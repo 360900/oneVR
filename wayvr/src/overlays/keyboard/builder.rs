@@ -41,7 +41,10 @@ const PIXELS_PER_UNIT: f32 = 60.;
 fn new_doc_params(panel: &mut GuiPanel<KeyboardState>) -> ParseDocumentParams<'static> {
     ParseDocumentParams {
         globals: panel.layout.state.globals.clone(),
-        path: AssetPathRef::FileOrBuiltIn("gui/keyboard.xml"),
+        path: AssetPathRef::FileOrBuiltIn {
+            path: "gui/keyboard.xml",
+            fallback: None,
+        },
         extra: panel.doc_extra.take().unwrap_or_default(),
     }
 }
