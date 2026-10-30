@@ -1656,11 +1656,19 @@ impl WvrServerState {
 
     pub fn send_mouse_scroll(
         &mut self,
+        target: PointerFocusTarget,
         hover_window: window::WindowHandle,
         global_pos: Vec2,
         delta: WheelDelta,
     ) {
         let global_pos = DVec2::from(global_pos);
+        let (focus, _) = self.get_mouse_focus(target, hover_window, false);
+        if self.manager.seat_pointer.current_focus()
+            != focus.as_ref().map(|(surface, _)| surface.clone())
+        {
+            self.manager
+                .send_mouse_move(focus, global_pos, DVec2::ZERO, DVec2::ZERO);
+        }
         self.wm.mouse = Some(window::MouseState {
             hover_window,
             pos: global_pos,

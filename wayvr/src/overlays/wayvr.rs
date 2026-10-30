@@ -878,9 +878,7 @@ impl OverlayBackend for WvrWindowBackend {
             || cursor_redraw
             || self.mouse != mouse
             || rendered_surfaces_dirty(&self.popups, &popups);
-        if !self.scrolling {
-            self.mouse = mouse;
-        }
+        self.mouse = mouse;
         self.popups = popups.into();
         self.meta = Some(meta);
 
@@ -1046,6 +1044,15 @@ impl OverlayBackend for WvrWindowBackend {
     }
 
     fn on_hover(&mut self, app: &mut state::AppState, hit: &input::PointerHit) -> HoverResult {
+        let is_scrolling = |idx: usize| {
+            let pointer = &app.input_state.pointers[idx];
+            pointer.tracked
+                && (pointer.now.scroll_x.abs() > 0.1 || pointer.now.scroll_y.abs() > 0.1)
+        };
+        if is_scrolling(1 - hit.pointer) && !is_scrolling(hit.pointer) {
+            return HoverResult::consume();
+        }
+
         if std::mem::take(&mut self.scrolling) {
             // we scrolled on previous frame so don't send mouse move events in case the user wants to scroll on this frame as well
             return HoverResult::consume();
@@ -1274,14 +1281,30 @@ impl OverlayBackend for WvrWindowBackend {
                 let _ = hit2;
             }
             Some(
-                WvrHitTarget::Popup { global_pos, .. } | WvrHitTarget::Surface { global_pos, .. },
+                WvrHitTarget::Popup {
+                    surface,
+                    global_pos,
+                    origin,
+                }
+                | WvrHitTarget::Surface {
+                    surface,
+                    global_pos,
+                    origin,
+                },
             ) => {
                 let wvr_server = app.wvr_server.as_mut().unwrap();
-                wvr_server.send_mouse_scroll(self.window, global_pos, delta);
+                wvr_server.set_vr_pointer(hit.pointer);
+                wvr_server.send_mouse_scroll(
+                    PointerFocusTarget::Surface { surface, origin },
+                    self.window,
+                    global_pos,
+                    delta,
+                );
             }
             Some(WvrHitTarget::Toplevel { pos }) => {
                 let wvr_server = app.wvr_server.as_mut().unwrap();
-                wvr_server.send_mouse_scroll(self.window, pos, delta);
+                wvr_server.set_vr_pointer(hit.pointer);
+                wvr_server.send_mouse_scroll(PointerFocusTarget::Toplevel, self.window, pos, delta);
             }
             None => {}
         }
