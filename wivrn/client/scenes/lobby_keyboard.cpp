@@ -29,10 +29,12 @@
 #include <uni_algo/ranges_grapheme.h>
 #include <utility>
 
-#include "IconsFontAwesome7.h"
+#include "IconsLvrr.h"
 #include "imgui.h"
 #include "imgui_internal.h"
+#include "lvrr.h"
 #include "render/ui_theme.h"
+#include "render/ui_widgets.h"
 
 static const ImGuiKey key_layout = (ImGuiKey)(ImGuiKey_NamedKey_END + 1);
 static const ImGuiKey key_symbols_letter = (ImGuiKey)(ImGuiKey_NamedKey_END + 2);
@@ -51,7 +53,7 @@ virtual_keyboard::layout qwerty = {
                 {1, "iîïīĩiìí"},
                 {1, "oœøõôöòó"},
                 {1, "p"},
-                {1.5, ICON_FA_DELETE_LEFT, ImGuiKey_Backspace, virtual_keyboard::key_flag_repeat},
+                {1.5, ICON_LVRR_BACKSPACE, ImGuiKey_Backspace, virtual_keyboard::key_flag_repeat},
         }, // 12
         {
                 {1},
@@ -83,7 +85,7 @@ virtual_keyboard::layout qwerty = {
         {
                 {2},
                 {1, "?123", key_symbols_letter},
-                {1, ICON_FA_GLOBE, key_layout},
+                {1, ICON_LVRR_GLOBE, key_layout},
                 {5, " "},
                 {3},
         } // 12
@@ -103,7 +105,7 @@ virtual_keyboard::layout azerty = {
                 {1, "iîï"},
                 {1, "oôœ"},
                 {1, "p"},
-                {1.5, ICON_FA_DELETE_LEFT, ImGuiKey_Backspace, virtual_keyboard::key_flag_repeat},
+                {1.5, ICON_LVRR_BACKSPACE, ImGuiKey_Backspace, virtual_keyboard::key_flag_repeat},
         }, // 12
         {
                 {1},
@@ -136,7 +138,7 @@ virtual_keyboard::layout azerty = {
         {
                 {2},
                 {1, "?123", key_symbols_letter},
-                {1, ICON_FA_GLOBE, key_layout},
+                {1, ICON_LVRR_GLOBE, key_layout},
                 {5, " "},
                 {3},
         } // 12
@@ -160,7 +162,7 @@ virtual_keyboard::layout digits = {
         }, // 3
         {
                 {2, "0"},
-                {1, ICON_FA_DELETE_LEFT, ImGuiKey_Backspace, virtual_keyboard::key_flag_repeat},
+                {1, ICON_LVRR_BACKSPACE, ImGuiKey_Backspace, virtual_keyboard::key_flag_repeat},
         } // 3
 };
 
@@ -181,7 +183,7 @@ virtual_keyboard::layout symbols = {
                 {1, "8"},
                 {1, "9"},
                 {1, "0"},
-                {1.5, ICON_FA_DELETE_LEFT, ImGuiKey_Backspace, virtual_keyboard::key_flag_repeat},
+                {1.5, ICON_LVRR_BACKSPACE, ImGuiKey_Backspace, virtual_keyboard::key_flag_repeat},
         }, // 12
         {
                 {1},
@@ -212,7 +214,7 @@ virtual_keyboard::layout symbols = {
         }, // 12
         {
                 {1, "ABC", key_symbols_letter},
-                {1, ICON_FA_GLOBE, key_layout},
+                {1, ICON_LVRR_GLOBE, key_layout},
                 {5, " "},
                 {3},
         },
@@ -340,8 +342,8 @@ virtual_keyboard::key_status virtual_keyboard::draw_single_key(const key & k, in
 
 	const std::string & key_label = is_shift
 	                                        ? (current_case_mode == case_mode::lower)
-	                                                  ? ICON_FA_CHEVRON_UP
-	                                                  : ICON_FA_CIRCLE_CHEVRON_UP
+	                                                  ? ICON_LVRR_SHIFT
+	                                                  : ICON_LVRR_CAPS_LOCK
 	                                        : ((current_case_mode == case_mode::lower)
 	                                                   ? k.glyph_lower
 	                                                   : k.glyph_upper);
@@ -379,11 +381,24 @@ virtual_keyboard::key_status virtual_keyboard::draw_single_key(const key & k, in
 	// Render
 	bool active = (status.held and status.hovered) or (is_shift and current_case_mode == case_mode::caps_lock);
 
-	const ImU32 col = ImGui::GetColorU32(active ? ImGuiCol_ButtonActive : status.hovered ? ImGuiCol_ButtonHovered
-	                                                                                     : ImGuiCol_Button);
+	// LVRR: One keys: letters on the surface, special keys filled, a locked shift in the accent
+	const wivrn::ui::theme & th = wivrn::ui::current();
+	const bool special = k.keycode != ImGuiKey_None;
+	const bool locked = is_shift and current_case_mode != case_mode::lower;
+	ImVec4 bg = special ? th.control_hovered : th.card;
+	if (locked)
+		bg = th.accent;
 	ImGui::RenderNavCursor(bb, id);
-	ImGui::RenderFrame(bb.Min, bb.Max, col, true, style.FrameRounding);
+	if (special or locked)
+		window->DrawList->AddRectFilled(bb.Min, bb.Max, th.col(bg), style.FrameRounding);
+	else
+		wivrn::ui::surface_frame(window->DrawList, bb.Min, bb.Max, style.FrameRounding, bg, 1);
+	if (active and not locked)
+		window->DrawList->AddRectFilled(bb.Min, bb.Max, th.col(th.pressed), style.FrameRounding);
+	else if (status.hovered and not locked)
+		window->DrawList->AddRectFilled(bb.Min, bb.Max, th.col(th.hover), style.FrameRounding);
 
+	ImGui::PushStyleColor(ImGuiCol_Text, locked ? th.on_accent : th.text);
 	ImGui::RenderTextClippedEx(
 	        g.CurrentWindow->DrawList,
 	        bb.Min + style.FramePadding,
@@ -393,6 +408,7 @@ virtual_keyboard::key_status virtual_keyboard::draw_single_key(const key & k, in
 	        &label_size,
 	        style.ButtonTextAlign,
 	        &bb);
+	ImGui::PopStyleColor();
 
 	if (status.pressed)
 		press_single_key(k);
@@ -464,7 +480,7 @@ void virtual_keyboard::display(imgui_context & ctx)
 	                                                     : *layouts[current_layout].second;
 
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {8, 8});
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, th.card_rounding);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, th.window_rounding);
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {8, 8});
 	ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, th.rounding);
 	if (want_digits)
@@ -472,8 +488,10 @@ void virtual_keyboard::display(imgui_context & ctx)
 	else
 		ImGui::SetNextWindowSize({1400, 400});
 
-	// window background follows the theme, with a user-controlled opacity
-	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{th.background.x, th.background.y, th.background.z, wivrn::ui::background_alpha()});
+	// window background follows the theme, with a user-controlled opacity; LVRR: the sidebar color
+	// sets the keys apart
+	const ImVec4 & keyboard_bg = wivrn::lvrr::stock_ui ? th.background : th.sidebar;
+	ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4{keyboard_bg.x, keyboard_bg.y, keyboard_bg.z, wivrn::ui::background_alpha()});
 	ImGui::PushStyleColor(ImGuiCol_Button, th.control);
 	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, th.control_hovered);
 	ImGui::PushStyleColor(ImGuiCol_ButtonActive, th.control_active);

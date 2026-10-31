@@ -20,6 +20,9 @@
 #include "ui_theme.h"
 #include "utils/i18n.h"
 
+#include <cmath>
+#include <cstdint>
+
 namespace wivrn::ui
 {
 
@@ -59,8 +62,22 @@ static theme dark_default()
 
 	t.dimming = rgb(128, 128, 128, 0.5f);
 
+	t.sidebar = t.background;
+	t.surface_alt = t.card_hovered;
+	t.text_faint = t.text_muted;
+	t.hover = rgb(255, 255, 255, 0.06f);
+	t.pressed = rgb(255, 255, 255, 0.1f);
+	t.container = t.accent;
+	t.on_container = t.on_accent;
+	t.accent_soft = rgb(30, 115, 255, 0.16f);
+	t.success_soft = rgb(52, 199, 123, 0.16f);
+	t.warning_soft = rgb(249, 115, 6, 0.16f);
+	t.danger_soft = rgb(239, 68, 68, 0.16f);
+
 	t.rounding = 8;
 	t.card_rounding = 14;
+	t.window_rounding = 14;
+	t.small_rounding = 6;
 	t.border_size = 1;
 	t.font_scale = 1.0; // user multiplier, 100% maps to metrics::font_base
 	return t;
@@ -151,51 +168,96 @@ static theme light()
 	return t;
 }
 
-// LVRR: the dashboard's default palette (wgui palette.rs), so the lobby and the
-// dashboard look like one application
-static theme wayvr()
+// LVRR: alpha that darkens a light backdrop as much as black at alpha a does in sRGB, the GUI
+// blends in linear light (see imgui_context::end_frame)
+static float ink(float a)
+{
+	const float c = 1 - a;
+	return 1 - (c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f));
+}
+
+static ImVec4 black(float a)
+{
+	return {0, 0, 0, ink(a)};
+}
+
+static ImVec4 hex(uint32_t c, float a = 1)
+{
+	return rgb((c >> 16) & 0xff, (c >> 8) & 0xff, c & 0xff, a);
+}
+
+// c at alpha a over an opaque backdrop, blended in sRGB like the One spec's CSS
+static ImVec4 over(uint32_t c, float a, uint32_t backdrop)
+{
+	const ImVec4 f = hex(c), b = hex(backdrop);
+	return {f.x * a + b.x * (1 - a), f.y * a + b.y * (1 - a), f.z * a + b.z * (1 - a), 1};
+}
+
+// LVRR: the oneDesign "One" language, light, blue accent, shared with the dashboard
+static theme one()
 {
 	theme t = dark_default();
-	t.name = "WayVR";
-	t.localized_name = "WayVR";
+	t.name = "One";
+	t.localized_name = "One";
 
-	t.accent = rgb(33, 173, 255);
-	t.accent_hovered = rgb(80, 192, 255);
-	t.accent_active = rgb(20, 150, 230);
-	t.on_accent = rgb(234, 247, 255);
+	const uint32_t surface = 0xfcffff;
 
-	t.background = rgb(0, 46, 67);
-	t.background_contrast = rgb(0, 19, 28);
-	t.card = rgb(0, 19, 28, 0.5f);
-	t.card_hovered = rgb(12, 81, 112, 0.5f);
-	t.control = rgb(12, 81, 112);
-	t.control_hovered = rgb(22, 100, 136);
-	t.control_active = rgb(32, 118, 158);
+	t.accent = hex(0x2474cf);
+	t.accent_hovered = hex(0x1467c2);
+	t.accent_active = hex(0x005bb5);
+	t.on_accent = hex(0xffffff);
+	t.accent_soft = over(0x2474cf, 0x24 / 255.f, surface);
+	t.container = hex(0xc5e8ff);
+	t.on_container = hex(0x003b7e);
 
-	t.text = rgb(228, 245, 246);
-	t.text_muted = rgb(181, 202, 204);
-	t.heading = rgb(244, 201, 93);
-	t.border = rgb(28, 103, 136);
+	t.background = hex(0xf4f7fb);          // canvas
+	t.background_contrast = hex(0xf9fcff); // float: popups, menus, tooltips, opaque as nothing blurs
+	t.sidebar = hex(0xeceff2);
+	t.card = hex(surface);
+	t.card_hovered = hex(0xf1f4f7);
+	t.surface_alt = hex(0xf1f4f7);
+	t.control = black(0x0f / 255.f);         // fill
+	t.control_hovered = black(0x1f / 255.f); // fill_strong
+	t.control_active = black(0x29 / 255.f);
+	t.hover = black(0x0d / 255.f);
+	t.pressed = black(0x17 / 255.f);
 
-	t.danger = rgb(247, 70, 154);
-	t.danger_hovered = rgb(255, 104, 176);
-	t.success = rgb(0, 212, 67);
-	t.warning = rgb(244, 201, 93);
+	t.text = hex(0x12161b);
+	t.text_muted = hex(0x51565c);
+	t.text_faint = hex(0x81878d);
+	t.heading = t.text;
+	t.border = black(0x1a / 255.f); // stroke
 
-	t.dimming = rgb(0, 0, 0, 0.5f);
+	t.danger = hex(0xd02b31);
+	t.danger_hovered = hex(0xb8232a);
+	t.success = hex(0x0e8c41);
+	t.warning = hex(0xa96200);
+	t.success_soft = over(0x0e8c41, 0x21 / 255.f, surface);
+	t.warning_soft = over(0xa96200, 0x21 / 255.f, surface);
+	t.danger_soft = over(0xd02b31, 0x21 / 255.f, surface);
 
-	t.rounding = 6;
-	t.card_rounding = 11;
-	t.border_size = 2;
+	t.dimming = black(0.3f);
+
+	t.rounding = 10 * metrics::one;
+	t.card_rounding = 14 * metrics::one;
+	t.window_rounding = 18 * metrics::one;
+	t.small_rounding = 6 * metrics::one;
+	t.border_size = metrics::one;
 	return t;
 }
 
 std::vector<theme> presets()
 {
-	return {wayvr(), oled(), dark_default(), midnight(), graphite(), slate_light(), light()};
+	return {one(), oled(), dark_default(), midnight(), graphite(), slate_light(), light()};
 }
 
 ImFont *& bold_font()
+{
+	static ImFont * f = nullptr;
+	return f;
+}
+
+ImFont *& semibold_font()
 {
 	static ImFont * f = nullptr;
 	return f;
@@ -223,7 +285,7 @@ void set_accent(const accent_swatch & swatch)
 
 theme & current()
 {
-	static theme t = wayvr();
+	static theme t = one();
 	return t;
 }
 
@@ -243,38 +305,45 @@ void theme::apply() const
 	ImGuiStyle & style = ImGui::GetStyle();
 
 	style.FontScaleMain = font_scale;
-	style.WindowRounding = card_rounding;
+	style.WindowRounding = window_rounding;
 	style.ChildRounding = card_rounding;
 	style.PopupRounding = card_rounding;
 	style.FrameRounding = rounding;
 	style.GrabRounding = rounding;
 	style.TabRounding = rounding;
-	style.FrameBorderSize = border_size;
+	style.ScrollbarRounding = rounding;
+	style.FrameBorderSize = 0; // filled controls, no outline
 	style.WindowBorderSize = border_size;
+	style.PopupBorderSize = border_size;
+	style.DisabledAlpha = 0.45f;
 
 	ImVec4 * c = style.Colors;
 	c[ImGuiCol_Text] = text;
 	c[ImGuiCol_TextDisabled] = text_muted;
 	c[ImGuiCol_WindowBg] = background;
-	c[ImGuiCol_ChildBg] = card;
-	c[ImGuiCol_PopupBg] = card;
+	c[ImGuiCol_ChildBg] = {0, 0, 0, 0};
+	c[ImGuiCol_PopupBg] = background_contrast;
 	c[ImGuiCol_Border] = border;
+	c[ImGuiCol_BorderShadow] = {0, 0, 0, 0};
 	c[ImGuiCol_FrameBg] = control;
 	c[ImGuiCol_FrameBgHovered] = control_hovered;
 	c[ImGuiCol_FrameBgActive] = control_active;
 	c[ImGuiCol_Button] = control;
 	c[ImGuiCol_ButtonHovered] = control_hovered;
-	c[ImGuiCol_ButtonActive] = accent;
-	c[ImGuiCol_Header] = control_hovered;
-	c[ImGuiCol_HeaderHovered] = control_hovered;
-	c[ImGuiCol_HeaderActive] = accent;
+	c[ImGuiCol_ButtonActive] = control_active;
+	c[ImGuiCol_Header] = container;
+	c[ImGuiCol_HeaderHovered] = hover;
+	c[ImGuiCol_HeaderActive] = pressed;
 	c[ImGuiCol_SliderGrab] = accent;
 	c[ImGuiCol_SliderGrabActive] = accent_active;
 	c[ImGuiCol_CheckMark] = accent;
+	c[ImGuiCol_TextSelectedBg] = accent_soft;
+	c[ImGuiCol_InputTextCursor] = accent;
+	c[ImGuiCol_NavCursor] = accent;
 	c[ImGuiCol_ScrollbarBg] = {0, 0, 0, 0};
-	c[ImGuiCol_ScrollbarGrab] = control;
-	c[ImGuiCol_ScrollbarGrabHovered] = control_hovered;
-	c[ImGuiCol_ScrollbarGrabActive] = control_active;
+	c[ImGuiCol_ScrollbarGrab] = control_hovered;
+	c[ImGuiCol_ScrollbarGrabHovered] = control_active;
+	c[ImGuiCol_ScrollbarGrabActive] = text_faint;
 	c[ImGuiCol_Separator] = border;
 }
 

@@ -58,6 +58,7 @@
 
 #include "IconsFontAwesome7.h"
 #include "IconsFontAwesome7Brands.h"
+#include "IconsLvrr.h"
 
 using namespace std::chrono_literals;
 
@@ -213,7 +214,7 @@ void scenes::lobby::gui_enter_pin(locked_notifiable<pin_request_data> & pin_requ
 		}
 	}
 
-	if (ui::button(ICON_FA_RECTANGLE_XMARK, ui::button_style::danger, pin_entry_key_size))
+	if (ui::button(ICON_LVRR_CLOSE, ui::button_style::danger, pin_entry_key_size))
 	{
 		async_session.cancel();
 		next_scene.reset();
@@ -237,7 +238,7 @@ void scenes::lobby::gui_enter_pin(locked_notifiable<pin_request_data> & pin_requ
 
 	ImGui::SameLine();
 	ImGui::BeginDisabled(pin_buffer.size() == 0);
-	if (ui::button(ICON_FA_DELETE_LEFT, ui::button_style::secondary, pin_entry_key_size))
+	if (ui::button(ICON_LVRR_BACKSPACE, ui::button_style::secondary, pin_entry_key_size))
 		pin_buffer.resize(pin_buffer.size() - 1);
 	ImGui::EndDisabled();
 
@@ -398,7 +399,7 @@ void scenes::lobby::gui_server_list()
 	const auto & t = ui::current();
 
 	const std::string add_label = _("Add server");
-	const float add_w = ui::button_width(ICON_FA_PLUS, add_label);
+	const float add_w = ui::button_width(ICON_LVRR_ADD, add_label);
 	bool add_server = false;
 
 	if constexpr (lvrr::stock_ui)
@@ -410,8 +411,26 @@ void scenes::lobby::gui_server_list()
 		const ImVec2 hend = ImGui::GetCursorPos();
 
 		ImGui::SetCursorPos({hstart.x + header_avail - add_w, hstart.y});
-		add_server = ui::button(ICON_FA_PLUS, add_label, ui::button_style::primary);
+		add_server = ui::button(ICON_LVRR_ADD, add_label, ui::button_style::primary);
 		ImGui::SetCursorPos(hend);
+	}
+	else
+	{
+		// LVRR: the headerbar has the title, the hint and the Add server button head the list
+		const ImVec2 hstart = ImGui::GetCursorPos();
+		const float header_avail = ImGui::GetContentRegionAvail().x;
+		const float bh = ui::metrics::control_size;
+		ImGui::SetCursorPos({hstart.x + header_avail - add_w, hstart.y});
+		add_server = ui::button(ICON_LVRR_ADD, add_label, ui::button_style::primary);
+		const float below = ImGui::GetCursorPosY();
+		ImGui::SetCursorPos({hstart.x, hstart.y + (bh - ImGui::GetFontSize()) * 0.5f});
+		ImGui::PushTextWrapPos(hstart.x + header_avail - add_w - ImGui::GetStyle().ItemSpacing.x);
+		ImGui::PushStyleColor(ImGuiCol_Text, t.text_muted);
+		// LVRR: the stock header's msgctxt, the catalogs translate the text only under it
+		ImGui::TextUnformatted(_cS("page header subtitle", "Pick a PC running the LVRR server to stream from."));
+		ImGui::PopStyleColor();
+		ImGui::PopTextWrapPos();
+		ImGui::SetCursorPosY(std::max(below, ImGui::GetCursorPosY()) + ui::metrics::card_title_gap - ImGui::GetStyle().ItemSpacing.y);
 	}
 
 	std::multimap<std::string, std::string> sorted_cookies;
@@ -427,26 +446,10 @@ void scenes::lobby::gui_server_list()
 	// PC, or while the list keeps what the last one found
 	const bool servers_known = lvrr_discovery_settled() or lvrr_list_kept();
 
-	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ui::metrics::card_item_spacing);
+	// LVRR: rows of a boxed list touch the hairlines between them
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {ui::metrics::card_item_spacing.x, lvrr::stock_ui ? ui::metrics::card_item_spacing.y : 0});
 	ui::begin_list_card("##servers");
 	{
-		if constexpr (not lvrr::stock_ui)
-		{
-			// LVRR: the dashboard's group box, its title row holds the Add server button
-			const ImVec2 hstart = ImGui::GetCursorPos();
-			const float header_avail = ImGui::GetContentRegionAvail().x;
-			ui::card_title(ICON_FA_COMPUTER, _cS("page header title", "Computers"));
-			const ImVec2 hend = ImGui::GetCursorPos();
-			const float bh = ImGui::GetFrameHeight() * ui::metrics::control_height;
-			ImGui::SetCursorPos({hstart.x + header_avail - add_w, hstart.y - (bh - ImGui::GetFontSize() * 1.05f) * 0.5f});
-			add_server = ui::button(ICON_FA_PLUS, add_label, ui::button_style::primary);
-			ImGui::SetCursorPos(hend);
-			ImGui::PushStyleColor(ImGuiCol_Text, t.text_muted);
-			// LVRR: the stock header's msgctxt, the catalogs translate the text only under it
-			ImGui::TextUnformatted(_cS("page header subtitle", "Pick a PC running the LVRR server to stream from."));
-			ImGui::PopStyleColor();
-		}
-
 		if (add_server)
 		{
 			add_server_cookie = "";
@@ -458,9 +461,15 @@ void scenes::lobby::gui_server_list()
 		}
 		if (sorted_cookies.empty())
 		{
+			// LVRR: a list row's padding
+			const float pad = lvrr::stock_ui ? 0 : ui::metrics::list_row_pad - ui::metrics::list_card_padding.x;
+			ImGui::Dummy({0, pad * 0.5f});
+			ImGui::Indent(pad);
 			ImGui::PushStyleColor(ImGuiCol_Text, t.text_muted);
 			ImGui::TextUnformatted(_S("Start an LVRR server on your local network."));
 			ImGui::PopStyleColor();
+			ImGui::Unindent(pad);
+			ImGui::Dummy({0, pad * 0.5f});
 		}
 
 		bool first = true;
@@ -487,14 +496,14 @@ void scenes::lobby::gui_server_list()
 			const bool waking = wakeable and woken_recently;
 			const bool wake_failed = wakeable and woken != lvrr_woken.end() and not waking;
 			const float gap = ImGui::GetStyle().ItemSpacing.x;
-			const float bh = ImGui::GetFrameHeight() * ui::metrics::control_height;
+			const float bh = lvrr::stock_ui ? ImGui::GetFrameHeight() * ui::metrics::control_height : ui::metrics::control_size;
 			std::string sub = fmt::format("{} : {}", data.service.hostname, data.service.port);
 			// LVRR: a manual PC is never found on the network, its row says it was woken
 			if (data.manual and woken_recently)
 				sub = _("Waiting for the PC and LVRR to start");
 
 			// trailing controls [Auto chip] [Connect] [menu], measured up front to exclude from the row click area
-			const char * c_icon = reachable ? ICON_FA_PLAY : (incompatible ? ICON_FA_TRIANGLE_EXCLAMATION : ICON_FA_MAGNIFYING_GLASS);
+			const char * c_icon = reachable ? ICON_LVRR_PLAY : (incompatible ? ICON_LVRR_WARNING : ICON_LVRR_SEARCH);
 			std::string c_label = ui::icon_label(c_icon, reachable ? _("Connect") : (incompatible ? _C("button label when the server has an incompatible version", "Incompatible") : _C("button label when the server is known but not visible", "Searching…")));
 			std::string c_tooltip = reachable ? std::string{} : (incompatible ? _("Incompatible server version") : _("Looking for this server on your network"));
 			// LVRR: the protocol changes with most updates, show both versions and how to match them.
@@ -517,7 +526,7 @@ void scenes::lobby::gui_server_list()
 			}
 			if (wakeable)
 			{
-				c_label = ui::icon_label(ICON_FA_POWER_OFF, waking ? _("Waking…") : _("Wake"));
+				c_label = ui::icon_label(ICON_LVRR_POWER, waking ? _("Waking…") : _("Wake"));
 				// LVRR: the server only runs once LVRR is started, a woken PC waits at its login screen
 				if (waking)
 					c_tooltip = _("Waiting for the PC and LVRR to start");
@@ -527,7 +536,7 @@ void scenes::lobby::gui_server_list()
 					c_tooltip = _("Not found on your network. If the PC is off, wake it; if it's on, start LVRR on it.");
 			}
 			const float cw = ui::button_width(c_label);
-			const std::string chip_label = ui::icon_label(ICON_FA_BOLT, _C("chip displayed in server list when autoconnect is enabled", "Auto"));
+			const std::string chip_label = ui::icon_label(ICON_LVRR_AUTO, _C("chip displayed in server list when autoconnect is enabled", "Auto"));
 			const ImVec2 chip_sz = ui::chip_size(chip_label);
 			float trailing = bh + gap + cw + (data.autoconnect ? gap + chip_sz.x : 0) + ui::metrics::list_row_pad;
 
@@ -536,11 +545,11 @@ void scenes::lobby::gui_server_list()
 				{
 					const auto & interface = service.addresses.front().interface;
 					if (interface.starts_with("usb"))
-						return ICON_FA_USB;
+						return ICON_LVRR_USB;
 					if (interface.starts_with("w"))
-						return ICON_FA_TOWER_BROADCAST;
+						return ICON_LVRR_NETWORK_WIRELESS;
 				}
-				return ICON_FA_SERVER;
+				return ICON_LVRR_NETWORK_SERVER;
 			}(data.service);
 
 			const auto row = ui::begin_list_row("##row", server_icon, 0, name, sub, false, trailing);
@@ -556,11 +565,11 @@ void scenes::lobby::gui_server_list()
 			ImGui::SetCursorScreenPos(row.trailing(x, {bh, bh}));
 			if (data.manual)
 			{
-				actions.push_back({ICON_FA_PEN, edit_l.c_str(), false, false});
-				actions.push_back({ICON_FA_TRASH, del_l.c_str(), true, false});
+				actions.push_back({ICON_LVRR_EDIT, edit_l.c_str(), false, false});
+				actions.push_back({ICON_LVRR_TRASH, del_l.c_str(), true, false});
 				if (data.mac)
-					actions.push_back({ICON_FA_POWER_OFF, wake_l.c_str(), false, false});
-				switch (ui::action_menu("##menu", ICON_FA_ELLIPSIS_VERTICAL, actions))
+					actions.push_back({ICON_LVRR_POWER, wake_l.c_str(), false, false});
+				switch (ui::action_menu("##menu", ICON_LVRR_MORE, actions))
 				{
 					case 0:
 						add_server_cookie = cookie;
@@ -583,11 +592,11 @@ void scenes::lobby::gui_server_list()
 			}
 			else
 			{
-				actions.push_back({ICON_FA_BOLT, auto_l.c_str(), false, data.autoconnect});
+				actions.push_back({ICON_LVRR_AUTO, auto_l.c_str(), false, data.autoconnect});
 				// LVRR: PCs with a known MAC are remembered, let them go
 				if (data.mac)
-					actions.push_back({ICON_FA_TRASH, forget_l.c_str(), true, false});
-				switch (ui::action_menu("##menu", ICON_FA_ELLIPSIS_VERTICAL, actions))
+					actions.push_back({ICON_LVRR_TRASH, forget_l.c_str(), true, false});
+				switch (ui::action_menu("##menu", ICON_LVRR_MORE, actions))
 				{
 					case 0:
 						data.autoconnect = not data.autoconnect;
@@ -1071,7 +1080,7 @@ void scenes::lobby::gui_licenses()
 	// Components shipping a license file, probed once
 	static const std::vector<std::string> components = [] {
 		std::vector<std::string> v;
-		for (const char * c: {"WiVRn", "FontAwesome", "Quicksand", "Meadow", "openxr-loader", "simdjson"})
+		for (const char * c: {"WiVRn", "FontAwesome", "Inter", "Adwaita", "Papirus", "Meadow", "openxr-loader", "simdjson"})
 		{
 			try
 			{
@@ -1206,10 +1215,14 @@ std::vector<std::pair<int, XrCompositionLayerQuad>> scenes::lobby::draw_gui(XrTi
 	update_file_picker();
 
 	ImGuiStyle & style = ImGui::GetStyle();
+	// LVRR: the whole One style, colors included
+	if constexpr (not lvrr::stock_ui)
+		wivrn::ui::current().apply();
 	style.FontScaleMain = wivrn::ui::current().font_scale * wivrn::ui::metrics::font_base;
 
 	// rounding follows the theme so every window/popup gets rounded corners
-	style.WindowRounding = wivrn::ui::current().card_rounding;
+	if constexpr (lvrr::stock_ui)
+		style.WindowRounding = wivrn::ui::current().card_rounding;
 	style.ChildRounding = wivrn::ui::current().card_rounding;
 	style.PopupRounding = wivrn::ui::current().card_rounding;
 	style.FrameRounding = wivrn::ui::current().rounding;

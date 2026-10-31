@@ -110,7 +110,7 @@ public:
 	uint32_t app_icon_size = 0;
 
 	// interface theme, defaults match the built-in "Dark" preset and "Blue" accent
-	std::string theme_preset = "WayVR";
+	std::string theme_preset = "One";
 	std::string theme_accent = "Blue";
 	float theme_rounding = 6;
 	float theme_card_rounding = 11;

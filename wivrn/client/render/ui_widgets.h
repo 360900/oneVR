@@ -196,32 +196,34 @@ void end_sidebar();
 // Hairline dividers separating the top bar, sidebar and content, dimmed with the panel
 void shell_dividers(float top_bar_h, float tab_width);
 
-// LVRR: the dashboard's shell (dashboard.xml) for the lobby, drawn at the cursor inside the
-// main window: a pill of round buttons on the left, a title pill with a close button on top,
-// a content panel with the dashboard's gradient and a bar at the bottom
+// LVRR: One depth, level 1 for cards and buttons, 2 for popovers, menus and tooltips, 3 for
+// dialogs; drawn outside min/max, under what is drawn next
+void shadow(ImDrawList * draw, const ImVec2 & min, const ImVec2 & max, float rounding, int level);
 
-// Rounded rectangle whose fill goes from top to bottom, or left to right when horizontal, with the
-// vertex alpha kept for AA; corners takes ImDrawFlags_RoundCorners*, 0 rounds all four
-void gradient_rect(ImDrawList * draw, const ImVec2 & min, const ImVec2 & max, float rounding, const ImVec4 & from, const ImVec4 & to, bool horizontal = false, ImDrawFlags corners = 0);
+// Shadow, fill and hairline of a raised surface
+void surface_frame(ImDrawList * draw, const ImVec2 & min, const ImVec2 & max, float rounding, const ImVec4 & fill, int level);
 
-// Column of height h with a pill around buttons round buttons and separators separators, centered vertically
-void shell_side_begin(float height, int buttons, int separators);
-bool shell_side_button(const char * icon, const std::string & tooltip, bool selected);
-void shell_side_separator();
-void shell_side_end();
+// Floating windows (popups, menus, tooltips) keep a transparent margin for their shadow, as the
+// GUI layers are cropped to their windows: push_float_style before Begin*, float_frame right
+// after it to draw the surface, pop_float_style after End*; fill defaults to the float color
+void push_float_style(const ImVec2 & padding);
+void pop_float_style();
+void float_frame(float rounding, int level, const ImVec4 * fill = nullptr);
 
-// Title pill centered in width, close button at the right edge, a title too long to fit between
-// them ends in an ellipsis; true when close is clicked
-bool shell_top(float width, const char * icon, const std::string & title, const std::string & close_tooltip);
+// LVRR: the lobby's One window, drawn at the cursor inside the main window: a flush sidebar
+// with the app name and nav_item rows, a headerbar with the centred title and a close button,
+// the content in a centred column on the canvas
 
-// Content panel; the cursor is inside a scrolling child with padding, pair with shell_content_end
-void shell_content_begin(const ImVec2 & size, const ImVec2 & padding);
+// Pair: shell_sidebar_begin -> nav_item rows -> shell_sidebar_footer -> footer items -> shell_sidebar_end
+void shell_sidebar_begin(const ImVec2 & size, const std::string & title);
+void shell_sidebar_footer();
+void shell_sidebar_end();
+
+// Headerbar over the content, a title too long ends in an ellipsis; true when close is clicked
+bool shell_header(float width, const std::string & title, const std::string & close_tooltip);
+
+// Scrolling content column, pair with shell_content_end
+void shell_content_begin(const ImVec2 & size);
 void shell_content_end();
-
-// Bottom bar; left and right draw their items at the cursor, right-aligned for right
-void shell_bottom(float width, const std::function<void()> & left, const std::function<void()> & right);
-
-// Card title: icon and bold label in the heading color over a rule, like the dashboard's group box
-void card_title(const char * icon, const std::string & title);
 
 } // namespace wivrn::ui

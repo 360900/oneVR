@@ -61,9 +61,24 @@ struct theme
 	// Dimming when a modal popup is visible
 	ImVec4 dimming;
 
+	// LVRR: the rest of the One design tokens
+	ImVec4 sidebar;
+	ImVec4 surface_alt; // hovered rows of a boxed list
+	ImVec4 text_faint;  // placeholders
+	ImVec4 hover;       // overlay on a hovered flat item
+	ImVec4 pressed;     // overlay on a pressed flat item
+	ImVec4 container;   // selection
+	ImVec4 on_container;
+	ImVec4 accent_soft;
+	ImVec4 success_soft;
+	ImVec4 warning_soft;
+	ImVec4 danger_soft;
+
 	// Shape, in pixels
 	float rounding;      // buttons, inputs, sliders
 	float card_rounding; // cards
+	float window_rounding;
+	float small_rounding; // chips, check boxes
 	float border_size;
 
 	float font_scale; // global text size multiplier
@@ -83,65 +98,76 @@ struct theme
 // fixed design tokens shared by the widgets
 namespace metrics
 {
-constexpr float font_base = 0.765;       // user-facing 100% text scale
-constexpr float font_title = 1.7;        // page header, x base font size
-constexpr float font_description = 0.82; // muted secondary text, x base font size
+// LVRR: the lobby is drawn at 1.4x the dashboard's logical pixels, the One spec's sizes are in
+// those pixels
+constexpr float one = 1.4;
 
-constexpr ImVec2 button_padding = {26, 14};
-constexpr ImVec2 card_padding = {28, 22};      // regular cards
-constexpr ImVec2 list_card_padding = {18, 18}; // cards holding a list of rows
+constexpr float font_base = 14 * one / 30;   // user-facing 100% text scale: One's 14 px body text
+constexpr float font_title = 22. / 14;       // page header, x base font size
+constexpr float font_description = 12. / 14; // caption: secondary text, x base font size
+constexpr float font_heading = 15. / 14;     // headerbar title, card titles
+
+constexpr ImVec2 button_padding = {16 * one, 0};
+constexpr ImVec2 card_padding = {16 * one, 14 * one};    // regular cards
+constexpr ImVec2 list_card_padding = {6 * one, 6 * one}; // cards holding a list of rows
 
 // shared height of every full-width control so they line up in a setting row, x frame height
+// LVRR: the widgets use control_size below instead
 constexpr float control_height = 1.65;
+constexpr float control_size = 36 * one;
 
-constexpr float toggle_aspect = 1.9;   // track width / height
-constexpr float toggle_knob_inset = 3; // gap between track edge and knob
+constexpr float toggle_aspect = 46. / 26;    // track width / height
+constexpr float toggle_track = 26 * one;     // track height
+constexpr float toggle_knob_inset = 3 * one; // gap between track edge and knob
 
-constexpr float slider_grab_width = 14;
+constexpr float slider_track = 4 * one;
+constexpr float slider_thumb = 20 * one;
 
-constexpr float segmented_inset = 3; // gap around the active segment
+constexpr float segmented_inset = 3 * one; // gap around the active segment
 
-constexpr float icon_button_glyph = 0.58;  // glyph height as a fraction of the button side
-constexpr float button_label_glyph = 1.35; // leading icon size in a labeled button, x base text size
+constexpr float icon_button_glyph = 16. / 36;  // glyph height as a fraction of the button side
+constexpr float button_label_glyph = 16. / 14; // leading icon size in a labeled button, x base text size
 
-constexpr float combo_row_height = 2.2;      // x frame height, big touch rows in the modal
-constexpr float combo_chevron = 12;          // chevron size in the closed box
-constexpr float combo_modal_min_width = 460; // popup never narrower than this
-constexpr ImVec2 combo_padding = {16, 0};    // horizontal inner padding of box and rows
+constexpr float combo_row_height = 44 * one;    // rows in the modal
+constexpr float combo_chevron = 8 * one;        // chevron size in the closed box
+constexpr float combo_modal_min_width = 460;    // popup never narrower than this
+constexpr ImVec2 combo_padding = {12 * one, 0}; // horizontal inner padding of box and rows
 
-constexpr float list_row_box = 52;        // leading icon/thumbnail size in a list row
-constexpr float list_row_box_large = 80;  // min thumbnail size for full-height list rows
-constexpr float list_row_pad = 12;        // inner padding of a list row, both axes
-constexpr ImVec2 chip_padding = {12, 6};  // inner padding of a chip/badge
-constexpr float chip_pill_padding_x = 18; // roomier horizontal padding for top-bar pill chips
-constexpr float input_padding_x = 14;     // horizontal text padding inside inputs
-constexpr float font_modal_title = 1.2;   // modal heading, x base font size
+constexpr float list_row_box = 32 * one;            // leading icon box size in a list row
+constexpr float list_row_box_large = 80;            // min thumbnail size for full-height list rows
+constexpr float list_row_pad = 14 * one;            // horizontal inner padding of a list row
+constexpr float list_row_height = 52 * one;         // minimum height of a list row
+constexpr ImVec2 chip_padding = {8 * one, 3 * one}; // inner padding of a chip/badge
+constexpr float chip_pill_padding_x = 12 * one;     // roomier horizontal padding for bar chips
+constexpr float input_padding_x = 12 * one;         // horizontal text padding inside inputs
+constexpr float font_modal_title = 18. / 14;        // modal heading, x base font size
 
-constexpr float label_line_gap = 5;   // title to description
-constexpr float label_bottom_pad = 6; // breathing room below the description
-constexpr float nav_section_gap = 18; // space above a sidebar section header
+constexpr float label_line_gap = 2 * one; // title to description
+constexpr float label_bottom_pad = 6;     // breathing room below the description
+constexpr float nav_section_gap = 18;     // space above a sidebar section header
 
-constexpr ImVec2 card_item_spacing = {12, 10}; // ItemSpacing pushed around a card section
-constexpr float setting_control_width = 480;   // width of the control in a setting row
+constexpr ImVec2 card_item_spacing = {8 * one, 8 * one}; // ItemSpacing pushed around a card section
+constexpr float setting_control_width = 480;             // width of the control in a setting row
+
+constexpr float focus_ring = 2 * one; // border of a focused entry
+constexpr float popup_margin = 40;    // room around a popup for its shadow, inside its window
 
 // application shell: top bar, sidebar, content panel, shared by lobby and in-stream window
 constexpr float sidebar_width = 300;
 constexpr float top_bar_height = 72;
 constexpr float content_margin = 20; // gap around the main content panel
 
-// LVRR: the lobby shell, the dashboard's layout (dashboard.xml) at 1.4x its logical pixels
-constexpr float shell_pad = 6;         // around everything
-constexpr float shell_gap = 12;        // between the pills, the panel and the bar
-constexpr float shell_side_width = 68; // side pill and its round buttons
-constexpr float shell_side_glyph = 34; // icon in a side button
-constexpr float shell_top_height = 56; // title pill and close button
-constexpr float shell_title_min_width = 420;
-constexpr float shell_title_glyph = 30;
-constexpr float shell_bottom_height = 68;
-constexpr float shell_panel_rounding = 11;
-constexpr ImVec2 shell_content_padding = {24, 20};
-constexpr float card_title_rule = 2;    // rule under a card title
-constexpr float button_gradient = 0.3f; // the dashboard darkens the bottom of a button this much
+// LVRR: the lobby shell, a One window: sidebar, headerbar, content on the canvas
+constexpr float shell_sidebar_width = 220 * one;
+constexpr float shell_sidebar_pad = 8 * one; // around the nav rows
+constexpr float shell_nav_row = 40 * one;    // nav row height
+constexpr float shell_nav_glyph = 16 * one;  // icon in a nav row
+constexpr float shell_header_height = 50 * one;
+constexpr float shell_close_size = 24 * one;  // round close button in the headerbar
+constexpr float shell_close_glyph = 14 * one; // its icon's font size, the cross is half of it
+constexpr ImVec2 shell_content_padding = {32 * one, 16 * one};
+constexpr float shell_content_max_width = 640 * one; // content column, centered like the renders
+constexpr float card_title_gap = 8 * one;            // heading row to its box
 
 // application launcher grid
 constexpr float app_icon_small = 120;
@@ -158,8 +184,8 @@ constexpr ImVec2 window_padding = {20, 20};
 constexpr float window_rounding = 10;
 constexpr float window_border_size = 2;
 
-constexpr ImVec2 tooltip_padding = {16, 12}; // hover tooltip window padding
-constexpr ImVec2 button_size = {220, 80};    // big touch buttons in confirm dialogs
+constexpr ImVec2 tooltip_padding = {10 * one, 6 * one}; // hover tooltip window padding
+constexpr ImVec2 button_size = {220, 80};               // big touch buttons in confirm dialogs
 
 // PIN entry keypad
 constexpr ImVec2 pin_entry_key_size = {90, 70};
@@ -170,8 +196,10 @@ constexpr float pin_entry_popup_width = 3 * pin_entry_key_size.x + 2 * pin_entry
 // theme in effect, call current().apply() after mutating
 theme & current();
 
-// LVRR: the bold face of the UI font, set by the imgui context that owns it, null when none
+// LVRR: the bold and semibold faces of the UI font, set by the imgui context that owns them,
+// null when none
 ImFont *& bold_font();
+ImFont *& semibold_font();
 void set_theme(const theme & t);
 
 // panel and card background opacity, 0..1, kept out of the presets so switching palette keeps it

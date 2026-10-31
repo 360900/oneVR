@@ -24,7 +24,7 @@
 #include "render/ui_widgets.h"
 
 #include "imgui.h"
-#include <IconsFontAwesome7.h>
+#include <IconsLvrr.h>
 #include <cmath>
 #include <spdlog/fmt/fmt.h>
 
@@ -32,7 +32,7 @@ namespace wivrn::gui
 {
 float toggle_width()
 {
-	return ImGui::GetFrameHeight() * ui::metrics::control_height * ui::metrics::toggle_aspect;
+	return ui::metrics::toggle_track * ui::metrics::toggle_aspect;
 }
 
 std::optional<battery_indicator> battery_status_indicator(XrTime now)
@@ -41,7 +41,7 @@ std::optional<battery_indicator> battery_status_indicator(XrTime now)
 	if (not battery.charge)
 		return std::nullopt;
 
-	const char * icon = ICON_FA_BATTERY_FULL;
+	const char * icon = ICON_LVRR_BATTERY_100;
 	int icon_nr;
 	if (battery.charging)
 		icon_nr = *battery.charge > 0.995 ? 5 : now / 500'000'000 % 5;
@@ -50,22 +50,22 @@ std::optional<battery_indicator> battery_status_indicator(XrTime now)
 	switch (icon_nr)
 	{
 		case 0:
-			icon = ICON_FA_BATTERY_EMPTY;
+			icon = ICON_LVRR_BATTERY_0;
 			break;
 		case 1:
-			icon = ICON_FA_BATTERY_QUARTER;
+			icon = ICON_LVRR_BATTERY_20;
 			break;
 		case 2:
-			icon = ICON_FA_BATTERY_HALF;
+			icon = ICON_LVRR_BATTERY_50;
 			break;
 		case 3:
-			icon = ICON_FA_BATTERY_THREE_QUARTERS;
+			icon = ICON_LVRR_BATTERY_80;
 			break;
 		case 4:
-			icon = ICON_FA_BATTERY_FULL;
+			icon = ICON_LVRR_BATTERY_100;
 			break;
 		case 5:
-			icon = ICON_FA_PLUG;
+			icon = ICON_LVRR_BATTERY_CHARGED;
 			break;
 	}
 

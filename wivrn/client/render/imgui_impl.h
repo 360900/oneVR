@@ -208,8 +208,10 @@ private:
 #endif
 
 	beman::inplace_vector::inplace_vector<utils::mapped_file, 3> font_awesome;
-	beman::inplace_vector::inplace_vector<utils::mapped_file, 2> ui_font; // LVRR: regular and bold
-	std::vector<utils::mapped_file> system_fonts;                         // LVRR: mapped once, merged into both families
+	beman::inplace_vector::inplace_vector<utils::mapped_file, 3> ui_font; // LVRR: regular, semibold and bold
+	utils::mapped_file icons;                                             // LVRR: Adwaita icons, tools/lvrr_icons.py
+	std::vector<utils::mapped_file> system_fonts;                         // LVRR: mapped once, merged into every family
+	ImFont * semibold = nullptr;
 	ImFont * bold = nullptr;
 	void initialize_fonts();
 

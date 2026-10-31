@@ -18,12 +18,14 @@
 
 #include "imgui_impl.h"
 #include "implot.h"
+#include "lvrr.h"
 
 #include "application.h"
 #include "constants.h"
 #include "image_loader.h"
 #include "openxr/openxr.h"
 #include "ui_theme.h"
+#include "ui_widgets.h"
 #include "utils/mapped_file.h"
 #include "utils/ranges.h"
 #include "utils/strings.h"
@@ -32,6 +34,7 @@
 #include "vulkan/vulkan_to_string.hpp"
 #include "xr/space.h"
 #include <algorithm>
+#include <array>
 #include <backends/imgui_impl_vulkan.h>
 #include <boost/locale.hpp>
 #include <cmath>
@@ -536,20 +539,26 @@ void imgui_context::initialize_fonts()
 		}
 	}
 
+	// LVRR: the lobby's icons are Adwaita's, Font Awesome is only for WiVRn's own GUI
 	assert(font_awesome.empty());
-	font_awesome.emplace_back("assets://Font Awesome 7 Free-Regular-400.otf");
-	font_awesome.emplace_back("assets://Font Awesome 7 Free-Solid-900.otf");
-	font_awesome.emplace_back("assets://Font Awesome 7 Brands-Regular-400.otf");
+	if constexpr (wivrn::lvrr::stock_ui)
+	{
+		font_awesome.emplace_back("assets://Font Awesome 7 Free-Regular-400.otf");
+		font_awesome.emplace_back("assets://Font Awesome 7 Free-Solid-900.otf");
+		font_awesome.emplace_back("assets://Font Awesome 7 Brands-Regular-400.otf");
+	}
+	icons = utils::mapped_file("assets://lvrr-icons.otf");
 
-	// LVRR: the dashboard's font comes first, the system fonts fill in the scripts it lacks
+	// LVRR: the One design's font comes first, the system fonts fill in the scripts it lacks
 	assert(ui_font.empty());
-	ui_font.emplace_back("assets://Quicksand-Regular.ttf");
-	ui_font.emplace_back("assets://Quicksand-Bold.ttf");
+	ui_font.emplace_back("assets://Inter-Regular.ttf");
+	ui_font.emplace_back("assets://Inter-SemiBold.ttf");
+	ui_font.emplace_back("assets://Inter-Bold.ttf");
 
 	for (auto & font: fonts)
 		spdlog::info("Using font {}", font, application::get_messages_info().language);
 
-	// LVRR: map each system font once, both families merge the same bytes
+	// LVRR: map each system font once, every family merges the same bytes
 	for (auto & font: fonts)
 	{
 		try
@@ -575,6 +584,8 @@ void imgui_context::initialize_fonts()
 		for (auto & font: system_fonts)
 			io.Fonts->AddFontFromMemoryTTF(const_cast<std::byte *>(font.data()), font.size(), constants::gui::font_size_small, &config);
 
+		io.Fonts->AddFontFromMemoryTTF(const_cast<std::byte *>(icons.data()), icons.size(), constants::gui::font_size_small, &config);
+
 		config.GlyphMinAdvanceX = 40; // Use if you want to make the icon monospaced
 		for (auto & fa: font_awesome)
 			io.Fonts->AddFontFromMemoryTTF(const_cast<std::byte *>(fa.data()), fa.size(), constants::gui::font_size_small, &config);
@@ -582,8 +593,10 @@ void imgui_context::initialize_fonts()
 	};
 
 	add_family(ui_font[0]);
-	bold = add_family(ui_font[1]);
+	semibold = add_family(ui_font[1]);
+	bold = add_family(ui_font[2]);
 	wivrn::ui::bold_font() = bold;
+	wivrn::ui::semibold_font() = semibold;
 }
 
 std::vector<imgui_context::controller_state> imgui_context::read_controllers_state(XrTime display_time)
@@ -801,6 +814,7 @@ void imgui_context::new_frame(XrTime display_time)
 	ImGui::SetCurrentContext(context);
 	ImPlot::SetCurrentContext(plot_context);
 	wivrn::ui::bold_font() = bold;
+	wivrn::ui::semibold_font() = semibold;
 
 	if (last_display_time)
 		io.DeltaTime = std::clamp((display_time - last_display_time) * 1e-9f, 0.001f, 0.0166f);
@@ -863,6 +877,28 @@ void imgui_context::new_frame(XrTime display_time)
 
 	hovered_item_prev = hovered_item;
 	hovered_item = 0;
+}
+
+// LVRR: the swapchain is sRGB, so what the shader writes is taken as linear light: turn the
+// GUI's sRGB colors into linear ones, so they show as the theme specifies them
+static void linearize_colors(ImDrawData * draw_data)
+{
+	static const auto lut = [] {
+		std::array<ImU32, 256> t;
+		for (int i = 0; i < 256; ++i)
+		{
+			const float c = i / 255.f;
+			t[i] = std::lround(255 * (c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f)));
+		}
+		return t;
+	}();
+
+	for (ImDrawList * list: draw_data->CmdLists)
+		for (ImDrawVert & v: list->VtxBuffer)
+			v.col = (v.col & IM_COL32_A_MASK) |
+			        lut[(v.col >> IM_COL32_R_SHIFT) & 0xff] << IM_COL32_R_SHIFT |
+			        lut[(v.col >> IM_COL32_G_SHIFT) & 0xff] << IM_COL32_G_SHIFT |
+			        lut[(v.col >> IM_COL32_B_SHIFT) & 0xff] << IM_COL32_B_SHIFT;
 }
 
 std::vector<std::pair<int, XrCompositionLayerQuad>> imgui_context::end_frame()
@@ -1040,6 +1076,8 @@ std::vector<std::pair<int, XrCompositionLayerQuad>> imgui_context::end_frame()
 	{
 		auto _ = queue.lock(); // ImGui_ImplVulkan_RenderDrawData uses the queue internally (in ImGui_ImplVulkan_UpdateTexture)
 		// TODO: patch imgui_impl_vulkan to accept a mutex
+		if constexpr (not wivrn::lvrr::stock_ui)
+			linearize_colors(ImGui::GetDrawData());
 		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), *cb);
 	}
 
@@ -1326,6 +1364,7 @@ void imgui_context::set_current()
 	ImGui::SetCurrentContext(context);
 	ImPlot::SetCurrentContext(plot_context);
 	wivrn::ui::bold_font() = bold;
+	wivrn::ui::semibold_font() = semibold;
 }
 
 void imgui_context::set_controllers_enabled(bool value)
@@ -1375,27 +1414,23 @@ void imgui_context::tooltip(std::string_view text, std::optional<ImVec2> anchor)
 	// Draw the tooltip in the tooltip layer, themed
 	// Clamp position to avoid overflowing on the left or the right
 	const wivrn::ui::theme & t = wivrn::ui::current();
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, wivrn::ui::metrics::tooltip_padding);
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, t.card_rounding);
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, t.border_size);
-	ImGui::PushStyleColor(ImGuiCol_PopupBg, t.background_contrast); // LVRR: card is translucent, the panel behind would show through
-	ImGui::PushStyleColor(ImGuiCol_Border, t.border);
-
-	auto & style = ImGui::GetStyle();
 	const ImVec2 text_size = ImGui::CalcTextSize(text.data(), text.data() + text.size(), true);
-	const ImVec2 tooltip_size = {text_size.x + style.WindowPadding.x * 2.0f, text_size.y + style.WindowPadding.y * 2.0f};
+	const ImVec2 padding = wivrn::ui::metrics::tooltip_padding;
+	const ImVec2 tooltip_size = text_size + padding * 2;
 
+	// LVRR: a One tooltip, with room for its shadow in its window
+	wivrn::ui::push_float_style(padding);
 	ImGui::SetNextWindowPos(viewport->Pos + viewport->Size * 0.5, ImGuiCond_Always, {0.5, 0.5});
 	ImGui::SetNextWindowSizeConstraints({0, 0}, viewport->Size);
 	if (ImGui::BeginTooltip())
 	{
-		ImGui::PushStyleColor(ImGuiCol_Text, t.col(t.text));
+		wivrn::ui::float_frame(t.rounding, 2);
+		ImGui::PushStyleColor(ImGuiCol_Text, t.text);
 		ImGui::TextUnformatted(text.data(), text.data() + text.size());
 		ImGui::PopStyleColor();
 		ImGui::EndTooltip();
 	}
-	ImGui::PopStyleColor(2);
-	ImGui::PopStyleVar(3);
+	wivrn::ui::pop_float_style();
 
 	viewport->Pos = pos_backup;
 	viewport->Size = size_backup;
