@@ -2,7 +2,7 @@ use std::{collections::HashMap, rc::Rc, sync::Arc};
 
 use chrono::Offset;
 use idmap::IdMap;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use strum::{AsRefStr, EnumProperty, EnumString, VariantArray, VariantNames};
 use wayvr_ipc::packet_client::WvrProcessLaunchParams;
 use wgui::drawing::{self, HsvColor};
@@ -13,6 +13,8 @@ use crate::{
 	overlays::{BackendAttribValue, ToastDisplayMethod, ToastTopic},
 	windowing::OverlayWindowState,
 };
+
+pub const CONFIG_VERSION: u32 = 1;
 
 pub type PwTokenMap = AStrMap<String>;
 pub type SerializedWindowStates = HashMap<Arc<str>, OverlayWindowState>;
@@ -87,11 +89,11 @@ pub enum InputCaptureMethod {
 #[derive(Default, Clone, Copy, Serialize, Deserialize, AsRefStr, EnumString, EnumProperty, VariantArray)]
 pub enum DefaultPositioning {
 	#[default]
-	#[strum(props(Translation = "DEFINITIONS.ANCHORED", Tooltip = "APP_SETTINGS.OPTION.ANCHORED_HELP"))]
-	Anchored,
-
 	#[strum(props(Translation = "DEFINITIONS.FLOATING", Tooltip = "APP_SETTINGS.OPTION.FLOATING_HELP",))]
 	Floating,
+
+	#[strum(props(Translation = "DEFINITIONS.ANCHORED", Tooltip = "APP_SETTINGS.OPTION.ANCHORED_HELP"))]
+	Anchored,
 
 	#[strum(props(Translation = "DEFINITIONS.STATIC", Tooltip = "APP_SETTINGS.OPTION.STATIC_HELP"))]
 	Static,
@@ -281,6 +283,15 @@ const fn def_point15() -> f32 {
 
 const fn def_osc_port() -> u16 {
 	9000
+}
+
+fn deserialize_or_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+	D: Deserializer<'de>,
+	T: Deserialize<'de> + Default,
+{
+	let value = serde_json::Value::deserialize(deserializer)?;
+	Ok(T::deserialize(value).unwrap_or_default())
 }
 
 fn def_timezones() -> Vec<String> {
@@ -480,7 +491,7 @@ pub struct GeneralConfig {
 	#[serde(default)]
 	pub spawn_overlays: Vec<Arc<str>>,
 
-	#[serde(default)]
+	#[serde(default, deserialize_with = "deserialize_or_default")]
 	pub autostart_apps: Vec<WvrProcessLaunchParams>,
 
 	#[serde(default)]
@@ -548,4 +559,10 @@ pub struct GeneralConfig {
 
 	#[serde(default)]
 	pub middle_grabs_single: bool,
+
+	#[serde(default)]
+	pub state_version: u32,
+
+	#[serde(default)]
+	pub config_version: u32,
 }

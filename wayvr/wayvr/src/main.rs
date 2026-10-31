@@ -184,7 +184,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     setup_signal_hooks()?;
 
     let mut used_backend = None;
-    auto_run(args, &mut used_backend);
+    auto_run(&args, &mut used_backend);
 
     if RESTART.load(Ordering::Relaxed) {
         use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
@@ -194,16 +194,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(path) = exe.as_os_str().as_bytes().strip_suffix(b" (deleted)") {
             exe = PathBuf::from(OsStr::from_bytes(path));
         }
-        let mut args = vec!["--replace", "--show"];
-
-        match used_backend {
-            Some(XrBackend::OpenXR) => args.push("--openxr"),
-            Some(XrBackend::OpenVR) => args.push("--openvr"),
-            _ => {}
-        }
 
         // oneVR: in place, so the systemd unit the server started this in keeps running
-        let err = std::os::unix::process::CommandExt::exec(Command::new(exe).args(args));
+        let err = std::os::unix::process::CommandExt::exec(
+            Command::new(exe).args(restart_args(&args, used_backend)),
+        );
         log::error!("Could not restart: {err}");
     }
 
@@ -211,23 +206,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[allow(unused_mut, clippy::similar_names)]
-fn auto_run(args: Args, used_backend: &mut Option<XrBackend>) {
+fn auto_run(args: &Args, out_backend: &mut Option<XrBackend>) {
     let mut tried_xr = false;
     let mut tried_vr = false;
 
     loop {
         #[cfg(feature = "openxr")]
-        if !args_get_openvr(&args) {
+        if !args_get_openvr(args) {
             use crate::backend::{BackendError, openxr::openxr_run};
             tried_xr = true;
-            match openxr_run(&args, init_run_params(args.no_audio)) {
+            match openxr_run(args, init_run_params(args.no_audio)) {
                 Ok(()) => {
-                    used_backend.replace(XrBackend::OpenXR);
+                    out_backend.replace(XrBackend::OpenXR);
                     return;
                 }
                 Err(BackendError::NotSupported) => (),
                 Err(e) => {
-                    used_backend.replace(XrBackend::OpenXR);
+                    out_backend.replace(XrBackend::OpenXR);
                     log::error!("{e:?}");
                     return;
                 }
@@ -235,17 +230,17 @@ fn auto_run(args: Args, used_backend: &mut Option<XrBackend>) {
         }
 
         #[cfg(feature = "openvr")]
-        if !args_get_openxr(&args) {
+        if !args_get_openxr(args) {
             use crate::backend::{BackendError, openvr::openvr_run};
             tried_vr = true;
-            match openvr_run(&args, init_run_params(args.no_audio)) {
+            match openvr_run(args, init_run_params(args.no_audio)) {
                 Ok(()) => {
-                    used_backend.replace(XrBackend::OpenVR);
+                    out_backend.replace(XrBackend::OpenVR);
                     return;
                 }
                 Err(BackendError::NotSupported) => (),
                 Err(e) => {
-                    used_backend.replace(XrBackend::OpenVR);
+                    out_backend.replace(XrBackend::OpenVR);
                     log::error!("{e:?}");
                     return;
                 }
@@ -311,6 +306,31 @@ const fn args_get_openxr(args: &Args) -> bool {
     let ret = false;
 
     ret
+}
+
+fn restart_args(args: &Args, backend: Option<XrBackend>) -> Vec<&'static str> {
+    let mut flags = vec!["--replace", "--show"];
+
+    match backend {
+        Some(XrBackend::OpenXR) => flags.push("--openxr"),
+        Some(XrBackend::OpenVR) => flags.push("--openvr"),
+        None => {}
+    }
+
+    if args.headless {
+        flags.push("--headless");
+    }
+    if args.no_autostart {
+        flags.push("--no-autostart");
+    }
+    if args.install {
+        flags.push("--install");
+    }
+    if args.no_audio {
+        flags.push("--no-audio");
+    }
+
+    flags
 }
 
 #[allow(clippy::single_match_else)]

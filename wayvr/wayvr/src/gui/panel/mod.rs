@@ -134,7 +134,10 @@ impl<S: 'static> GuiPanel<S> {
             path: if params.external_xml {
                 AssetPathRef::File(path)
             } else {
-                AssetPathRef::FileOrBuiltIn(path)
+                AssetPathRef::FileOrBuiltIn {
+                    path,
+                    fallback: None,
+                }
             },
             extra: wgui::parser::ParseDocumentExtra {
                 on_custom_attribs: Some(on_custom_attrib_inner.clone()),

@@ -108,6 +108,10 @@ impl OverlayLifetime {
 
 pub struct OverlayWindowConfig {
     pub name: Arc<str>,
+    /// Optional presentation title
+    pub title: Option<Arc<str>>,
+    pub persistent: bool,
+    pub restore_on_spawn: bool,
     pub backend: Box<dyn OverlayBackend>,
     /// The default state to show when the overlay is newly spawned.
     pub default_state: OverlayWindowState,
@@ -136,9 +140,16 @@ pub struct OverlayWindowConfig {
 }
 
 impl OverlayWindowConfig {
+    pub const fn can_persist(&self) -> bool {
+        self.persistent
+    }
+
     pub fn from_backend(backend: Box<dyn OverlayBackend>) -> Self {
         Self {
             name: "".into(),
+            title: None,
+            persistent: true,
+            restore_on_spawn: true,
             backend,
             default_state: OverlayWindowState {
                 transform: Affine3A::from_translation(Vec3::NEG_Z),
@@ -275,8 +286,8 @@ impl OverlayWindowConfig {
                 app.input_state.pointers[hand as usize].pose * cur_transform,
                 lerp,
             ),
-            Positioning::Anchored => (app.anchor * cur_transform, 1.0),
-            Positioning::Static | Positioning::Floating => (state.transform, 1.0), // STAGE space
+            Positioning::Anchored | Positioning::Floating => (app.anchor * cur_transform, 1.0),
+            Positioning::Static => (state.transform, 1.0), // STAGE space
         };
 
         state.transform = match lerp {
@@ -347,9 +358,9 @@ impl OverlayWindowConfig {
             .unwrap_or(self.default_state.transform);
 
         let parent_transform = match state.positioning {
-            Positioning::Floating | Positioning::FollowHead { .. } => app.input_state.hmd,
+            Positioning::FollowHead { .. } => app.input_state.hmd,
             Positioning::FollowHand { hand, .. } => app.input_state.pointers[hand as usize].pose,
-            Positioning::Anchored => app.anchor,
+            Positioning::Anchored | Positioning::Floating => app.anchor,
             Positioning::Static => {
                 if hard_reset {
                     app.input_state.hmd
@@ -437,7 +448,7 @@ pub fn scalar_scale(a: &Affine3A) -> f32 {
 
 pub fn save_transform(state: &mut OverlayWindowState, app: &mut AppState) {
     let parent_transform = match state.positioning {
-        Positioning::Floating => snap_upright(app.input_state.hmd, Vec3A::Y),
+        Positioning::Floating => app.anchor,
         Positioning::FollowHead { .. } => app.input_state.hmd,
         Positioning::FollowHand { hand, .. } => app.input_state.pointers[hand as usize].pose,
         Positioning::Anchored => snap_upright(app.anchor, Vec3A::Y),

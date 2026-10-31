@@ -10,7 +10,7 @@ use anyhow::Context;
 use glam::{DVec2, Vec2};
 use slotmap::DenseSlotMap;
 use smithay::{
-    backend::input::{Axis, AxisSource, ButtonState, Keycode},
+    backend::input::{Axis, AxisSource, ButtonState, InputTime, Keycode},
     input::{
         keyboard::KeyboardHandle,
         pointer::{AxisFrame, ButtonEvent, MotionEvent, PointerHandle, RelativeMotionEvent},
@@ -20,8 +20,6 @@ use smithay::{
 };
 use wgui::log::LogErr;
 use xkbcommon::xkb;
-
-use crate::backend::wayvr::WayVRTask;
 
 use super::{
     ProcessWayVREnv,
@@ -238,7 +236,7 @@ impl WayVRCompositor {
             Keycode::new(virtual_key),
             state,
             self.serial_counter.next_serial(),
-            super::time::get_millis() as u32,
+            InputTime::from_millis(super::time::get_millis() as u32),
             |_, _, _| smithay::input::keyboard::FilterResult::Forward,
         );
     }
@@ -252,7 +250,7 @@ impl WayVRCompositor {
                 keycode,
                 smithay::backend::input::KeyState::Released,
                 self.serial_counter.next_serial(),
-                super::time::get_millis() as u32,
+                InputTime::from_millis(super::time::get_millis() as u32),
                 |_, _, _| smithay::input::keyboard::FilterResult::Forward,
             );
         }
@@ -285,13 +283,14 @@ impl WayVRCompositor {
             (surface, focus_location)
         });
 
+        let time = InputTime::from_millis(super::time::get_millis() as u32);
         self.seat_pointer.motion(
             &mut self.state,
             focus.clone(),
             &MotionEvent {
                 location,
                 serial: self.serial_counter.next_serial(),
-                time: super::time::get_millis() as u32,
+                time,
             },
         );
         self.seat_pointer.relative_motion(
@@ -300,7 +299,7 @@ impl WayVRCompositor {
             &RelativeMotionEvent {
                 delta,
                 delta_unaccel,
-                utime: super::time::get_millis(),
+                time,
             },
         );
 
@@ -315,7 +314,7 @@ impl WayVRCompositor {
         };
 
         let serial = self.serial_counter.next_serial();
-        let time = super::time::get_millis() as u32;
+        let time = InputTime::from_millis(super::time::get_millis() as u32);
         let button = match index {
             super::MouseIndex::Left => 0x110,
             super::MouseIndex::Center => 0x112,
@@ -339,7 +338,7 @@ impl WayVRCompositor {
         // 15 logical axis units for one wheel detent of 120 v120 units
         const AXIS_VALUE_PER_DETENT: f64 = 15.0;
 
-        let time = super::time::get_millis() as u32;
+        let time = InputTime::from_millis(super::time::get_millis() as u32);
 
         let v120_x = delta.x as i32;
         let v120_y = delta.y as i32;
@@ -373,7 +372,7 @@ impl WayVRCompositor {
     }
 
     pub fn send_pointer_axis_wheel_accumulated(&mut self, delta: super::WheelDelta) {
-        let time = super::time::get_millis() as u32;
+        let time = InputTime::from_millis(super::time::get_millis() as u32);
 
         let multiplier = 32.0;
         let delta_x = (delta.x * multiplier) as i32;

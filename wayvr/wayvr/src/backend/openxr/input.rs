@@ -738,7 +738,7 @@ fn for_each_path(spec: Option<&OneOrMany<String>>, mut f: impl FnMut(&str)) {
     }
 }
 
-fn button_actions(profile: &OpenXrInputProfile) -> [Option<&OpenXrInputAction>; 11] {
+const fn button_actions(profile: &OpenXrInputProfile) -> [Option<&OpenXrInputAction>; 11] {
     [
         profile.click.as_ref(),
         profile.alt_click.as_ref(),
@@ -964,7 +964,7 @@ fn add_button_bindings(
             physical_input_map,
             &grab_inputs,
         ) {
-            field(&mut **hand).add_binding(binding);
+            field(hand).add_binding(binding);
         }
     }
 }

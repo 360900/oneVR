@@ -55,7 +55,8 @@ strum.workspace = true
 tracing-subscriber.workspace = true
 uuid = { workspace = true }
 wayland-client = { workspace = true }
-wayland-protocols = { workspace = true }
+wayland-protocols = { workspace = true, features = ["server", "staging"] }
+wayland-scanner = "0.31.10"
 wayland-protocols-misc = { workspace = true }
 winit = { workspace = true, optional = true }
 xdg.workspace = true
@@ -64,6 +65,7 @@ bytes = { workspace = true }
 chrono-tz = "0.10.4"
 config = "0.15.25"
 futures = "0.3.32"
+image.workspace = true
 image_dds = {
   version = "0.7.2",
   default-features = false,
@@ -97,7 +99,8 @@ rosc = { version = "0.11.4", optional = true }
 serde_yaml = "0.9.33"
 signal-hook = "0.4.4"
 smithay = {
-  version = "0.7.0",
+  git = "https://github.com/Smithay/smithay.git",
+  rev = "0d66849533b475c40c0c461ec182d0f939424452",
   default-features = false,
   features = [
     "backend_vulkan",
