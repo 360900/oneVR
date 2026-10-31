@@ -18,7 +18,7 @@
 
 #include "imgui_impl.h"
 #include "implot.h"
-#include "lvrr.h"
+#include "onevr.h"
 
 #include "application.h"
 #include "constants.h"
@@ -539,17 +539,17 @@ void imgui_context::initialize_fonts()
 		}
 	}
 
-	// LVRR: the lobby's icons are Adwaita's, Font Awesome is only for WiVRn's own GUI
+	// oneVR: the lobby's icons are Adwaita's, Font Awesome is only for WiVRn's own GUI
 	assert(font_awesome.empty());
-	if constexpr (wivrn::lvrr::stock_ui)
+	if constexpr (wivrn::onevr::stock_ui)
 	{
 		font_awesome.emplace_back("assets://Font Awesome 7 Free-Regular-400.otf");
 		font_awesome.emplace_back("assets://Font Awesome 7 Free-Solid-900.otf");
 		font_awesome.emplace_back("assets://Font Awesome 7 Brands-Regular-400.otf");
 	}
-	icons = utils::mapped_file("assets://lvrr-icons.otf");
+	icons = utils::mapped_file("assets://onevr-icons.otf");
 
-	// LVRR: the One design's font comes first, the system fonts fill in the scripts it lacks
+	// oneVR: the One design's font comes first, the system fonts fill in the scripts it lacks
 	assert(ui_font.empty());
 	ui_font.emplace_back("assets://Inter-Regular.ttf");
 	ui_font.emplace_back("assets://Inter-SemiBold.ttf");
@@ -558,7 +558,7 @@ void imgui_context::initialize_fonts()
 	for (auto & font: fonts)
 		spdlog::info("Using font {}", font, application::get_messages_info().language);
 
-	// LVRR: map each system font once, every family merges the same bytes
+	// oneVR: map each system font once, every family merges the same bytes
 	for (auto & font: fonts)
 	{
 		try
@@ -879,7 +879,7 @@ void imgui_context::new_frame(XrTime display_time)
 	hovered_item = 0;
 }
 
-// LVRR: the swapchain is sRGB, so what the shader writes is taken as linear light: turn the
+// oneVR: the swapchain is sRGB, so what the shader writes is taken as linear light: turn the
 // GUI's sRGB colors into linear ones, so they show as the theme specifies them
 static void linearize_colors(ImDrawData * draw_data)
 {
@@ -1020,7 +1020,7 @@ std::vector<std::pair<int, XrCompositionLayerQuad>> imgui_context::end_frame()
 
 	ImGui::Render();
 
-	// LVRR: a swapchain shows its most recently released image, so the quads keep
+	// oneVR: a swapchain shows its most recently released image, so the quads keep
 	// pointing at it while the draw data and their rects match it. A change nobody points
 	// at waits one frame, so an animation (a spinner, a caret) is drawn every other frame.
 	// A window that appears, moves or resizes is drawn at once: the quads would crop the
@@ -1076,7 +1076,7 @@ std::vector<std::pair<int, XrCompositionLayerQuad>> imgui_context::end_frame()
 	{
 		auto _ = queue.lock(); // ImGui_ImplVulkan_RenderDrawData uses the queue internally (in ImGui_ImplVulkan_UpdateTexture)
 		// TODO: patch imgui_impl_vulkan to accept a mutex
-		if constexpr (not wivrn::lvrr::stock_ui)
+		if constexpr (not wivrn::onevr::stock_ui)
 			linearize_colors(ImGui::GetDrawData());
 		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), *cb);
 	}
@@ -1418,7 +1418,7 @@ void imgui_context::tooltip(std::string_view text, std::optional<ImVec2> anchor)
 	const ImVec2 padding = wivrn::ui::metrics::tooltip_padding;
 	const ImVec2 tooltip_size = text_size + padding * 2;
 
-	// LVRR: a One tooltip, with room for its shadow in its window
+	// oneVR: a One tooltip, with room for its shadow in its window
 	wivrn::ui::push_float_style(padding);
 	ImGui::SetNextWindowPos(viewport->Pos + viewport->Size * 0.5, ImGuiCond_Always, {0.5, 0.5});
 	ImGui::SetNextWindowSizeConstraints({0, 0}, viewport->Size);

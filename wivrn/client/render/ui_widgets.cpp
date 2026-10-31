@@ -23,7 +23,7 @@
 #include "imgui_internal.h"
 #include "ui_theme.h"
 
-#include "IconsLvrr.h"
+#include "IconsOneVr.h"
 
 #include <algorithm>
 #include <cmath>
@@ -286,7 +286,7 @@ void row_separator()
 		return;
 	}
 
-	// LVRR: a hairline across the whole box, like the rows of a boxed list
+	// oneVR: a hairline across the whole box, like the rows of a boxed list
 	const card_frame & cf = card_stack.back();
 	ImGuiWindow * window = ImGui::GetCurrentWindow();
 	const float y = window->DC.CursorPos.y;
@@ -354,7 +354,7 @@ button_colors colors_for(button_style s, const theme & t)
 	return {};
 }
 
-// LVRR: One buttons are flat fills
+// oneVR: One buttons are flat fills
 void button_frame(ImDrawList * draw, const ImRect & bb, const ImVec4 & bg, float rounding)
 {
 	if (bg.w <= 0)
@@ -615,7 +615,7 @@ bool cancel_progress_button(const char * id, float fraction, const ImVec2 & size
 	}
 
 	// stop glyph in the centre, darkening on hover to read as a cancel target
-	glyph_centered(draw, ICON_LVRR_STOP, center, size.y * metrics::icon_button_glyph * 0.7f, t.col(hovered or held ? t.text : t.text_muted));
+	glyph_centered(draw, ICON_ONEVR_STOP, center, size.y * metrics::icon_button_glyph * 0.7f, t.col(hovered or held ? t.text : t.text_muted));
 
 	return pressed;
 }
@@ -637,7 +637,7 @@ static bool reset_slot(const char * id, bool show)
 		return false;
 	}
 	ImGui::PushID(id);
-	const bool clicked = icon_button(ICON_LVRR_RESET, {side, side}, false, "Reset to default");
+	const bool clicked = icon_button(ICON_ONEVR_RESET, {side, side}, false, "Reset to default");
 	ImGui::PopID();
 	return clicked;
 }
@@ -886,7 +886,7 @@ bool combo_row(const combo_item & item, bool selected, bool checked)
 		draw->AddRectFilled(bb.Min, bb.Max, t.col(t.hover), r);
 
 	if (checked)
-		glyph_centered(draw, ICON_LVRR_CHECK, {bb.Max.x - metrics::combo_padding.x - metrics::shell_nav_glyph * 0.5f, bb.GetCenter().y}, metrics::shell_nav_glyph, t.col(t.accent));
+		glyph_centered(draw, ICON_ONEVR_CHECK, {bb.Max.x - metrics::combo_padding.x - metrics::shell_nav_glyph * 0.5f, bb.GetCenter().y}, metrics::shell_nav_glyph, t.col(t.accent));
 
 	const float tx = bb.Min.x + metrics::combo_padding.x;
 	const ImU32 name_col = t.col(selected ? t.on_container : t.text);
@@ -954,7 +954,7 @@ bool combo_impl(const char * id, const std::string & title, const char * preview
 	draw->PopClipRect();
 
 	// chevron on the right
-	glyph_centered(draw, ICON_LVRR_PAN_DOWN, {bb.Max.x - pad_x - metrics::combo_chevron * 0.5f, bb.GetCenter().y}, metrics::combo_chevron * 2, t.col(t.text_muted));
+	glyph_centered(draw, ICON_ONEVR_PAN_DOWN, {bb.Max.x - pad_x - metrics::combo_chevron * 0.5f, bb.GetCenter().y}, metrics::combo_chevron * 2, t.col(t.text_muted));
 
 	char popup_id[64];
 	std::snprintf(popup_id, sizeof(popup_id), "##combo_%08X", gid);
@@ -1257,13 +1257,13 @@ bool input_int(const char * id, int * v, int step, int v_min, int v_max, float w
 	hover_haptic();
 
 	ImGui::SameLine(0, gap);
-	if (icon_button(ICON_LVRR_REMOVE, {side, side}))
+	if (icon_button(ICON_ONEVR_REMOVE, {side, side}))
 	{
 		*v -= step;
 		changed = true;
 	}
 	ImGui::SameLine(0, gap);
-	if (icon_button(ICON_LVRR_ADD, {side, side}))
+	if (icon_button(ICON_ONEVR_ADD, {side, side}))
 	{
 		*v += step;
 		changed = true;
@@ -1508,7 +1508,7 @@ int action_menu(const char * id, const char * icon, const std::vector<action_ite
 				const ImVec2 ls = ImGui::CalcTextSize(it.label);
 				draw->AddText({bb.Min.x + pad + icon_w, bb.Min.y + (row_h - ls.y) * 0.5f}, fg, it.label);
 				if (it.checked)
-					glyph_centered(draw, ICON_LVRR_CHECK, {bb.Max.x - pad - glyph * 0.5f, bb.GetCenter().y}, glyph, t.col(t.accent));
+					glyph_centered(draw, ICON_ONEVR_CHECK, {bb.Max.x - pad - glyph * 0.5f, bb.GetCenter().y}, glyph, t.col(t.accent));
 			}
 			ImGui::PopID();
 		}
@@ -1544,7 +1544,7 @@ void top_bar(float height, ImTextureID logo, const std::vector<top_bar_item> & r
 		ImGui::SameLine(0, 12);
 		ImGui::PushFont(nullptr, ImGui::GetStyle().FontSizeBase * 1.3f);
 		ImGui::SetCursorPosY((height - ImGui::GetFontSize()) * 0.5f);
-		ImGui::TextUnformatted("LVRR");
+		ImGui::TextUnformatted("oneVR");
 		ImGui::PopFont();
 
 		// right-aligned cluster
@@ -1610,7 +1610,7 @@ void shell_dividers(float top_bar_h, float tab_width)
 	dl->AddLine({win_pos.x + tab_width, win_pos.y + top_bar_h}, {win_pos.x + tab_width, win_pos.y + win_size.y}, divider);
 }
 
-// LVRR: the lobby's One window
+// oneVR: the lobby's One window
 
 namespace
 {
@@ -1713,7 +1713,7 @@ bool shell_header(float width, const std::string & title, const std::string & cl
 			show_tooltip(close_tooltip);
 		draw->AddCircleFilled(center, d * 0.5f, t.col(held ? t.control_active : hovered ? t.control_hovered
 		                                                                                : t.control));
-		glyph_centered(draw, ICON_LVRR_CLOSE, center, metrics::shell_close_glyph, t.col(t.text));
+		glyph_centered(draw, ICON_ONEVR_CLOSE, center, metrics::shell_close_glyph, t.col(t.text));
 	}
 
 	ImGui::EndChild();

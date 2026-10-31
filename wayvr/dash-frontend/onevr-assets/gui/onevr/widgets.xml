@@ -1,0 +1,156 @@
+<layout version="2">
+  <!-- oneVR: building blocks for the oneVR dashboard pages, see src/tab/onevr/ui.rs -->
+  <include src="@/gui/t_group_box.xml" />
+  <include src="@/gui/t_dropdown_button.xml" />
+
+  <!-- id, translation, icon -->
+  <template name="Group">
+    <rectangle macro="group_box" id="${id}" width="100%">
+      <GroupBoxTitle translation="${translation}" src_builtin="${icon}" />
+    </rectangle>
+  </template>
+
+  <!-- id -->
+  <template name="Row">
+    <div id="${id}" flex_direction="row" align_items="center" gap="12" flex_wrap="wrap" />
+  </template>
+
+  <!-- id; a row that wraps its children within the parent's width -->
+  <template name="WrapRow">
+    <div id="${id}" flex_direction="row" align_items="center" gap="12" flex_wrap="wrap" width="100%" />
+  </template>
+
+  <!-- translation; a section heading with an underline rule -->
+  <template name="SectionHeader">
+    <div flex_direction="column" gap="6" width="100%" margin_top="12">
+      <label translation="${translation}" weight="bold" size="15" color="text" />
+      <rectangle width="100%" height="1" color="stroke" />
+    </div>
+  </template>
+
+  <!-- id; a row that never wraps, for a Column of details followed by buttons -->
+  <template name="Line">
+    <div id="${id}" flex_direction="row" align_items="center" gap="12" width="100%" />
+  </template>
+
+  <!-- id; takes the rest of a Row's line and puts its children at its end. A Line there
+       would be as wide as the Row and wrap onto a line of its own. -->
+  <template name="RowEnd">
+    <div id="${id}" flex_direction="row" align_items="center" justify_content="end" gap="4" flex_grow="1" />
+  </template>
+
+  <!-- id -->
+  <template name="Column">
+    <div id="${id}" flex_direction="column" gap="4" flex_grow="1" flex_shrink="1" />
+  </template>
+
+  <!-- id; a column as wide as its parent, so section rules and rows span the group.
+       A Group doesn't stretch its children, and a Column is only as wide as its widest row. -->
+  <template name="List">
+    <div id="${id}" flex_direction="column" gap="4" width="100%" />
+  </template>
+
+  <!-- id; a positioning context sized to its child, for overlays on a game cover -->
+  <template name="CoverWrap">
+    <div id="${id}" position="relative" flex_direction="column" />
+  </template>
+
+  <!-- id; pinned to the top-right corner of a CoverWrap. CoverWrap is a column, so
+       align_self moves along the horizontal axis; justify_self does nothing in flexbox. -->
+  <template name="CornerOverlay">
+    <div id="${id}" position="absolute" align_self="end" margin_top="6" margin_right="6" flex_direction="row" align_items="center" gap="4" />
+  </template>
+
+  <!-- text, translation, size, color -->
+  <template name="Text">
+    <label text="${text}" translation="${translation}" size="${size}" color="${color}" wrap="1" />
+  </template>
+
+  <!-- text, translation, size, color -->
+  <template name="Bold">
+    <label text="${text}" translation="${translation}" size="${size}" color="${color}" weight="bold" wrap="1" />
+  </template>
+
+  <!-- translation, bg, fg; see Ui::badge for the tones. Body text size, smaller is hard to
+       read on the VR panel -->
+  <template name="Badge">
+    <rectangle round="6" color="${bg}" padding_left="8" padding_right="8" padding_top="2" padding_bottom="2">
+      <label translation="${translation}" size="13" weight="semibold" color="${fg}" />
+    </rectangle>
+  </template>
+
+  <!-- translation, icon, bg, fg; a Badge with an icon before the text, for game covers.
+       Its fill is opaque, a see-through one is hard to read on bright art. -->
+  <template name="IconBadge">
+    <rectangle round="6" color="${bg}" shadow="1" padding_left="8" padding_right="8" padding_top="2" padding_bottom="2" flex_direction="row" align_items="center" gap="4">
+      <sprite src_builtin="${icon}" width="14" height="14" color="${fg}" />
+      <label translation="${translation}" size="13" weight="semibold" color="${fg}" />
+    </rectangle>
+  </template>
+
+  <!-- id, text, translation, checked -->
+  <template name="ToggleText">
+    <CheckBox id="${id}" text="${text}" translation="${translation}" checked="${checked}" />
+  </template>
+
+  <!-- id, min, max, step, value; the label goes above it, see Ui::slider -->
+  <template name="Slider">
+    <Slider id="${id}" width="300" height="24" min_value="${min}" max_value="${max}" step="${step}" value="${value}" />
+  </template>
+
+  <!-- id, text; in VR the keyboard types into it while it has focus -->
+  <template name="EditBox">
+    <EditBox id="${id}" text="${text}" width="260" height="36" />
+  </template>
+
+  <!-- id, text, translation, icon, color; a Button clips what overflows it, which lets flexbox
+       shrink it below its content beside a long text in a Line, the sprite first as it has no
+       content size. The text beside it wraps instead. -->
+  <template name="Button">
+    <Button id="${id}" height="36" padding_left="12" padding_right="14" gap="8" color="${color}" flex_shrink="0">
+      <sprite src_builtin="${icon}" height="16" width="16" flex_shrink="0" />
+      <label text="${text}" translation="${translation}" weight="semibold" />
+    </Button>
+  </template>
+
+  <!-- id, icon, tooltip; doesn't shrink beside a long text either, see Button -->
+  <template name="IconButton">
+    <Button id="${id}" width="36" height="36" color="fill" tooltip="${tooltip}" align_items="center" justify_content="center" flex_shrink="0">
+      <sprite src_builtin="${icon}" height="16" width="16" />
+    </Button>
+  </template>
+
+  <!-- id, translation, icon; the label always gets room for two lines, so icons line up across tiles.
+       A sprite has no content size, so without flex_shrink="0" flexbox would squash it first. -->
+  <template name="ActionButton">
+    <Button id="${id}" width="150" height="104" padding="8" gap="8" round="14" color="surface_alt" hover_color="fill_strong" flex_direction="column" align_items="center" justify_content="center">
+      <sprite src_builtin="${icon}" height="28" width="28" flex_shrink="0" />
+      <div height="40" flex_shrink="0" flex_direction="column" justify_content="center" align_items="center">
+        <label translation="${translation}" weight="semibold" align="center" wrap="1" />
+      </div>
+    </Button>
+  </template>
+
+  <!-- translation, value_id -->
+  <template name="Stat">
+    <rectangle flex_direction="column" align_items="baseline" gap="2" min_width="120" padding_left="12" padding_right="12" padding_top="8" padding_bottom="8" round="10" color="surface_alt">
+      <label translation="${translation}" size="12" color="text2" />
+      <label id="${value_id}" weight="semibold" size="18" color="text" text="-" />
+    </rectangle>
+  </template>
+
+  <!-- id, name, limit_max, unit -->
+  <template name="Graph">
+    <rectangle flex_direction="column" align_items="baseline" gap="8" color="surface_alt" round="10" padding="10">
+      <label translation="${name}" size="12" color="text2" />
+      <BarGraph id="${id}" width="240" height="80" unit="${unit}" limit_min="0" limit_max="${limit_max}" capacity="120" />
+    </rectangle>
+  </template>
+
+  <!-- id, translation, bg, fg; see Ui::banner -->
+  <template name="Banner">
+    <rectangle id="${id}" width="100%" flex_direction="row" align_items="center" justify_content="space_between" gap="12" padding_left="14" padding_right="10" padding_top="10" padding_bottom="10" min_height="56" round="14" color="${bg}">
+      <label translation="${translation}" weight="semibold" color="${fg}" wrap="1" />
+    </rectangle>
+  </template>
+</layout>

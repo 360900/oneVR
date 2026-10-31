@@ -463,7 +463,7 @@ void scenes::stream::tracking()
 				}
 
 				// Meta's body tracking doesn't work alongside it
-				session.set_simultaneous_hands_and_controllers(lvrr_simultaneous_hands and std::holds_alternative<std::monostate>(body_tracker));
+				session.set_simultaneous_hands_and_controllers(onevr_simultaneous_hands and std::holds_alternative<std::monostate>(body_tracker));
 			}
 
 			hands.clear();
@@ -525,8 +525,8 @@ void scenes::stream::tracking()
 							{
 								j.pose = i.pose;
 								j.fov = i.fov;
-								// LVRR: games render a smaller FOV, the headset leaves the edges black
-								const float h = lvrr_fov_horizontal, v = lvrr_fov_vertical;
+								// oneVR: games render a smaller FOV, the headset leaves the edges black
+								const float h = onevr_fov_horizontal, v = onevr_fov_vertical;
 								auto scale = [](float angle, float k) { return std::atan(std::tan(angle) * k); };
 								j.fov.angleLeft = scale(j.fov.angleLeft, h);
 								j.fov.angleRight = scale(j.fov.angleRight, h);
@@ -665,22 +665,22 @@ void scenes::stream::tracking()
 				scheduled_derived_pose.compare_exchange_strong(old, 0);
 			}
 		}
-		// LVRR: this loop only sends to the server, so only socket errors mean a lost connection;
+		// oneVR: this loop only sends to the server, so only socket errors mean a lost connection;
 		// OpenXR and tracker errors are the headset's
 		catch (socket_shutdown & e)
 		{
-			lvrr_connection_lost(e);
+			onevr_connection_lost(e);
 		}
 		catch (std::system_error & e)
 		{
 			if (e.code().category() == xr::error_category())
-				lvrr_headset_error(e);
+				onevr_headset_error(e);
 			else
-				lvrr_connection_lost(e);
+				onevr_connection_lost(e);
 		}
 		catch (std::exception & e)
 		{
-			lvrr_headset_error(e);
+			onevr_headset_error(e);
 		}
 	}
 

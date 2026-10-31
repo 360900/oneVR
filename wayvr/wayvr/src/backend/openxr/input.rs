@@ -160,7 +160,7 @@ impl MultiClickHandler {
             return false;
         }
 
-        // LVRR: a press that doesn't count, like a grab, also drops the clicks before it
+        // oneVR: a press that doesn't count, like a grab, also drops the clicks before it
         if !counts {
             self.previous = [None, None];
             self.held_inactive = true;
@@ -199,7 +199,7 @@ enum ButtonConditionSet {
 struct ButtonBinding {
     conditions: ButtonConditionSet,
     clicks: MultiClickHandler,
-    // LVRR: a multi-click that the grab's input alone fires counts a press only while the
+    // oneVR: a multi-click that the grab's input alone fires counts a press only while the
     // pointer points at nothing and holds nothing, so retrying a grab doesn't fire it
     idle_only: bool,
 }
@@ -265,10 +265,10 @@ pub(super) struct OpenXrHandSource {
 
 impl OpenXrInputSource {
     pub fn new(xr: &XrState) -> anyhow::Result<Self> {
-        let mut action_set = xr
-            .session
-            .instance()
-            .create_action_set("wayvr", "LVRR Actions", 0)?;
+        let mut action_set =
+            xr.session
+                .instance()
+                .create_action_set("wayvr", "oneVR Actions", 0)?;
 
         let mut left_source = OpenXrHandSource::new(&mut action_set, "left")?;
         let mut right_source = OpenXrHandSource::new(&mut action_set, "right")?;
@@ -632,7 +632,7 @@ impl OpenXrPointer {
         xr: &XrState,
         physical_inputs: &[PhysicalInput],
     ) -> anyhow::Result<()> {
-        // LVRR: points at nothing and holds nothing, as of the last interact()
+        // oneVR: points at nothing and holds nothing, as of the last interact()
         let idle =
             pointer.interaction.hovered_id.is_none() && pointer.interaction.grabbed.is_none();
 
@@ -894,7 +894,7 @@ fn build_button_bindings(
         }
     });
     if !alternatives.is_empty() {
-        // LVRR: e.g. the hand profile's double fist, which shares the grab's grasp input
+        // oneVR: e.g. the hand profile's double fist, which shares the grab's grasp input
         let idle_only = !matches!(count, ClickCount::Single)
             && alternatives
                 .iter()
@@ -927,7 +927,7 @@ fn build_button_bindings(
             bindings.push(ButtonBinding {
                 conditions: ButtonConditionSet::All(conditions),
                 clicks: MultiClickHandler::new(count),
-                // LVRR: a chord needs more than the grab
+                // oneVR: a chord needs more than the grab
                 idle_only: false,
             });
         }
@@ -949,7 +949,7 @@ fn add_button_bindings(
     };
 
     for (side, hand) in hands.iter_mut().enumerate() {
-        // LVRR: the inputs this hand grabs with
+        // oneVR: the inputs this hand grabs with
         let mut grab_inputs = Vec::new();
         for_each_path(grab.and_then(|grab| action_spec(grab, side)), |path| {
             if let Some(input) = physical_input_index(physical_input_map, profile_index, path) {
@@ -1025,7 +1025,7 @@ fn suggest_bindings(
         );
         add_button_bindings(
             profile.grab.as_ref(),
-            // LVRR: never idle-only, or a double-click grab could not grab a panel
+            // oneVR: never idle-only, or a double-click grab could not grab a panel
             None,
             profile_index,
             hands,

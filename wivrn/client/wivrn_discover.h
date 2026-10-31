@@ -39,7 +39,7 @@ public:
 	static inline const std::chrono::milliseconds poll_max_time{10000};
 	static inline const std::chrono::milliseconds discover_period{5000};
 
-	// LVRR: until a new discovery heard from every PC, the lobby does not trust what it misses
+	// oneVR: until a new discovery heard from every PC, the lobby does not trust what it misses
 	const std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
 
 private:

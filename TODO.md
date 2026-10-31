@@ -1,4 +1,4 @@
-# LVRR TODO
+# oneVR TODO
 
 Reconciled against CHANGES.md on 2026-10-31. Items already implemented per CHANGES
 are removed. The 2026-10-30 branch work is merged to main (f598d729) and pushed; CI is
@@ -6,13 +6,13 @@ building the APK.
 
 ## Verify on the Quest (shipped this session, not yet confirmed on device)
 
-- Blocker 1, screens crash: the LVRR DMA-buf copy is now opt-in
-  (`copy_captured_frames: true` in `~/.config/wayvr/lvrr.json5`, only on GPUs with a
+- Blocker 1, screens crash: the oneVR DMA-buf copy is now opt-in
+  (`copy_captured_frames: true` in `~/.config/wayvr/onevr.json5`, only on GPUs with a
   second graphics queue), default off = upstream in-place sampling. Confirm screens show
   without the Xid 69 device-lost crash.
-- Blocker 2, Steam runtime: `~/.config/environment.d/lvrr.conf` is written and the var is
+- Blocker 2, Steam runtime: `~/.config/environment.d/onevr.conf` is written and the var is
   active. Confirm a Steam VR game opens in the headset, not on the monitor, and that
-  `lvrr doctor`'s Steam game sandbox row, `lvrr steam` and PC > Server's Steam launch
+  `onevr doctor`'s Steam game sandbox row, `onevr steam` and PC > Server's Steam launch
   options agree with it (all three now read the running Steam's environment).
 - Hand grab (#18): grasp thresholds raised to press 0.9. Confirm a pointing hand no longer
   grabs and the dashboard does not reopen on its own; tune if still off. A double fist now
@@ -37,14 +37,14 @@ building the APK.
 - VR keyboard: clicking the Library search shows it, and after the clear button it keeps
   typing into the box, not the PC's window. Hidden from the watch, it stays hidden on a
   press elsewhere (between covers, on a label); a press on the box shows it.
-- PC > Diagnostics > Fix in VR (wayvr runs under lvrr-server.service): the admin password
+- PC > Diagnostics > Fix in VR (wayvr runs under onevr-server.service): the admin password
   prompt shows on the PC's screen and the row updates after it; cancelling the prompt
   toasts "Couldn't apply the fix: the admin password prompt was closed".
 - Home's Codec and Resolution tiles show what the session streams (e.g. HEVC 10-bit with
   the codec on Automatic) and keep the running values after a restart-only change until
   Restart session.
 - Pairing from the desktop window during a session: one confirm, Getting a PIN..., then the
-  PIN. With LVRR stopped, the tray's Pair headset starts it first; Pair headset again while
+  PIN. With oneVR stopped, the tray's Pair headset starts it first; Pair headset again while
   a PIN shows keeps that PIN.
 - Stats pause: stream with the desktop window on PC > Performance, then open the headset's
   system menu or take it off for 5 s. The graphs stay and go on when you return; the stage
@@ -77,14 +77,14 @@ Headset interaction (do with the device):
   panel planes). Larger feature.
 
 Server and dashboard:
-- Auto audio switch (#14): WiVRn makes a PipeWire sink "wivrn.sink" (desc "LVRR",
+- Auto audio switch (#14): WiVRn makes a PipeWire sink "wivrn.sink" (desc "oneVR",
   Audio/Sink) per session in server/audio/audio_pipewire.cpp (wivrn_session.cpp:106). Switch
   the PC default to it on connect and restore on disconnect via the "default" metadata
   (default.configured.audio.sink) from the audio pipewire loop, saving/restoring the prior
   value. Gate behind a config option (default on). Verify on the device; don't shell out to
   pactl/wpctl in the shipped server.
 - Game-exited-without-connecting message (blocker-2 follow-up): detect in the server when a
-  launched app exits while never opening an XR session, and send a new lvrr_packets message
+  launched app exits while never opening an XR session, and send a new onevr_packets message
   so the headset shows "the game closed without starting in VR; check the Steam launch
   option / re-login". Needs app tracking in server/main.cpp (forked_children exit) crossed
   with whether an XR session opened, plus a headset-side notice.
@@ -101,7 +101,7 @@ Server and dashboard:
   bundled and a default path (skymaps are downloaded at runtime today). Passthrough default
   is already off.
 - Lobby layout (#23): drop the separator between the computer list and "Add server"; put
-  the list under the heading "Pick a PC running the LVRR server to stream from."
+  the list under the heading "Pick a PC running the oneVR server to stream from."
 - Real remote stop (optional, from #25): a headset action that actually stops the PC
   session (StopSession/StopServer over the connection), beyond the current close-the-app.
 
@@ -112,7 +112,7 @@ Stability, verify on this build:
   after today's build; may be resolved by the blocker-1 fix or the #1153 Monado patch.
 
 Known bugs and limits:
-- Monado lvrr-0004 at session end: for apps without a timeline semaphore
+- Monado onevr-0004 at session end: for apps without a timeline semaphore
   (XR_KHR_vulkan_enable, so Proton games), swapchains destroyed after the last frame are
   freed at once, and work queued after the last xrEndFrame is not waited for. A fence per
   swapchain on each release barrier would cover both.
@@ -133,22 +133,22 @@ Known bugs and limits:
   "ScreenCopy CPU", and on GPU capture once it falls back to shared memory. Needs
   Bgr888/Rgb888 in both (image copy wants a stride that is a multiple of 3) and each row
   expanded to Xbgr8888/Xrgb8888 before upload, as fourcc_to_vk has no 24-bit format.
-- KWin before 6.8 offers its screencast to wayvr only if io.github.lvrr.wayvr.desktop is
-  found. When it isn't, only VR says so; `lvrr doctor` (and so PC > Diagnostics) could
+- KWin before 6.8 offers its screencast to wayvr only if io.github.onevr.wayvr.desktop is
+  found. When it isn't, only VR says so; `onevr doctor` (and so PC > Diagnostics) could
   check the entry and its Exec, and fix it by linking it into ~/.local/share/applications.
 - Virtual monitors: Home lists one still being restored like a working one; only the toast
   at start says it is retried. After removing a lower-numbered one, the rest are renamed at
-  the next start ([LVRR-1, LVRR-3] come back as LVRR-1 and LVRR-2), and the renamed one
-  loses its placement and settings. Saving the names in lvrr.json5 would fix it.
+  the next start ([oneVR-1, oneVR-3] come back as oneVR-1 and oneVR-2), and the renamed one
+  loses its placement and settings. Saving the names in onevr.json5 would fix it.
   Compositor detection still trusts another login's Hyprland: a launcher can hand Hyprland
   its Wayland socket, so a pid check can't rule it out.
-- A Library page restored after a restart can toast "The LVRR server is not running." when
+- A Library page restored after a restart can toast "The oneVR server is not running." when
   its first request beats the link's first answer. new() could skip the request while the
   link is down, as update() asks once it is up.
 - CI debug APKs get a new signing key each run, so one can't update another, until the repo
   secret APK_DEBUG_KEYSTORE_BASE64 holds a debug keystore in base64. With the local one
   (`base64 -w0 ~/.android/debug.keystore`), local and CI debug builds update each other.
-  After setting it, uninstall io.github.lvrr.debug once.
+  After setting it, uninstall io.github.onevr.debug once.
 
 Features not yet built:
 - Starting bitrate from a UDP burst during the handshake.

@@ -48,7 +48,7 @@ struct server_error
 	std::string message;
 };
 
-// LVRR: a headset passed the running session's checks and resumes it
+// oneVR: a headset passed the running session's checks and resumes it
 struct headset_resumed
 {
 	std::string public_key;
@@ -64,8 +64,8 @@ using packets = std::variant<
         headset_connected,
         headset_disconnected,
         server_error,
-        wivrn::lvrr::headset_settings,
-        wivrn::lvrr::stats,
+        wivrn::onevr::headset_settings,
+        wivrn::onevr::stats,
         wivrn::to_headset::server_message,
         headset_resumed>;
 } // namespace from_monado
@@ -74,8 +74,8 @@ namespace to_monado
 {
 struct stop
 {
-	// LVRR: what the headset is told; StopSession ends only the session, LVRR keeps running
-	wivrn::lvrr::server_stopping::reason_t reason = wivrn::lvrr::server_stopping::reason_t::stopped;
+	// oneVR: what the headset is told; StopSession ends only the session, oneVR keeps running
+	wivrn::onevr::server_stopping::reason_t reason = wivrn::onevr::server_stopping::reason_t::stopped;
 };
 
 struct disconnect
@@ -86,11 +86,11 @@ struct set_bitrate
 	uint32_t bitrate_bps;
 };
 
-// LVRR: close the session so connection-time settings apply; the headset reconnects
+// oneVR: close the session so connection-time settings apply; the headset reconnects
 struct restart_session
 {};
 
-// LVRR: the dashboard opened or closed, see lvrr::show_hands
+// oneVR: the dashboard opened or closed, see onevr::show_hands
 struct dashboard_visible
 {
 	bool visible;
@@ -100,7 +100,7 @@ using packets = std::variant<stop,
                              disconnect,
                              set_bitrate,
                              wivrn::to_headset::stream_tab_change,
-                             wivrn::lvrr::set_headset_settings,
+                             wivrn::onevr::set_headset_settings,
                              wivrn::from_headset::stop_application,
                              restart_session,
                              dashboard_visible>;

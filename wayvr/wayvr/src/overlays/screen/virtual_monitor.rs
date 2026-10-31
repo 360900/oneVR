@@ -1,4 +1,4 @@
-//! LVRR: virtual monitors. The compositor adds an output of the chosen size and WayVR
+//! oneVR: virtual monitors. The compositor adds an output of the chosen size and WayVR
 //! shows it as a screen; the output goes away with the screen.
 //!
 //! KWin and Mutter add the output for a screencast and remove it when the cast ends,
@@ -60,7 +60,7 @@ const RETRY_DELAY_MAX_STREAM: Duration = Duration::from_secs(15);
 /// A failed try on Sway and Hyprland can add and unplug an output, which moves workspaces
 const RETRY_DELAY_MAX: Duration = Duration::from_secs(60);
 /// Headless outputs this install added, as `method<TAB>instance<TAB>output` lines
-const ORPHANS_FILE: &str = "lvrr-virtual-outputs";
+const ORPHANS_FILE: &str = "onevr-virtual-outputs";
 static ORPHANS_LOCK: Mutex<()> = Mutex::new(());
 /// Sway's answer names no output, so ours is the name that is new: one creation at a
 /// time. Taken before ORPHANS_LOCK.
@@ -482,7 +482,7 @@ pub struct VirtualMonitorBackend {
     located: bool,
     /// The mouse maps onto the output
     mapped: bool,
-    /// The desktop layout the mapping was read from, see `crate::lvrr::layout_gen`
+    /// The desktop layout the mapping was read from, see `crate::onevr::layout_gen`
     seen_gen: u64,
     next_look: Instant,
     give_up: Instant,
@@ -590,9 +590,9 @@ impl VirtualMonitorBackend {
                 .filter(|name| wl.outputs.values().any(|o| o.name == **name))
         });
         // also the outputs KWin named after the other monitors
-        let mut claimed = crate::lvrr::virtual_monitor_outputs(app);
+        let mut claimed = crate::onevr::virtual_monitor_outputs(app);
         claimed.extend(
-            app.lvrr
+            app.onevr
                 .virtual_monitors
                 .iter()
                 .filter(|m| m.name != self.name)
@@ -615,7 +615,7 @@ impl VirtualMonitorBackend {
             // the stream works, the mouse can't reach it
             log::warn!("{}: output not found, no mouse input", self.name);
             self.located = true;
-            crate::lvrr::end_locate_turn(app, &self.name);
+            crate::onevr::end_locate_turn(app, &self.name);
             return Ok(());
         };
 
@@ -634,13 +634,13 @@ impl VirtualMonitorBackend {
             output.logical_pos,
             output.logical_size
         );
-        crate::lvrr::set_virtual_monitor_output(app, &self.name, output.name.clone());
+        crate::onevr::set_virtual_monitor_output(app, &self.name, output.name.clone());
         // read just now, with this output in place
-        self.seen_gen = crate::lvrr::layout_gen(app);
+        self.seen_gen = crate::onevr::layout_gen(app);
         self.output = Some(output.name.clone());
         self.located = true;
         self.mapped = true;
-        crate::lvrr::end_locate_turn(app, &self.name);
+        crate::onevr::end_locate_turn(app, &self.name);
         set_desktop_extent(app, &wl);
         Ok(())
     }
@@ -648,15 +648,15 @@ impl VirtualMonitorBackend {
     fn fail(&mut self, app: &mut AppState, error: &anyhow::Error) {
         self.pending = None;
         self.located = true;
-        crate::lvrr::end_locate_turn(app, &self.name);
+        crate::onevr::end_locate_turn(app, &self.name);
         let first = !self.toasted;
         if first {
             self.toasted = true;
             log::error!("{}: virtual monitor failed: {error:?}", self.name);
             let title = if self.restore {
-                "LVRR.VIRTUAL_MONITOR_RETRYING"
+                "ONEVR.VIRTUAL_MONITOR_RETRYING"
             } else {
-                "LVRR.VIRTUAL_MONITOR_FAILED"
+                "ONEVR.VIRTUAL_MONITOR_FAILED"
             };
             Toast::new(
                 ToastTopic::Error,
@@ -667,7 +667,7 @@ impl VirtualMonitorBackend {
             .submit(app);
         }
         if !self.restore {
-            crate::lvrr::remove_virtual_monitor(app, &self.name);
+            crate::onevr::remove_virtual_monitor(app, &self.name);
             return;
         }
         // The monitor stays, so its size stays saved and Home can remove it. A half-made
@@ -692,7 +692,7 @@ impl VirtualMonitorBackend {
     /// Reads the output's place again once outputs were added or removed, which can
     /// move it. A hidden screen catches up once shown.
     fn follow_layout(&mut self, app: &mut AppState) {
-        let layout_gen = crate::lvrr::layout_gen(app);
+        let layout_gen = crate::onevr::layout_gen(app);
         if !self.mapped || self.seen_gen == layout_gen {
             return;
         }
@@ -813,7 +813,7 @@ impl OverlayBackend for VirtualMonitorBackend {
         // one at a time, so the one new output is this monitor's
         if self.queued {
             let now = Instant::now();
-            if !crate::lvrr::take_locate_turn(app, &self.name, now + LOCATE_TIMEOUT) {
+            if !crate::onevr::take_locate_turn(app, &self.name, now + LOCATE_TIMEOUT) {
                 return Ok(ShouldRender::Unable);
             }
             self.queued = false;

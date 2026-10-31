@@ -104,13 +104,13 @@ class wivrn_session : public xrt_system_devices
 	std::optional<wivrn_body_tracker> body_tracker;
 	beman::inplace_vector::inplace_vector<wivrn_generic_tracker, from_headset::htc_body::max_tracked_poses> generic_trackers;
 	std::optional<wivrn_uinput> uinput_handler;
-	bool gamepad_connected = false; // network thread only
-	int64_t lvrr_stats_ns = 0;      // LVRR: start of the PC rates' period, network thread only
-	lvrr::pc_stats lvrr_pc_stats{}; // LVRR: last PC rates and stream settings sent, network thread only
-	bool lvrr_outdated = false;     // LVRR: resumed with other restart settings, network thread only
-	// LVRR: network thread only, see lvrr_update_hands
-	bool lvrr_dashboard_open = false;
-	std::optional<bool> lvrr_hands_shown; // last lvrr::show_hands sent
+	bool gamepad_connected = false;   // network thread only
+	int64_t onevr_stats_ns = 0;       // oneVR: start of the PC rates' period, network thread only
+	onevr::pc_stats onevr_pc_stats{}; // oneVR: last PC rates and stream settings sent, network thread only
+	bool onevr_outdated = false;      // oneVR: resumed with other restart settings, network thread only
+	// oneVR: network thread only, see onevr_update_hands
+	bool onevr_dashboard_open = false;
+	std::optional<bool> onevr_hands_shown; // last onevr::show_hands sent
 
 	clock_offset_estimator offset_est;
 	std::atomic<XrDuration> tracking_latency; // production to reception time
@@ -142,7 +142,7 @@ public:
 
 	void request_stop();
 	void quit_if_no_client();
-	// LVRR: how long a session waits for a lost headset, see quit_if_no_client
+	// oneVR: how long a session waits for a lost headset, see quit_if_no_client
 	static constexpr int64_t reconnect_wait_ns = 5 * 60 * 1'000'000'000LL;
 	int64_t reconnect_deadline = 0;
 
@@ -198,20 +198,20 @@ public:
 	void operator()(const from_headset::set_active_application &);
 	void operator()(const from_headset::stop_application &);
 	void operator()(audio_data &&);
-	// LVRR, see wivrn_session_lvrr.cpp
-	void operator()(lvrr::headset_settings &&);
-	void operator()(lvrr::headset_stats &&);
-	void send_stopping(lvrr::server_stopping::reason_t);
+	// oneVR, see wivrn_session_onevr.cpp
+	void operator()(onevr::headset_settings &&);
+	void operator()(onevr::headset_stats &&);
+	void send_stopping(onevr::server_stopping::reason_t);
 	void send_expect_reconnect();
 
 	void operator()(to_monado::stop &&);
 	void operator()(to_monado::disconnect &&);
 	void operator()(to_monado::set_bitrate &&);
 	void operator()(to_headset::stream_tab_change &&);
-	void operator()(lvrr::set_headset_settings &&);
+	void operator()(onevr::set_headset_settings &&);
 	void operator()(to_monado::restart_session &&);
 	void operator()(to_monado::dashboard_visible &&);
-	void lvrr_update_hands();
+	void onevr_update_hands();
 
 	bool has_stream()
 	{
@@ -234,7 +234,7 @@ public:
 	template <typename T>
 	void send_control(T && packet)
 	{
-		// LVRR: the dashboard shows server messages instead of the headset
+		// oneVR: the dashboard shows server messages instead of the headset
 		if constexpr (std::is_same_v<std::remove_cvref_t<T>, to_headset::server_message>)
 			send_to_main(packet);
 		try

@@ -44,7 +44,7 @@ pub(super) fn install_manifest(app_mgr: &mut ApplicationsManager) -> anyhow::Res
                 is_dashboard_overlay: true,
                 strings: object!{
                     "en_us": object!{
-                        name: "LVRR",
+                        name: "oneVR",
                         description: "A lightweight Wayland desktop overlay for OpenVR/OpenXR",
                     },
                 },

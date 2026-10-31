@@ -366,7 +366,7 @@ void xr::session::sync_actions(XrActionSet action_set, const std::string & subac
 
 void xr::session::enable_passthrough(xr::system & system, bool background)
 {
-	// LVRR: also when passthrough already runs: the stream reuses the lobby's for see-through
+	// oneVR: also when passthrough already runs: the stream reuses the lobby's for see-through
 	passthrough_background = background;
 
 	if (not std::holds_alternative<std::monostate>(passthrough))
@@ -409,7 +409,7 @@ void xr::session::on_boundary_visibility_changed(XrBoundaryVisibilityMETA v)
 
 // the runtime only allows suppression while passthrough is shown and restores
 // the boundary when it stops, so this re-requests every time passthrough comes back
-// LVRR: only a backdrop passthrough may hide it, see-through still shows a VR game
+// oneVR: only a backdrop passthrough may hide it, see-through still shows a VR game
 void xr::session::update_boundary_visibility()
 {
 	if (not xrRequestBoundaryVisibilityMETA)
@@ -433,7 +433,7 @@ void xr::session::update_boundary_visibility()
 	}
 }
 
-// LVRR: lets one hand be tracked while the other holds a controller, paused by default
+// oneVR: lets one hand be tracked while the other holds a controller, paused by default
 void xr::session::set_simultaneous_hands_and_controllers(bool enabled)
 {
 	if (not xrResumeSimultaneousHandsAndControllersTrackingMETA or enabled == simultaneous_hands_and_controllers)

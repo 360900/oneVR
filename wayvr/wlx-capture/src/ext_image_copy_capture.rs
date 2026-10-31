@@ -1,4 +1,4 @@
-//! LVRR: ext-image-copy-capture-v1, the standard successor of wlr-screencopy (wlroots 0.19,
+//! oneVR: ext-image-copy-capture-v1, the standard successor of wlr-screencopy (wlroots 0.19,
 //! Hyprland, niri, COSMIC). One session per output; for every frame the client attaches a
 //! buffer of its own and the compositor copies the screen into it once it changed.
 

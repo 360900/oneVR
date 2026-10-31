@@ -173,7 +173,7 @@ pub struct Layout {
 	registered_components_to_refresh: HashMap<taffy::NodeId, ComponentWeak>,
 	sounds_to_play_once: Vec<WguiSoundType>,
 	focused_component: Option<ComponentWeak>,
-	/// LVRR: bumped each time `set_focus` gives a component the focus
+	/// oneVR: bumped each time `set_focus` gives a component the focus
 	focus_serial: u64,
 
 	// Global EventAlterables queue, always processed in update() call at the end
@@ -828,7 +828,7 @@ impl Layout {
 			});
 
 			self.focused_component = Some(to_focus.weak());
-			// LVRR: also for the component that had it, an edit box takes the focus on every press
+			// oneVR: also for the component that had it, an edit box takes the focus on every press
 			self.focus_serial = self.focus_serial.wrapping_add(1);
 		}
 
@@ -840,7 +840,7 @@ impl Layout {
 		self.focused_component.as_ref().is_some_and(|c| c.upgrade().is_some())
 	}
 
-	/// LVRR: changes each time a component is given the focus, so a caller can tell whether an
+	/// oneVR: changes each time a component is given the focus, so a caller can tell whether an
 	/// event gave it
 	pub const fn focus_serial(&self) -> u64 {
 		self.focus_serial

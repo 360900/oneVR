@@ -302,7 +302,7 @@ std::string to_iso8601(std::chrono::zoned_time<T> timestamp)
 
 std::optional<std::chrono::system_clock::time_point> from_iso8601(const std::string & timestamp)
 {
-	// LVRR: mktime read the time as local, ignored the written offset and guessed DST from an
+	// oneVR: mktime read the time as local, ignored the written offset and guessed DST from an
 	// uninitialized tm, shifting the time each save
 	tm t{};
 	if (strptime(timestamp.c_str(), "%FT%H:%M:%S%z", &t) == nullptr)

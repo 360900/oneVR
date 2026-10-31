@@ -8,7 +8,7 @@ authors = ["galister", "oo8dev"]
 repository = "https://github.com/wlx-team/wayvr"
 
 [dependencies]
-lvrr-common = { path = "../lvrr-common" }
+onevr-common = { path = "../onevr-common" }
 wayvr-ipc = { path = "../wayvr-ipc", default-features = false }
 
 anyhow.workspace = true

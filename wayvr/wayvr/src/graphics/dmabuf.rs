@@ -7,7 +7,7 @@ pub trait WGfxDmabuf {
     fn dmabuf_texture(&self, frame: DmabufFrame) -> anyhow::Result<Arc<Image>> {
         self.dmabuf_texture_with_usage(frame, ImageUsage::SAMPLED)
     }
-    // LVRR: TRANSFER_SRC to copy captured frames, see overlays/screen/capture/lvrr_dmabuf.rs
+    // oneVR: TRANSFER_SRC to copy captured frames, see overlays/screen/capture/onevr_dmabuf.rs
     fn dmabuf_texture_with_usage(
         &self,
         frame: DmabufFrame,

@@ -109,47 +109,47 @@ pub trait DashInterface<T> {
 	fn hmd_stats(&mut self, data: &mut T) -> HmdStats;
 	fn enumerate_vulkan_devices(&mut self, data: &mut T) -> anyhow::Result<Vec<String>>;
 
-	// LVRR: the LVRR server; None without it
-	fn lvrr_state<'a>(&'a mut self, _data: &'a mut T) -> Option<&'a lvrr_common::state::LvrrState> {
+	// oneVR: the oneVR server; None without it
+	fn onevr_state<'a>(&'a mut self, _data: &'a mut T) -> Option<&'a onevr_common::state::OneVrState> {
 		None
 	}
-	fn lvrr_request(&mut self, _data: &mut T, _request: lvrr_common::state::LvrrRequest) -> anyhow::Result<()> {
-		anyhow::bail!("The LVRR server is not running")
+	fn onevr_request(&mut self, _data: &mut T, _request: onevr_common::state::OneVrRequest) -> anyhow::Result<()> {
+		anyhow::bail!("The oneVR server is not running")
 	}
-	fn lvrr_perf_overlay(&mut self, _data: &mut T) -> bool {
+	fn onevr_perf_overlay(&mut self, _data: &mut T) -> bool {
 		false
 	}
-	fn lvrr_set_perf_overlay(&mut self, _data: &mut T, _visible: bool) {}
-	fn lvrr_batteries(&mut self, _data: &mut T) -> Vec<lvrr_common::state::Battery> {
+	fn onevr_set_perf_overlay(&mut self, _data: &mut T, _visible: bool) {}
+	fn onevr_batteries(&mut self, _data: &mut T) -> Vec<onevr_common::state::Battery> {
 		Vec::new()
 	}
 	/// None when the desktop can't add monitors
-	fn lvrr_virtual_monitors(&mut self, _data: &mut T) -> Option<Vec<lvrr_common::state::VirtualMonitor>> {
+	fn onevr_virtual_monitors(&mut self, _data: &mut T) -> Option<Vec<onevr_common::state::VirtualMonitor>> {
 		None
 	}
-	fn lvrr_add_virtual_monitor(&mut self, _data: &mut T, _width: u32, _height: u32) {}
-	fn lvrr_remove_virtual_monitor(&mut self, _data: &mut T, _name: &str) {}
+	fn onevr_add_virtual_monitor(&mut self, _data: &mut T, _width: u32, _height: u32) {}
+	fn onevr_remove_virtual_monitor(&mut self, _data: &mut T, _name: &str) {}
 	fn clipboard_set_text(&mut self, _data: &mut T, _text: &str) -> anyhow::Result<()> {
 		anyhow::bail!("No clipboard")
 	}
-	// LVRR: the desktop window, which shows only the pages that work without a headset
-	fn lvrr_desktop(&self) -> bool {
+	// oneVR: the desktop window, which shows only the pages that work without a headset
+	fn onevr_desktop(&self) -> bool {
 		false
 	}
-	/// Starts this install's LVRR server
-	fn lvrr_start_server(&mut self, _data: &mut T) -> anyhow::Result<()> {
-		anyhow::bail!("Can't start the LVRR server from here")
+	/// Starts this install's oneVR server
+	fn onevr_start_server(&mut self, _data: &mut T) -> anyhow::Result<()> {
+		anyhow::bail!("Can't start the oneVR server from here")
 	}
-	/// LVRR starts from lvrr_start_server or lvrr_pair, and lvrr_state isn't online yet
-	fn lvrr_starting(&self) -> bool {
+	/// oneVR starts from onevr_start_server or onevr_pair, and onevr_state isn't online yet
+	fn onevr_starting(&self) -> bool {
 		false
 	}
-	/// Lets a new headset pair, after starting LVRR or ending the headset session if needed
-	fn lvrr_pair(&mut self, _data: &mut T) -> anyhow::Result<()> {
+	/// Lets a new headset pair, after starting oneVR or ending the headset session if needed
+	fn onevr_pair(&mut self, _data: &mut T) -> anyhow::Result<()> {
 		anyhow::bail!("Can't pair a headset from here")
 	}
-	/// A pairing from lvrr_pair has no PIN yet: LVRR starts, or the session ends
-	fn lvrr_pairing(&self) -> bool {
+	/// A pairing from onevr_pair has no PIN yet: oneVR starts, or the session ends
+	fn onevr_pairing(&self) -> bool {
 		false
 	}
 }

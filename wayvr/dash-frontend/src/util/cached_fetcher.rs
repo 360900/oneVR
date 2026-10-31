@@ -107,10 +107,10 @@ pub struct CoverArt {
 	pub compressed_image_data: Vec<u8>,
 }
 
-// LVRR: how long an empty cached cover or game details file is used before it is fetched again
+// oneVR: how long an empty cached cover or game details file is used before it is fetched again
 const EMPTY_CACHE_RETRY_SECS: u64 = 3600;
 
-// LVRR: false when the file's age is unknown, so the caller fetches again
+// oneVR: false when the file's age is unknown, so the caller fetches again
 async fn cache_file_is_recent(cache_file_path: &str, max_age_secs: u64) -> bool {
 	smol::fs::metadata(cache_dir::get_path(cache_file_path))
 		.await
@@ -124,7 +124,7 @@ pub async fn request_cover_art(app_id: AppID) -> anyhow::Result<CoverArt> {
 	let cache_file_path = format!("cover_arts/{}.bin", app_id);
 
 	// check if file already exists in cache directory
-	// LVRR: an empty file records a failed fetch or a game without art; it is fetched again once
+	// oneVR: an empty file records a failed fetch or a game without art; it is fetched again once
 	// it is an hour old, so covers missed while offline come back
 	if let Some(data) = cache_dir::get_data(&cache_file_path).await
 		&& (!data.is_empty() || cache_file_is_recent(&cache_file_path, EMPTY_CACHE_RETRY_SECS).await)
@@ -142,7 +142,7 @@ pub async fn request_cover_art(app_id: AppID) -> anyhow::Result<CoverArt> {
 	match http_client::get_simple(&url).await {
 		Ok(response) => {
 			log::info!("Success");
-			// LVRR: a failed cache write still shows the cover
+			// oneVR: a failed cache write still shows the cover
 			if let Err(e) = cache_dir::set_data(&cache_file_path, &response.data).await {
 				log::warn!("CoverArtFetcher: failed cache write for AppID {}: {}", app_id, e);
 			}
@@ -153,7 +153,7 @@ pub async fn request_cover_art(app_id: AppID) -> anyhow::Result<CoverArt> {
 		Err(e) => {
 			// fetch failed, write an empty file
 			log::error!("CoverArtFetcher: failed fetch for AppID {}: {}", app_id, e);
-			// LVRR: a failed cache write still shows the placeholder
+			// oneVR: a failed cache write still shows the placeholder
 			if let Err(e) = cache_dir::set_data(&cache_file_path, &[]).await {
 				log::warn!("CoverArtFetcher: failed cache write for AppID {}: {}", app_id, e);
 			}
@@ -164,7 +164,7 @@ pub async fn request_cover_art(app_id: AppID) -> anyhow::Result<CoverArt> {
 	}
 }
 
-// LVRR: for the Library's Refresh: deletes an empty cached cover, which records a failed fetch,
+// oneVR: for the Library's Refresh: deletes an empty cached cover, which records a failed fetch,
 // so the next request tries again at once. Not async, as that request follows right away.
 pub fn forget_empty_cover_art(app_id: &str) {
 	let path = cache_dir::get_path(&format!("cover_arts/{}.bin", app_id));
@@ -194,7 +194,7 @@ pub struct AppDetailsJSONData {
 
 async fn get_app_details_json_internal(cache_file_path: &str, app_id: AppID) -> anyhow::Result<AppDetailsJSONData> {
 	// check if file already exists in cache directory
-	// LVRR: not an empty one, which records a fetch that failed an hour ago or more
+	// oneVR: not an empty one, which records a fetch that failed an hour ago or more
 	if let Some(data) = cache_dir::get_data(cache_file_path).await
 		&& !data.is_empty()
 	{
@@ -227,7 +227,7 @@ async fn get_app_details_json_internal(cache_file_path: &str, app_id: AppID) -> 
 pub async fn get_app_details_json(app_id: AppID) -> Option<AppDetailsJSONData> {
 	let cache_file_path = format!("app_details/{}.json", app_id);
 
-	// LVRR: an empty file records a failed fetch; it is fetched again once it is an hour old, so
+	// oneVR: an empty file records a failed fetch; it is fetched again once it is an hour old, so
 	// details missed while offline come back. Until then it isn't written again, which would put
 	// the retry off with each open.
 	let empty = smol::fs::metadata(cache_dir::get_path(&cache_file_path))

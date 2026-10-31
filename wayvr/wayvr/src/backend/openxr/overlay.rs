@@ -134,7 +134,7 @@ impl OverlayWindowData<OpenXrOverlayData> {
             self.data.layer_alpha_blend_fb = None;
         }
 
-        // LVRR: the compositor samples the panel several times per pixel, so text doesn't shimmer
+        // oneVR: the compositor samples the panel several times per pixel, so text doesn't shimmer
         if xr.extra_exts.fb_composition_layer_settings && self.data.layer_settings_fb.is_none() {
             self.data.layer_settings_fb = Some(Box::new(xr::sys::CompositionLayerSettingsFB {
                 ty: xr::sys::CompositionLayerSettingsFB::TYPE,

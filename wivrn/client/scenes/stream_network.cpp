@@ -20,7 +20,7 @@
 #include "stream.h"
 
 #include "application.h"
-#include "lvrr.h"
+#include "onevr.h"
 #include "utils/i18n.h"
 #include "utils/named_thread.h"
 
@@ -32,24 +32,24 @@ void scenes::stream::process_packets()
 #ifdef __ANDROID__
 	application::instance().setup_jni();
 #endif
-	// LVRR: the handshake's bytes don't arm lvrr_check_alive()
-	lvrr_bytes_seen = network_session->bytes_received();
+	// oneVR: the handshake's bytes don't arm onevr_check_alive()
+	onevr_bytes_seen = network_session->bytes_received();
 	while (state_ != state::shutdown)
 	{
 		try
 		{
 			network_session->poll(*this, std::chrono::milliseconds(500));
-			// LVRR: a link that went silent is lost too
-			lvrr_check_alive();
+			// oneVR: a link that went silent is lost too
+			onevr_check_alive();
 		}
-		// LVRR: decoder and socket errors share exception types, so the handlers mark the headset's
-		catch (lvrr_headset_failure & e)
+		// oneVR: decoder and socket errors share exception types, so the handlers mark the headset's
+		catch (onevr_headset_failure & e)
 		{
-			lvrr_headset_error(e);
+			onevr_headset_error(e);
 		}
 		catch (std::exception & e)
 		{
-			lvrr_connection_lost(e);
+			onevr_connection_lost(e);
 		}
 	}
 }
@@ -85,7 +85,7 @@ void scenes::stream::operator()(to_headset::video_stream_data_shard && shard)
 		// We don't know (yet?) about this stream, ignore packet
 		return;
 	}
-	lvrr_on_headset([&] { decoders[idx].decoder->push_shard(std::move(shard)); }); // LVRR
+	onevr_on_headset([&] { decoders[idx].decoder->push_shard(std::move(shard)); }); // oneVR
 }
 
 void scenes::stream::operator()(to_headset::feature_control && control)
@@ -94,7 +94,7 @@ void scenes::stream::operator()(to_headset::feature_control && control)
 	{
 		case wivrn::to_headset::feature_control::hid_input:
 			hid_forwarding = control.state;
-			lvrr_report_needed = true;
+			onevr_report_needed = true;
 			if (not control.state and (application::get_config().forward_keyboard or application::get_config().forward_mouse or application::get_config().forward_gamepad))
 			{
 				auto toast = gui_toast.lock();
@@ -111,13 +111,13 @@ void scenes::stream::operator()(to_headset::feature_control && control)
 
 void scenes::stream::operator()(to_headset::audio_stream_description && desc)
 {
-	lvrr_on_headset([&] { audio_handle.emplace(desc, *network_session, instance); }); // LVRR
+	onevr_on_headset([&] { audio_handle.emplace(desc, *network_session, instance); }); // oneVR
 }
 
 void scenes::stream::operator()(to_headset::video_stream_description && desc)
 {
-	// LVRR: rethrown so the poll stops before shards reach a half-built set, and tracking doesn't start
-	lvrr_on_headset([&] { setup(desc); });
+	// oneVR: rethrown so the poll stops before shards reach a half-built set, and tracking doesn't start
+	onevr_on_headset([&] { setup(desc); });
 
 	if (not tracking_thread)
 	{
@@ -129,8 +129,8 @@ void scenes::stream::operator()(to_headset::refresh_rate_change && rate)
 {
 	spdlog::info("refresh rate change request: {}", rate.hz);
 	session.set_refresh_rate(rate.hz);
-	// LVRR: asked for again when the stream comes back from the lobby
-	lvrr_refresh_rate = rate.hz;
+	// oneVR: asked for again when the stream comes back from the lobby
+	onevr_refresh_rate = rate.hz;
 	std::shared_lock lock(decoder_mutex);
 	if (video_stream_description)
 		video_stream_description->refresh_rate = rate.hz;
@@ -138,8 +138,8 @@ void scenes::stream::operator()(to_headset::refresh_rate_change && rate)
 
 void scenes::stream::operator()(to_headset::stream_tab_change && tab)
 {
-	// LVRR: there is no in-stream window to switch to
-	if constexpr (lvrr::stock_ui)
+	// oneVR: there is no in-stream window to switch to
+	if constexpr (onevr::stock_ui)
 		next_gui_status = tab.tab;
 }
 

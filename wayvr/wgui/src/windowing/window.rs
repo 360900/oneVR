@@ -248,7 +248,7 @@ impl WguiWindow {
 		};
 
 		let input_grabber = if params.extra.close_if_clicked_outside {
-			// LVRR: transparent unless the dim below fades it in; the default color is opaque black
+			// oneVR: transparent unless the dim below fades it in; the default color is opaque black
 			let mut rect = WidgetRectangle::create(WidgetRectangleParams {
 				color: drawing::Color::new(0.0, 0.0, 0.0, 0.0).into(),
 				..Default::default()
@@ -276,7 +276,7 @@ impl WguiWindow {
 				},
 			)?;
 
-			// LVRR: optional, see Globals::popup_backdrop_dim
+			// oneVR: optional, see Globals::popup_backdrop_dim
 			let dim = params.layout.state.globals.get().popup_backdrop_dim;
 			if dim {
 				// Fade animation

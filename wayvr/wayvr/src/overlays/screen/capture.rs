@@ -34,8 +34,8 @@ const CURSOR_SIZE: f32 = 16. / 1440.;
 // synchronize queue shared by the WlxCapture worker threads
 static CAPTURE_QUEUE_MUTEX: Mutex<()> = Mutex::new(());
 
-// LVRR: DMA-buf frames are copied before the compositor gets them back
-mod lvrr_dmabuf;
+// oneVR: DMA-buf frames are copied before the compositor gets them back
+mod onevr_dmabuf;
 
 struct BufPass {
     pass: WGfxPass<Vert2Uv>,
@@ -464,7 +464,7 @@ impl MyFirstDmaExporter {
         ))
     }
 
-    /// LVRR: `allowed` lists the modifiers the compositor takes, any when empty
+    /// oneVR: `allowed` lists the modifiers the compositor takes, any when empty
     fn set_format(
         &mut self,
         width: u32,
@@ -476,7 +476,7 @@ impl MyFirstDmaExporter {
             |modifier: DrmModifier| allowed.is_empty() || allowed.contains(&u64::from(modifier));
         if let Some(image) = self.images.first() {
             let extent = image.view.image().extent();
-            // LVRR: only a full pair, next_frame takes turns with the two images
+            // oneVR: only a full pair, next_frame takes turns with the two images
             if self.images.len() == 2
                 && self.fourcc == fourcc
                 && extent[0] == width
@@ -487,7 +487,7 @@ impl MyFirstDmaExporter {
             }
         }
 
-        // LVRR: the first explicit modifier the compositor allows, Vulkan exports no implicit
+        // oneVR: the first explicit modifier the compositor allows, Vulkan exports no implicit
         // one. With a list, none is no error and leaves the images alone: the caller tries its
         // next format, which may use them.
         let Some(modifier) = self
@@ -504,13 +504,13 @@ impl MyFirstDmaExporter {
         };
         self.images.clear();
 
-        // LVRR: a failed export is NoDmabuf::Export, so image copy takes shared memory instead
+        // oneVR: a failed export is NoDmabuf::Export, so image copy takes shared memory instead
         // of repeating the export for its other formats
         let format = fourcc_to_vk(fourcc)
             .log_err("Could not export new dmabuf due to invalid format")
             .map_err(|_| NoDmabuf::Export)?;
 
-        // LVRR: keep the images and their format only once both exported, so a failed export
+        // oneVR: keep the images and their format only once both exported, so a failed export
         // leaves no lone image and the check above reuses the pair for every format
         let mut images = smallvec![];
         for _ in 0..2 {
@@ -528,7 +528,7 @@ impl MyFirstDmaExporter {
         Ok(())
     }
 
-    // LVRR: the GPU the images are allocated on
+    // oneVR: the GPU the images are allocated on
     fn drm_render_node(&self) -> Option<(u32, u32)> {
         self.gfx.device_info().drm_render_node
     }
@@ -553,12 +553,12 @@ pub struct WlxCaptureIn {
     gfx: Arc<WGfx>,
     dma_exporter: Option<Arc<Mutex<MyFirstDmaExporter>>>,
     use_capture_queue: bool,
-    /// LVRR: copy each captured frame into our own image before the compositor reuses
+    /// oneVR: copy each captured frame into our own image before the compositor reuses
     /// the buffer. Off by default: the copy submits on a second GPU queue from the
     /// capture thread, concurrent with headset rendering, which faults some drivers
     /// (NVIDIA Blackwell, Xid 69). Enable with `copy_captured_frames: true` in
-    /// lvrr.json5 on setups where the compositor draws screens on a different GPU and
-    /// motion tears; LVRR_COPY_CAPTURED_FRAMES=1 only reaches `lvrr desktop`, as the
+    /// onevr.json5 on setups where the compositor draws screens on a different GPU and
+    /// motion tears; ONEVR_COPY_CAPTURED_FRAMES=1 only reaches `onevr desktop`, as the
     /// server starts wayvr with the user manager's environment. Never on GPUs with one
     /// graphics queue: MainThreadWlxCapture gives the buffer back before the render
     /// thread sees the frame, so a copy there protects nothing and stalls rendering.
@@ -571,9 +571,9 @@ impl WlxCaptureIn {
         app: &AppState,
         dma_exporter: Option<MyFirstDmaExporter>,
     ) -> Self {
-        // LVRR: see copy_frames
-        let copy_requested = app.lvrr.copy_captured_frames
-            || std::env::var("LVRR_COPY_CAPTURED_FRAMES").as_deref() == Ok("1");
+        // oneVR: see copy_frames
+        let copy_requested = app.onevr.copy_captured_frames
+            || std::env::var("ONEVR_COPY_CAPTURED_FRAMES").as_deref() == Ok("1");
         let copy_frames = copy_requested && app.gfx.has_capture_queue();
         if copy_frames {
             log::info!("{name}: copying captured frames");
@@ -604,7 +604,7 @@ impl DmaExporter for WlxCaptureIn {
         dma_exporter.next_frame()
     }
 
-    // LVRR: image copy names the modifiers and the GPU the compositor takes dma-bufs from. No
+    // oneVR: image copy names the modifiers and the GPU the compositor takes dma-bufs from. No
     // exporter or a poisoned one can't export for any format.
     fn next_frame_allowed(
         &mut self,
@@ -800,11 +800,11 @@ pub(super) fn receive_callback(me: &WlxCaptureIn, frame: WlxFrame) -> Option<Wlx
             }
             log::trace!("{}: New DMA-buf frame", me.name);
             let format = frame.format;
-            // LVRR: by default sample the imported frame in place, like upstream. With
+            // oneVR: by default sample the imported frame in place, like upstream. With
             // copy_frames the frame is copied first, so the compositor can reuse the
             // buffer without tearing when it draws on another GPU (see WlxCaptureIn).
             let image = if me.copy_frames {
-                lvrr_dmabuf::frame_image(me, frame)
+                onevr_dmabuf::frame_image(me, frame)
             } else {
                 me.gfx.dmabuf_texture(frame)
             };
@@ -924,7 +924,7 @@ impl DmaExporter for DmaExporterProxy {
         exporter.next_frame()
     }
 
-    // LVRR: as for WlxCaptureIn
+    // oneVR: as for WlxCaptureIn
     fn next_frame_allowed(
         &mut self,
         width: u32,

@@ -57,7 +57,7 @@ To check whether your system is affected, monitor the GPU P-State using `watch n
 | --- | --- | :---: | --- |
 | `0x166c5e` | CUDA - Force P2 State | 0 | Controls forcing of the CUDA P-State. When set to 0, prevents automatic forcing of a specific P-State. |
 <!--
-| `GLVRRAllowed` | G-SYNC VRR | false | Enables VRR support for applications on G-SYNC compatible monitors. Set to false to disable this feature. |
+| `GONEVRAllowed` | G-SYNC VRR | false | Enables VRR support for applications on G-SYNC compatible monitors. Set to false to disable this feature. |
 | `VKDirectGSYNCAllowed` | Vulkan Direct G-SYNC | false | Enables VRR support for vulkan direct-to-display applications on G-SYNC compatible monitors. Set to false to disable this feature. |
 | `VKDirectGSYNCCompatibleAllowed` | Vulkan Direct Compatible G-SYNC | 0 | Allows VRR on validated or unvalidated G-SYNC compatible monitors for Vulkan Direct-to-Display applications. Set to value 0 to disable this feature. |
 | `GLShowGraphicsOSD` | Graphics API OSD | false | Control whether the graphics API visual indicator is rendered on top of OpenGL and Vulkan applications. Set to false to disable this feature. |

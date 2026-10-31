@@ -664,9 +664,9 @@ where
         if hovered.config.category == OverlayCategory::Keyboard {
             pointer.interaction.kbd_block_activated = true;
         }
-        // LVRR: clicking a screen or window takes typing back from the dashboard
+        // oneVR: clicking a screen or window takes typing back from the dashboard
         if hovered.config.input_focus.is_some() {
-            app.lvrr.dash_text_focus = false;
+            app.onevr.dash_text_focus = false;
         }
         update_focus(app, hovered.config.input_focus);
         hovered.config.backend.on_pointer(app, &hit, true);

@@ -56,7 +56,7 @@ private:
 	encryption_state state;
 
 	from_headset::headset_info_packet info_packet;
-	std::string public_key; // LVRR: the headset's, without PEM armor
+	std::string public_key; // oneVR: the headset's, without PEM armor
 
 	void init(std::stop_token stop_token, std::function<void()> tick = []() {});
 
@@ -139,7 +139,7 @@ public:
 			std::visit(std::forward<T>(visitor), std::move(*packet));
 		while (auto packet = control.receive_pending())
 			std::visit(std::forward<T>(visitor), std::move(*packet));
-		// LVRR: like the stream socket, a read of the IPC socket keeps the other packets it took,
+		// oneVR: like the stream socket, a read of the IPC socket keeps the other packets it took,
 		// which poll no longer reports
 		while (auto packet = wivrn_ipc_socket_monado->receive_pending())
 			std::visit(std::forward<T>(visitor), std::move(*packet));

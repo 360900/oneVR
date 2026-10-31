@@ -60,7 +60,7 @@ static std::string clean_key(std::string key)
 	return key;
 }
 
-// LVRR: the MAC of the interface the headset reached us through, for wake-on-LAN
+// oneVR: the MAC of the interface the headset reached us through, for wake-on-LAN
 static std::optional<std::array<uint8_t, 6>> local_mac(const sockaddr_in6 & local)
 {
 	ifaddrs * addrs;
@@ -289,7 +289,7 @@ void wivrn::wivrn_connection::init(std::stop_token stop_token, std::function<voi
 		throw std::runtime_error("No handshake received from client");
 
 	const auto mac = local_mac(server_address);
-	control.send(to_headset::handshake{.stream_port = port, .lvrr_mac = mac});
+	control.send(to_headset::handshake{.stream_port = port, .onevr_mac = mac});
 
 	auto [stream_handshake, client_port] = receive(10s, true);
 
@@ -311,7 +311,7 @@ void wivrn::wivrn_connection::init(std::stop_token stop_token, std::function<voi
 		stream = decltype(stream)(-1);
 	}
 
-	control.send(to_headset::handshake{.stream_port = port, .lvrr_mac = mac});
+	control.send(to_headset::handshake{.stream_port = port, .onevr_mac = mac});
 
 	info_packet = std::get<from_headset::headset_info_packet>(receive(10s).first);
 

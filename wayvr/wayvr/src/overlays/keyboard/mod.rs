@@ -52,7 +52,7 @@ mod layout;
 pub const KEYBOARD_NAME: &str = "kbd";
 const AUTO_RELEASE_MODS: [KeyModifier; 5] = [SHIFT, CTRL, ALT, SUPER, ALTGR];
 const SYSTEM_LAYOUT_ALIASES: [&str; 5] = ["mozc", "pinyin", "hangul", "sayura", "unikey"];
-/// LVRR: a key held while typing into the dashboard repeats like in WayVR's windows
+/// oneVR: a key held while typing into the dashboard repeats like in WayVR's windows
 const DASH_REPEAT_DELAY: Duration = Duration::from_millis(500);
 const DASH_REPEAT_INTERVAL: Duration = Duration::from_millis(20);
 
@@ -303,7 +303,7 @@ impl OverlayBackend for KeyboardBackend {
         self.panel().init(app)
     }
     fn should_render(&mut self, app: &mut AppState) -> anyhow::Result<ShouldRender> {
-        // LVRR: a key held while typing into the dashboard repeats
+        // oneVR: a key held while typing into the dashboard repeats
         repeat_dash_key(app, &mut self.panel().state);
 
         while KEYMAP_CHANGE.swap(false, Ordering::Relaxed) {
@@ -353,7 +353,7 @@ impl OverlayBackend for KeyboardBackend {
     }
     fn pause(&mut self, app: &mut AppState) -> anyhow::Result<()> {
         self.panel().state.modifiers = 0;
-        // LVRR: a held key stops repeating too
+        // oneVR: a held key stops repeating too
         self.panel().state.dash_repeat = None;
         app.hid_provider
             .set_modifiers_routed(app.wvr_server.as_mut(), 0);
@@ -409,11 +409,11 @@ struct KeyboardState {
     keymap_switch_layouts: Vec<Arc<str>>,
     keymap_switch_index: usize,
     keymap_switch_pending: bool,
-    /// LVRR: the key held while typing into the dashboard
+    /// oneVR: the key held while typing into the dashboard
     dash_repeat: Option<DashRepeat>,
 }
 
-/// LVRR: a key typed into the dashboard, which repeats while held
+/// oneVR: a key typed into the dashboard, which repeats while held
 struct DashRepeat {
     vk: VirtualKey,
     text: String,
@@ -443,7 +443,7 @@ impl KeyboardState {
             keymap_switch_layouts: std::mem::take(&mut self.keymap_switch_layouts),
             keymap_switch_index: self.keymap_switch_index,
             keymap_switch_pending: false,
-            // LVRR: a key held on the old layout gets no release on the new one
+            // oneVR: a key held on the old layout gets no release on the new one
             dash_repeat: None,
         }
     }
@@ -453,12 +453,12 @@ fn play_key_click(app: &mut AppState) {
     app.audio.play_sample("key_click");
 }
 
-/// LVRR: keys type into the dashboard's focused edit box, see `handle_press`
+/// oneVR: keys type into the dashboard's focused edit box, see `handle_press`
 const fn dash_typing(app: &AppState) -> bool {
-    app.lvrr.dash_text_focus && app.hid_provider.keymap.is_some()
+    app.onevr.dash_text_focus && app.hid_provider.keymap.is_some()
 }
 
-/// LVRR: while keys type into the dashboard, the window gets no new Shift, Ctrl, Alt, Super or
+/// oneVR: while keys type into the dashboard, the window gets no new Shift, Ctrl, Alt, Super or
 /// AltGr, but still the release of one held from before. Locks stay shared, or the next key
 /// typed into the window would toggle them there.
 fn route_modifiers(app: &mut AppState, keyboard: &KeyboardState) {
@@ -470,7 +470,7 @@ fn route_modifiers(app: &mut AppState, keyboard: &KeyboardState) {
         .set_modifiers_routed(app.wvr_server.as_mut(), modifiers);
 }
 
-/// LVRR: types the held key into the dashboard again once it's due
+/// oneVR: types the held key into the dashboard again once it's due
 fn repeat_dash_key(app: &mut AppState, keyboard: &mut KeyboardState) {
     // interact() loses the release while the pointer is untracked or grabbing, but the input
     // backends keep updating its click
@@ -479,12 +479,12 @@ fn repeat_dash_key(app: &mut AppState, keyboard: &mut KeyboardState) {
         .as_ref()
         .and_then(|r| app.input_state.pointers.get(r.pointer))
         .is_some_and(|p| p.now.click);
-    if !app.lvrr.dash_text_focus || !held {
+    if !app.onevr.dash_text_focus || !held {
         keyboard.dash_repeat = None;
     } else if let Some(repeat) = &mut keyboard.dash_repeat {
         let now = Instant::now();
         if now >= repeat.next {
-            app.lvrr.dash_text.push(repeat.text.clone());
+            app.onevr.dash_text.push(repeat.text.clone());
             // no burst after a stall
             repeat.next = now + DASH_REPEAT_INTERVAL;
         }
@@ -513,7 +513,7 @@ enum KeyButtonData {
     Key {
         vk: VirtualKey,
         pressed: Cell<bool>,
-        /// LVRR: typed into the dashboard instead of the window
+        /// oneVR: typed into the dashboard instead of the window
         typed: Cell<bool>,
     },
     Modifier {
@@ -548,14 +548,14 @@ fn handle_press(
                 _ => 0,
             };
 
-            if app.lvrr.dash_text_focus
+            if app.onevr.dash_text_focus
                 && let Some(keymap) = &app.hid_provider.keymap
             {
                 let text = keymap.text_for_key(*vk, keyboard.modifiers);
                 keyboard.dash_repeat = if text.is_empty() {
                     None
                 } else {
-                    app.lvrr.dash_text.push(text.clone());
+                    app.onevr.dash_text.push(text.clone());
                     button.device.to_index().map(|pointer| DashRepeat {
                         vk: *vk,
                         text,
@@ -579,12 +579,12 @@ fn handle_press(
         KeyButtonData::Modifier { modifier, sticky } => {
             sticky.set(keyboard.modifiers & *modifier == 0);
             keyboard.modifiers |= *modifier;
-            // LVRR: masked while typing into the dashboard
+            // oneVR: masked while typing into the dashboard
             route_modifiers(app, keyboard);
             play_key_click(app);
         }
         KeyButtonData::Macro { verbs } => {
-            // LVRR: e.g. Copy and Paste would hit the window while typing into the dashboard
+            // oneVR: e.g. Copy and Paste would hit the window while typing into the dashboard
             if !dash_typing(app) {
                 for (vk, press) in verbs {
                     app.hid_provider
@@ -638,11 +638,11 @@ fn handle_release(app: &mut AppState, key: &KeyState, keyboard: &mut KeyboardSta
                 app.hid_provider
                     .send_key_routed(app.wvr_server.as_mut(), *vk, false);
             }
-            // LVRR: the key stops repeating
+            // oneVR: the key stops repeating
             if keyboard.dash_repeat.as_ref().is_some_and(|r| r.vk == *vk) {
                 keyboard.dash_repeat = None;
             }
-            // LVRR: masked while typing into the dashboard
+            // oneVR: masked while typing into the dashboard
             route_modifiers(app, keyboard);
             true
         }
@@ -651,7 +651,7 @@ fn handle_release(app: &mut AppState, key: &KeyState, keyboard: &mut KeyboardSta
                 false
             } else {
                 keyboard.modifiers &= !*modifier;
-                // LVRR: masked while typing into the dashboard
+                // oneVR: masked while typing into the dashboard
                 route_modifiers(app, keyboard);
                 true
             }

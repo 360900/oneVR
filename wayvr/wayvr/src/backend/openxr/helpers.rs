@@ -23,7 +23,7 @@ use crate::state::AppState;
 pub(super) struct ExtraExts {
     pub mndx_composition_layer_alpha_blend_system_ui: bool,
     pub ext_eye_gaze_interaction: bool,
-    /// LVRR: supersampling of our layers in the server's compositor
+    /// oneVR: supersampling of our layers in the server's compositor
     pub fb_composition_layer_settings: bool,
 }
 

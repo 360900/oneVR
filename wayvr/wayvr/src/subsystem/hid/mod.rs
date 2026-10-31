@@ -352,7 +352,7 @@ impl XkbKeymap {
         state.key_get_utf8(xkb::Keycode::from(key as u32))
     }
 
-    /// LVRR: the text a key types with all of the given modifiers, and NumLock on: the keypad
+    /// oneVR: the text a key types with all of the given modifiers, and NumLock on: the keypad
     /// caps show its digits (keyboard/layout.rs, `label_for_key(vk, NUM_LOCK)`) and an edit box
     /// has no use for KP_End and the like. NumLock only changes the keypad.
     pub fn text_for_key(&self, key: VirtualKey, modifiers: KeyModifier) -> String {
@@ -418,7 +418,7 @@ pub fn get_keymap_x11() -> anyhow::Result<XkbKeymap> {
     anyhow::bail!("X11 support not enabled.")
 }
 
-// LVRR: text typed into the dashboard
+// oneVR: text typed into the dashboard
 #[cfg(test)]
 mod tests {
     use super::{SHIFT, VirtualKey, XkbKeymap};

@@ -51,7 +51,7 @@ class app_pacer : public u_pacing_app
 
 	u_var_draggable_f32 min_margin_ms;
 
-	// LVRR: frame statistics, latched is only called by the system compositor's thread
+	// oneVR: frame statistics, latched is only called by the system compositor's thread
 	int64_t last_latched = -1;
 	std::atomic<uint32_t> shown = 0;
 	std::atomic<uint32_t> repeated = 0;
@@ -155,7 +155,7 @@ void app_pacer::predict(int64_t now_ns,
 	// Sync phase with compositor
 	last_display_time = compositor_display_time + period * ((period / 2 + last_display_time - compositor_display_time) / period);
 
-	// LVRR: an app that can't make the next slot runs without waiting, however many slots it
+	// oneVR: an app that can't make the next slot runs without waiting, however many slots it
 	// misses. Sleeping until the slot it could make made apps near the frame time swing
 	// between half and full rate (WiVRn #492).
 	if (min_ready > last_display_time)

@@ -311,7 +311,7 @@ void wivrn_uinput::init_keyboard()
 
 	uinput_user_dev uidev;
 	fill_ids(uidev, 0x0840);
-	std::snprintf(uidev.name, sizeof(uidev.name), "LVRR Headset Keyboard");
+	std::snprintf(uidev.name, sizeof(uidev.name), "oneVR Headset Keyboard");
 	write_or_throw(fd, &uidev, sizeof(uidev));
 	ioctl_or_throw(fd, UI_DEV_CREATE);
 }
@@ -337,7 +337,7 @@ void wivrn_uinput::init_mouse()
 
 	uinput_user_dev uidev;
 	fill_ids(uidev, 0x0839);
-	std::snprintf(uidev.name, sizeof(uidev.name), "LVRR Headset Mouse");
+	std::snprintf(uidev.name, sizeof(uidev.name), "oneVR Headset Mouse");
 	write_or_throw(fd, &uidev, sizeof(uidev));
 	ioctl_or_throw(fd, UI_DEV_CREATE);
 }
@@ -364,7 +364,7 @@ void wivrn_uinput::init_gamepad()
 	// Microsoft X-Box vendor/product so Steam Input also recognizes it by GUID
 	fill_ids(uidev, 0x045e, 0x028e);
 	uidev.ff_effects_max = ff_effects_max;
-	std::snprintf(uidev.name, sizeof(uidev.name), "LVRR Headset Gamepad");
+	std::snprintf(uidev.name, sizeof(uidev.name), "oneVR Headset Gamepad");
 
 	const auto set_abs = [&](int code, int32_t min, int32_t max, int32_t fuzz, int32_t flat) {
 		uidev.absmin[code] = min;

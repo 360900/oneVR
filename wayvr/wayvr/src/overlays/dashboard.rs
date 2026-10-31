@@ -97,7 +97,7 @@ impl DashFrontend {
             theme: app.wgui_theme.clone(),
             executor: app.executor.clone(),
         })?;
-        // LVRR: no dim behind dropdowns, its square corners show past the rounded panel
+        // oneVR: no dim behind dropdowns, its square corners show past the rounded panel
         frontend.layout.state.globals.get().popup_backdrop_dim = false;
 
         frontend
@@ -157,8 +157,8 @@ impl OverlayBackend for DashFrontend {
             app.session.config_dirty = false;
         }
         self.inner.layout.set_focus(None)?;
-        app.lvrr.dash_text_focus = false;
-        app.lvrr.dash_text.clear();
+        app.onevr.dash_text_focus = false;
+        app.onevr.dash_text.clear();
 
         Ok(())
     }
@@ -174,11 +174,11 @@ impl OverlayBackend for DashFrontend {
             self.inner.layout.tick()?;
         }
 
-        // LVRR: the keyboard types into a focused edit box, until a window or screen is clicked
-        if !app.lvrr.dash_text_focus && self.inner.layout.has_focus() {
+        // oneVR: the keyboard types into a focused edit box, until a window or screen is clicked
+        if !app.onevr.dash_text_focus && self.inner.layout.has_focus() {
             self.inner.layout.set_focus(None)?;
         }
-        for text in std::mem::take(&mut app.lvrr.dash_text) {
+        for text in std::mem::take(&mut app.onevr.dash_text) {
             self.push_event(&WguiEvent::TextInput(TextInputEvent {
                 text: Some(text.into()),
             }));
@@ -187,9 +187,9 @@ impl OverlayBackend for DashFrontend {
         if let Err(e) = self.update(app, self.timestep.alpha) {
             log::error!("uncaught exception: {e:?}");
         }
-        // LVRR: after the update, so a focus a page gives, as the Library's clear button does,
+        // oneVR: after the update, so a focus a page gives, as the Library's clear button does,
         // keeps the keyboard typing into the dashboard
-        app.lvrr.dash_text_focus = self.inner.layout.has_focus();
+        app.onevr.dash_text_focus = self.inner.layout.has_focus();
 
         Ok(if self.inner.layout.check_toggle_needs_redraw() {
             ShouldRender::Should
@@ -310,13 +310,13 @@ impl OverlayBackend for DashFrontend {
                 device: DeviceBitmask::from_index(hit.pointer),
             })
         };
-        // LVRR: a press on an edit box shows the keyboard, which types into it. The box takes the
+        // oneVR: a press on an edit box shows the keyboard, which types into it. The box takes the
         // focus again on every press. Other presses leave a hidden keyboard hidden; buttons,
         // sliders and checkboxes drop the focus.
         let serial = self.inner.layout.focus_serial();
         self.push_event(&e);
-        app.lvrr.dash_text_focus = self.inner.layout.has_focus();
-        if pressed && app.lvrr.dash_text_focus && self.inner.layout.focus_serial() != serial {
+        app.onevr.dash_text_focus = self.inner.layout.has_focus();
+        if pressed && app.onevr.dash_text_focus && self.inner.layout.focus_serial() != serial {
             app.tasks
                 .enqueue(TaskType::Overlay(OverlayTask::ToggleOverlay(
                     OverlaySelector::Name(KEYBOARD_NAME.into()),
@@ -422,47 +422,47 @@ impl DashInterfaceLive {
 }
 
 impl DashInterface<AppState> for DashInterfaceLive {
-    fn lvrr_state<'a>(
+    fn onevr_state<'a>(
         &'a mut self,
         app: &'a mut AppState,
-    ) -> Option<&'a lvrr_common::state::LvrrState> {
-        use lvrr_common::state::LvrrBackend;
-        app.lvrr.link.as_ref().map(LvrrBackend::state)
+    ) -> Option<&'a onevr_common::state::OneVrState> {
+        use onevr_common::state::OneVrBackend;
+        app.onevr.link.as_ref().map(OneVrBackend::state)
     }
 
-    fn lvrr_request(
+    fn onevr_request(
         &mut self,
         app: &mut AppState,
-        request: lvrr_common::state::LvrrRequest,
+        request: onevr_common::state::OneVrRequest,
     ) -> anyhow::Result<()> {
-        use lvrr_common::state::LvrrBackend;
-        match app.lvrr.link.as_mut() {
+        use onevr_common::state::OneVrBackend;
+        match app.onevr.link.as_mut() {
             Some(link) => link.request(request),
-            None => anyhow::bail!("The LVRR server is not running"),
+            None => anyhow::bail!("The oneVR server is not running"),
         }
     }
 
-    fn lvrr_batteries(&mut self, app: &mut AppState) -> Vec<lvrr_common::state::Battery> {
-        crate::lvrr::batteries(app)
+    fn onevr_batteries(&mut self, app: &mut AppState) -> Vec<onevr_common::state::Battery> {
+        crate::onevr::batteries(app)
     }
 
-    fn lvrr_perf_overlay(&mut self, app: &mut AppState) -> bool {
-        app.lvrr.perf_overlay
+    fn onevr_perf_overlay(&mut self, app: &mut AppState) -> bool {
+        app.onevr.perf_overlay
     }
 
-    fn lvrr_set_perf_overlay(&mut self, app: &mut AppState, visible: bool) {
-        crate::lvrr::set_perf_overlay(app, visible);
+    fn onevr_set_perf_overlay(&mut self, app: &mut AppState, visible: bool) {
+        crate::onevr::set_perf_overlay(app, visible);
     }
 
-    fn lvrr_virtual_monitors(
+    fn onevr_virtual_monitors(
         &mut self,
         app: &mut AppState,
-    ) -> Option<Vec<lvrr_common::state::VirtualMonitor>> {
-        crate::lvrr::virtual_monitors_supported(app).then(|| {
-            app.lvrr
+    ) -> Option<Vec<onevr_common::state::VirtualMonitor>> {
+        crate::onevr::virtual_monitors_supported(app).then(|| {
+            app.onevr
                 .virtual_monitors
                 .iter()
-                .map(|m| lvrr_common::state::VirtualMonitor {
+                .map(|m| onevr_common::state::VirtualMonitor {
                     name: m.name.to_string(),
                     width: m.width,
                     height: m.height,
@@ -471,17 +471,17 @@ impl DashInterface<AppState> for DashInterfaceLive {
         })
     }
 
-    fn lvrr_add_virtual_monitor(&mut self, app: &mut AppState, width: u32, height: u32) {
-        crate::lvrr::add_virtual_monitor(app, width, height);
+    fn onevr_add_virtual_monitor(&mut self, app: &mut AppState, width: u32, height: u32) {
+        crate::onevr::add_virtual_monitor(app, width, height);
     }
 
-    fn lvrr_remove_virtual_monitor(&mut self, app: &mut AppState, name: &str) {
-        crate::lvrr::remove_virtual_monitor(app, name);
+    fn onevr_remove_virtual_monitor(&mut self, app: &mut AppState, name: &str) {
+        crate::onevr::remove_virtual_monitor(app, name);
     }
 
-    // LVRR: the same copy as in the desktop window
+    // oneVR: the same copy as in the desktop window
     fn clipboard_set_text(&mut self, _app: &mut AppState, text: &str) -> anyhow::Result<()> {
-        lvrr_common::clipboard::set_text(text)
+        onevr_common::clipboard::set_text(text)
     }
 
     fn enumerate_vulkan_devices(&mut self, data: &mut AppState) -> anyhow::Result<Vec<String>> {

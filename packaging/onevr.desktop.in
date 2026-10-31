@@ -1,0 +1,20 @@
+[Desktop Entry]
+Name=oneVR
+Comment=Stream VR to a standalone headset, play SteamVR games and use your desktop in VR
+GenericName=VR streaming
+Exec=@ONEVR@
+Icon=@PREFIX@/share/icons/hicolor/scalable/apps/io.github.onevr.svg
+Type=Application
+StartupWMClass=io.github.onevr
+StartupNotify=true
+Categories=Network;Game;
+Keywords=VR;Virtual reality;OpenVR;OpenXR;WiVRn;
+Actions=Pair;Stop;
+
+[Desktop Action Pair]
+Name=Pair headset
+Exec=@ONEVR@ pair
+
+[Desktop Action Stop]
+Name=Stop oneVR
+Exec=@ONEVR@ stop

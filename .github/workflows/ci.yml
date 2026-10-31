@@ -1,7 +1,7 @@
 name: CI
 
 # Markdown alone doesn't run CI, except docs/dbus.md, whose config table
-# lvrr-common's tests check.
+# onevr-common's tests check.
 on:
   push:
     branches: [main]
@@ -51,7 +51,7 @@ jobs:
         run: rustup toolchain install
       # No listed target dir may contain another: rust-cache would strip the
       # inner one down to the outer workspace's dependencies. So the root
-      # workspace (lvrr, xtask) isn't listed; it rebuilds in under a minute.
+      # workspace (onevr, xtask) isn't listed; it rebuilds in under a minute.
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
@@ -62,27 +62,27 @@ jobs:
         run: cargo xtask dist
       - uses: actions/upload-artifact@v7
         with:
-          name: lvrr-linux-x86_64
+          name: onevr-linux-x86_64
           path: target/dist/*.tar.gz
-      - name: Test LVRR server
+      - name: Test oneVR server
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: target/wivrn/server/lvrr-test
+        run: target/wivrn/server/onevr-test
       - name: Test wayvr
         if: ${{ !cancelled() }}
         working-directory: wayvr
         env:
           CARGO_TARGET_DIR: ../target/wayvr
         run: cargo test --workspace --locked --release
-      # Here rather than in Lint for the packages lvrr-ui's dependencies need.
-      # Only LVRR's crates: upstream wayvr code isn't clippy-clean. In release,
+      # Here rather than in Lint for the packages onevr-ui's dependencies need.
+      # Only oneVR's crates: upstream wayvr code isn't clippy-clean. In release,
       # so it reuses Build's build scripts and proc macros instead of caching
       # a second, dev-profile tree.
-      - name: Lint LVRR's wayvr crates
+      - name: Lint oneVR's wayvr crates
         if: ${{ !cancelled() }}
         working-directory: wayvr
         env:
           CARGO_TARGET_DIR: ../target/wayvr
-        run: cargo clippy --locked --release -p lvrr-common -p lvrr-ui --all-targets --no-deps -- -D warnings
+        run: cargo clippy --locked --release -p onevr-common -p onevr-ui --all-targets --no-deps -- -D warnings
 
   # Its own job, so a lint failure doesn't skip the build and the tests.
   lint:
@@ -107,12 +107,12 @@ jobs:
         run: cargo fmt --check --all --manifest-path wayvr/Cargo.toml
       - name: Clippy
         if: ${{ !cancelled() }}
-        run: cargo clippy --locked -p lvrr -p xtask --all-targets -- -D warnings
+        run: cargo clippy --locked -p onevr -p xtask --all-targets -- -D warnings
       - name: Rebrand check
         if: ${{ !cancelled() }}
         run: cargo xtask rebrand --check
       # Here, where rust-cache keeps the root workspace's build.
-      - name: Test lvrr and xtask
+      - name: Test onevr and xtask
         if: ${{ !cancelled() }}
         run: cargo test --workspace --locked
 
@@ -185,5 +185,5 @@ jobs:
         run: cargo xtask apk ${{ matrix.type == 'debug' && '--debug' || '' }} -- -Pwivrn_compress_glb=ON
       - uses: actions/upload-artifact@v7
         with:
-          name: lvrr-apk-${{ matrix.type }}
+          name: onevr-apk-${{ matrix.type }}
           path: target/dist/*.apk

@@ -1,0 +1,629 @@
+/*
+ * oneVR: D-Bus API for the oneVR dashboard
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+#include "onevr_dbus.h"
+
+#include "application.h"
+#include "onevr_offline.h"
+
+#include <algorithm>
+#include <cmath>
+#include <iostream>
+#include <limits>
+#include <magic_enum.hpp>
+#include <map>
+#include <nlohmann/json.hpp>
+#include <stdexcept>
+
+using json = nlohmann::json;
+using namespace wivrn;
+
+namespace onevr_dbus
+{
+namespace
+{
+WivrnServer * dbus_server = nullptr;
+hooks session;
+
+// The headset reported its settings since it connected, so HeadsetSettings shows them and it
+// answers changes. Not HeadsetConnected: that turns true before the handshake, which drops them.
+bool headset_live = false;
+
+// SetHeadsetSettings calls waiting for the headset's answer, by request id
+struct pending_request
+{
+	GDBusMethodInvocation * invocation;
+	guint timeout;
+	json patch; // kept for the next connection if the headset leaves first
+};
+std::map<uint32_t, pending_request> pending;
+uint32_t next_request_id = 1;
+const guint request_timeout_ms = 3000;
+
+// Changes made while the headset was away, sent when it connects: their request id until the
+// headset answers, and whether they need a session restart
+uint32_t offline_request_id = 0;
+bool offline_restart = false;
+
+// Features the headset last reported waiting for a permission, as a feature_bit mask
+uint8_t permission_pending = 0;
+
+// The headset is still on the connection its session started with, so only the dashboard runs and
+// restarting for those changes closes no game. Stays false for a headset back in a running session.
+bool new_session = false;
+
+// Clears HeadsetStats once the samples stop: the headset sends them from its frame loop, which
+// stops while it sleeps or renders nothing, and it stays connected meanwhile
+guint stats_timeout = 0;
+const guint stats_timeout_ms = 3000;
+
+uint32_t new_request_id()
+{
+	uint32_t id = next_request_id++;
+	if (next_request_id == 0)
+		next_request_id = 1;
+	return id;
+}
+
+// Without a headset, the last one's settings and the changes waiting for it
+void publish_offline()
+{
+	auto view = onevr_offline::offline_view();
+	wivrn_server_set_headset_settings(dbus_server, view.is_null() ? "" : view.dump().c_str());
+}
+
+// headset_config fields with a plain JSON value; body_parts is a list of names
+#define ONEVR_CONFIG_FIELDS(X)    \
+	X(preferred_refresh_rate) \
+	X(minimum_refresh_rate)   \
+	X(fps_divider)            \
+	X(resolution_scale)       \
+	X(fov_horizontal)         \
+	X(fov_vertical)           \
+	X(foveation)              \
+	X(codec)                  \
+	X(bit_depth)              \
+	X(bitrate_bps)            \
+	X(foveation_override)     \
+	X(foveation_pitch)        \
+	X(foveation_distance)     \
+	X(super_sampling)         \
+	X(sharpening)             \
+	X(microphone)             \
+	X(mic_unprocessed)        \
+	X(forward_keyboard)       \
+	X(forward_mouse)          \
+	X(forward_gamepad)        \
+	X(hand_tracking)          \
+	X(eye_gaze)               \
+	X(face_tracking)          \
+	X(body_tracking)          \
+	X(posture)                \
+	X(height_offset)          \
+	X(high_power_mode)        \
+	X(passthrough_boundary)   \
+	X(see_through)            \
+	X(simultaneous_hands)     \
+	X(usb_network)            \
+	X(extended_config)
+
+// feature_bit values, named like the headset_config keys
+const std::pair<onevr::feature_bit, const char *> feature_names[] = {
+        {onevr::mic, "microphone"},
+        {onevr::hand, "hand_tracking"},
+        {onevr::eye, "eye_gaze"},
+        {onevr::face, "face_tracking"},
+        {onevr::body, "body_tracking"},
+};
+
+json features_to_json(uint8_t mask)
+{
+	json out = json::array();
+	for (auto [bit, name]: feature_names)
+		if (mask & bit)
+			out.push_back(name);
+	return out;
+}
+
+json body_parts_to_json(uint32_t mask)
+{
+	json out = json::array();
+	for (auto [bit, name]: magic_enum::enum_entries<from_headset::body_part_mask>())
+		if (mask & std::to_underlying(bit))
+			out.push_back(name);
+	return out;
+}
+
+uint32_t body_parts_from_json(const json & value)
+{
+	if (not value.is_array())
+		throw std::invalid_argument("body_parts: expected an array of body part names");
+	uint32_t mask = 0;
+	for (const auto & name: value)
+	{
+		auto bit = name.is_string() ? magic_enum::enum_cast<from_headset::body_part_mask>(name.get<std::string>()) : std::nullopt;
+		if (not bit or *bit == from_headset::body_part_mask::max)
+			throw std::invalid_argument("body_parts: unknown body part " + name.dump());
+		mask |= std::to_underlying(*bit);
+	}
+	return mask;
+}
+
+template <typename T>
+json value_to_json(T value)
+{
+	if constexpr (std::is_enum_v<T>)
+		return magic_enum::enum_name(value);
+	else
+		return value;
+}
+
+template <typename T>
+T value_from_json(const json & value, const char * key)
+{
+	auto invalid = [&](const char * expected) {
+		return std::invalid_argument(std::string(key) + ": expected " + expected + ", got " + value.dump());
+	};
+	if constexpr (std::is_same_v<T, bool>)
+	{
+		if (not value.is_boolean())
+			throw invalid("a boolean");
+		return value.get<bool>();
+	}
+	else if constexpr (std::is_floating_point_v<T>)
+	{
+		if (not value.is_number() or not std::isfinite(value.get<double>()))
+			throw invalid("a number");
+		return T(value.get<double>());
+	}
+	else if constexpr (std::is_enum_v<T>)
+	{
+		auto v = value.is_string() ? magic_enum::enum_cast<T>(value.get<std::string>()) : std::nullopt;
+		if (not v)
+			throw invalid("one of the documented names");
+		return *v;
+	}
+	else
+	{
+		if (not value.is_number_unsigned() or value.get<uint64_t>() > std::numeric_limits<T>::max())
+			throw invalid("a non-negative integer");
+		return T(value.get<uint64_t>());
+	}
+}
+
+json config_to_json(const onevr::headset_config & config)
+{
+	json out = json::object();
+#define X(name)          \
+	if (config.name) \
+		out[#name] = value_to_json(*config.name);
+	ONEVR_CONFIG_FIELDS(X)
+#undef X
+	if (config.body_parts)
+		out["body_parts"] = body_parts_to_json(*config.body_parts);
+	return out;
+}
+
+json codecs_to_json(const std::vector<onevr::codec_choice> & codecs)
+{
+	json out = json::array();
+	for (auto codec: codecs)
+		out.push_back(magic_enum::enum_name(codec));
+	return out;
+}
+
+json capabilities_to_json(const onevr::headset_capabilities & caps)
+{
+	return {
+	        {"android", caps.android},
+	        {"refresh_rates", caps.refresh_rates},
+	        {"refresh_rate_control", caps.refresh_rate_control},
+	        {"spacewarp", caps.spacewarp},
+	        {"eye_size", json::array({caps.eye_width, caps.eye_height})},
+	        {"codecs", codecs_to_json(caps.codecs)},
+	        {"codecs_10bit", codecs_to_json(caps.codecs_10bit)},
+	        {"max_bitrate_bps", caps.max_bitrate_bps},
+	        {"max_bitrate_extended_bps", caps.max_bitrate_extended_bps},
+	        {"post_processing", caps.post_processing},
+	        {"high_power_mode", caps.high_power_mode},
+	        {"passthrough_boundary", caps.passthrough_boundary},
+	        {"see_through", caps.see_through},
+	        {"simultaneous_hands", caps.simultaneous_hands},
+	        {"usb_network", caps.usb_network},
+	        {"keyboard_mouse", caps.keyboard_mouse},
+	        {"hand_tracking", caps.hand_tracking},
+	        {"eye_gaze", caps.eye_gaze},
+	        {"face_tracking", caps.face_tracking},
+	        {"body_tracking", caps.body_tracking},
+	        {"body_parts", body_parts_to_json(caps.body_parts)},
+	};
+}
+
+void return_error(GDBusMethodInvocation * invocation, const char * name, const std::string & message)
+{
+	g_dbus_method_invocation_return_dbus_error(invocation, (std::string("io.github.wivrn.Server.") + name).c_str(), message.c_str());
+}
+
+// The VR applications, refreshed by every ListApplications: the dashboard may just have added an app
+std::unordered_map<std::string, application> apps;
+
+gboolean on_set_headset_settings(WivrnServer * skeleton, GDBusMethodInvocation * invocation, const gchar * patch, gpointer)
+{
+	if (not headset_live and not onevr_offline::known())
+	{
+		return_error(invocation, "NotConnected", "No headset is connected");
+		return TRUE;
+	}
+
+	json patch_json;
+	onevr::headset_config config;
+	try
+	{
+		patch_json = json::parse(patch);
+		config = config_from_json(patch_json);
+	}
+	catch (std::exception & e)
+	{
+		return_error(invocation, "InvalidSettings", e.what());
+		return TRUE;
+	}
+
+	// Kept for the next connection, or the connecting headset's first report
+	if (not headset_live)
+	{
+		std::string text = onevr_offline::stage(patch_json).dump();
+		wivrn_server_set_headset_settings(dbus_server, text.c_str());
+		wivrn_server_complete_set_headset_settings(skeleton, invocation, text.c_str());
+		return TRUE;
+	}
+
+	uint32_t id = new_request_id();
+
+	guint timeout = g_timeout_add(request_timeout_ms, [](void * data) -> gboolean {
+		if (auto it = pending.find(GPOINTER_TO_UINT(data)); it != pending.end())
+		{
+			return_error(it->second.invocation, "Timeout", "The headset did not answer");
+			pending.erase(it);
+		}
+		return G_SOURCE_REMOVE; }, GUINT_TO_POINTER(id));
+	pending[id] = {invocation, timeout, std::move(patch_json)};
+
+	session.send_to_session(onevr::set_headset_settings{.request_id = id, .config = std::move(config)});
+	return TRUE;
+}
+
+gboolean on_restart_session(WivrnServer * skeleton, GDBusMethodInvocation * invocation, gpointer)
+{
+	if (session.session_running())
+		session.send_to_session(to_monado::restart_session{});
+	wivrn_server_complete_restart_session(skeleton, invocation);
+	return TRUE;
+}
+
+gboolean on_stop_session(WivrnServer * skeleton, GDBusMethodInvocation * invocation, gpointer)
+{
+	// oneVR keeps running, to pair another headset for example: the headset says the PC disconnected it
+	if (session.session_running())
+		session.send_to_session(to_monado::stop{.reason = onevr::server_stopping::reason_t::disconnected});
+	wivrn_server_complete_stop_session(skeleton, invocation);
+	return TRUE;
+}
+
+gboolean on_set_dashboard_visible(WivrnServer * skeleton, GDBusMethodInvocation * invocation, gboolean visible, gpointer)
+{
+	if (session.session_running())
+		session.send_to_session(to_monado::dashboard_visible{.visible = bool(visible)});
+	wivrn_server_complete_set_dashboard_visible(skeleton, invocation);
+	return TRUE;
+}
+
+gboolean on_list_applications(WivrnServer * skeleton, GDBusMethodInvocation * invocation, gpointer)
+{
+	// The scan throws on some unreadable directories, which must not unwind through GLib
+	try
+	{
+		apps = list_applications();
+	}
+	catch (std::exception & e)
+	{
+		return_error(invocation, "Failed", e.what());
+		return TRUE;
+	}
+
+	std::vector<std::tuple<std::string, std::string, std::string>> list;
+	for (const auto & [id, app]: apps)
+	{
+		auto name = app.name.find("");
+		list.emplace_back(id, name != app.name.end() ? name->second : id, app.icon_path ? app.icon_path->string() : "");
+	}
+	std::ranges::sort(list, [](const auto & a, const auto & b) { return std::get<1>(a) < std::get<1>(b); });
+
+	GVariantBuilder builder;
+	g_variant_builder_init(&builder, G_VARIANT_TYPE("a(sss)"));
+	for (const auto & [id, name, icon]: list)
+		g_variant_builder_add(&builder, "(sss)", id.c_str(), name.c_str(), icon.c_str());
+	wivrn_server_complete_list_applications(skeleton, invocation, g_variant_builder_end(&builder));
+	return TRUE;
+}
+
+gboolean on_start_application(WivrnServer * skeleton, GDBusMethodInvocation * invocation, const gchar * id, gpointer)
+{
+	// Applications are stopped when the session ends, so starting one without a session would be pointless
+	if (not session.session_running())
+	{
+		return_error(invocation, "NoSession", "No session is running");
+		return TRUE;
+	}
+	try
+	{
+		session.start_application(id);
+		wivrn_server_complete_start_application(skeleton, invocation);
+	}
+	catch (std::exception & e)
+	{
+		return_error(invocation, "Failed", e.what());
+	}
+	return TRUE;
+}
+
+gboolean on_stop_application(WivrnServer * skeleton, GDBusMethodInvocation * invocation, guint client_id, gpointer)
+{
+	if (session.session_running())
+		session.send_to_session(from_headset::stop_application{.id = client_id});
+	wivrn_server_complete_stop_application(skeleton, invocation);
+	return TRUE;
+}
+} // namespace
+
+json to_json(const onevr::headset_settings & settings)
+{
+	return {
+	        {"request_id", settings.request_id},
+	        {"capabilities", capabilities_to_json(settings.capabilities)},
+	        {"config", config_to_json(settings.config)},
+	        {"restart_required", settings.restart_required},
+	        {"server_input_forwarding", settings.server_input_forwarding},
+	        {"permission_pending", features_to_json(settings.permission_pending)},
+	        {"permission_denied", features_to_json(settings.permission_denied)},
+	        {"offline", false},
+	        {"pending", nullptr},
+	};
+}
+
+json to_json(const onevr::stats & all)
+{
+	const auto & stats = all.headset;
+	json decoders = json::array();
+	for (const auto & d: stats.decoders)
+		decoders.push_back({
+		        {"encode_ms", d.encode_ms},
+		        {"send_ms", d.send_ms},
+		        {"network_ms", d.network_ms},
+		        {"decode_ms", d.decode_ms},
+		        {"display_ms", d.display_ms},
+		        {"total_ms", d.total_ms},
+		});
+	return {
+	        {"cpu_time_ms", stats.cpu_time_ms},
+	        {"gpu_time_ms", stats.gpu_time_ms},
+	        {"rx_bps", stats.rx_bps},
+	        {"tx_bps", stats.tx_bps},
+	        {"display_hz", stats.display_hz},
+	        {"motion_to_photon_ms", stats.motion_to_photon_ms},
+	        {"battery", stats.battery ? json(*stats.battery) : json(nullptr)},
+	        {"charging", stats.charging},
+	        {"decoders", decoders},
+	        {"game_fps", all.pc.game_fps ? json(*all.pc.game_fps) : json(nullptr)},
+	        {"game_missed_fps", all.pc.game_missed_fps},
+	        {"encoder_skipped_fps", all.pc.encoder_skipped_fps},
+	        {"codec", all.pc.codec ? value_to_json(*all.pc.codec) : json(nullptr)},
+	        {"bit_depth", all.pc.bit_depth},
+	        {"render_size", json::array({all.pc.render_width, all.pc.render_height})},
+	};
+}
+
+onevr::headset_config config_from_json(const json & value)
+{
+	if (not value.is_object())
+		throw std::invalid_argument("expected a JSON object");
+	onevr::headset_config config;
+	for (const auto & [key, item]: value.items())
+	{
+#define X(name)                                                                                \
+	if (key == #name)                                                                      \
+	{                                                                                      \
+		config.name = value_from_json<decltype(config.name)::value_type>(item, #name); \
+		continue;                                                                      \
+	}
+		ONEVR_CONFIG_FIELDS(X)
+#undef X
+		if (key == "body_parts")
+		{
+			config.body_parts = body_parts_from_json(item);
+			continue;
+		}
+		throw std::invalid_argument("unknown setting " + key);
+	}
+	return config;
+}
+
+void setup(WivrnServer * server, hooks h)
+{
+	dbus_server = server;
+	session = std::move(h);
+
+	g_signal_connect(server, "handle-set-headset-settings", G_CALLBACK(on_set_headset_settings), nullptr);
+	g_signal_connect(server, "handle-restart-session", G_CALLBACK(on_restart_session), nullptr);
+	g_signal_connect(server, "handle-stop-session", G_CALLBACK(on_stop_session), nullptr);
+	g_signal_connect(server, "handle-set-dashboard-visible", G_CALLBACK(on_set_dashboard_visible), nullptr);
+	g_signal_connect(server, "handle-list-applications", G_CALLBACK(on_list_applications), nullptr);
+	g_signal_connect(server, "handle-start-application", G_CALLBACK(on_start_application), nullptr);
+	g_signal_connect(server, "handle-stop-application", G_CALLBACK(on_stop_application), nullptr);
+
+	onevr_offline::load(session.headsets_file);
+	publish_offline();
+	wivrn_server_set_headset_stats(server, "");
+}
+
+void on_headset_settings(const onevr::headset_settings & settings)
+{
+	headset_live = true;
+	permission_pending = settings.permission_pending;
+	json value = to_json(settings);
+	onevr_offline::remember(value);
+
+	// The changes made while the headset was away were applied
+	bool restart = false;
+	if (offline_request_id and settings.request_id == offline_request_id)
+	{
+		offline_request_id = 0;
+		onevr_offline::clear_pending();
+		if (offline_restart and settings.restart_required)
+		{
+			restart = new_session;
+			if (not restart)
+				std::cerr << "Changes made while the headset was away need a session restart, left to the dashboard" << std::endl;
+		}
+	}
+
+	auto changes = onevr_offline::pending();
+	value["pending"] = changes;
+	std::string text = value.dump();
+	wivrn_server_set_headset_settings(dbus_server, text.c_str());
+
+	if (auto it = pending.find(settings.request_id); it != pending.end())
+	{
+		g_source_remove(it->second.timeout);
+		wivrn_server_complete_set_headset_settings(dbus_server, it->second.invocation, text.c_str());
+		pending.erase(it);
+	}
+
+	if (restart)
+	{
+		std::cerr << "Restarting the session for settings changed while the headset was away" << std::endl;
+		session.send_to_session(to_monado::restart_session{});
+	}
+	else if (not changes.is_null() and not offline_request_id)
+	{
+		try
+		{
+			offline_request_id = new_request_id();
+			offline_restart = onevr_offline::needs_restart(changes);
+			session.send_to_session(onevr::set_headset_settings{.request_id = offline_request_id, .config = config_from_json(changes)});
+		}
+		catch (std::exception & e)
+		{
+			// saved by an older server
+			std::cerr << "Dropping invalid headset settings changes: " << e.what() << std::endl;
+			offline_request_id = 0;
+			onevr_offline::clear_pending();
+		}
+	}
+}
+
+void on_headset_stats(const onevr::stats & stats)
+{
+	wivrn_server_set_headset_stats(dbus_server, to_json(stats).dump().c_str());
+
+	if (stats_timeout)
+		g_source_remove(stats_timeout);
+	stats_timeout = g_timeout_add(stats_timeout_ms, [](void *) -> gboolean {
+		stats_timeout = 0;
+		wivrn_server_set_headset_stats(dbus_server, "");
+		return G_SOURCE_REMOVE; }, nullptr);
+}
+
+void on_server_message(const to_headset::server_message & message)
+{
+	wivrn_server_emit_headset_message(dbus_server, magic_enum::enum_name(message.kind).data(), message.msg.c_str());
+}
+
+void on_headset_disconnected()
+{
+	// Features waiting for a permission are kept as changes too: the call that turned one on was
+	// answered, and a prompt the headset holds until its session runs ends with the stream. First,
+	// so a waiting call's newer value wins; cleared, as on_session_ended() calls this again
+	if (uint8_t waiting = std::exchange(permission_pending, 0))
+	{
+		json held = json::object();
+		for (auto [bit, name]: feature_names)
+			if (waiting & bit)
+				held[name] = true;
+		onevr_offline::stage(held);
+	}
+
+	// Calls still waiting keep their change for the next connection, as without a headset
+	for (auto & [id, request]: pending)
+	{
+		g_source_remove(request.timeout);
+		json view = onevr_offline::stage(request.patch);
+		if (view.is_null())
+			return_error(request.invocation, "NotConnected", "The headset disconnected");
+		else
+			wivrn_server_complete_set_headset_settings(dbus_server, request.invocation, view.dump().c_str());
+	}
+	pending.clear();
+	// not answered, sent again next time
+	offline_request_id = 0;
+
+	headset_live = false;
+	new_session = false;
+	publish_offline();
+	if (stats_timeout)
+		g_source_remove(stats_timeout);
+	stats_timeout = 0;
+	wivrn_server_set_headset_stats(dbus_server, "");
+}
+
+void on_session_starting(const std::string & public_key)
+{
+	onevr_offline::set_headset(public_key);
+	new_session = true;
+}
+
+void on_headset_resumed(const std::string & public_key)
+{
+	// Possibly another paired headset than the session's. new_session stays false: a game may run.
+	onevr_offline::set_headset(public_key);
+}
+
+void on_session_ended()
+{
+	on_headset_disconnected();
+}
+
+void on_key_revoked(const std::string & public_key)
+{
+	onevr_offline::forget(public_key);
+	if (not headset_live)
+		publish_offline();
+}
+
+std::optional<application> find_application(const std::string & id)
+{
+	// A scan blocks the main loop, and the Library's Play just follows the listing that showed the app
+	auto it = apps.find(id);
+	if (it == apps.end())
+	{
+		apps = list_applications();
+		it = apps.find(id);
+		if (it == apps.end())
+			return std::nullopt;
+	}
+	return it->second;
+}
+} // namespace onevr_dbus

@@ -125,7 +125,7 @@ void wivrn_session::handshake(T address, bool tcp_only, crypto::key & headset_ke
 			send_control(from_headset::crypto_handshake{});
 
 			to_headset::handshake h{std::get<to_headset::handshake>(receive(10s))};
-			lvrr_mac = h.lvrr_mac;
+			onevr_mac = h.onevr_mac;
 			if (h.stream_port > 0 && !tcp_only)
 			{
 				stream = decltype(stream)();
@@ -178,7 +178,7 @@ void wivrn_session::handshake(T address, bool tcp_only, crypto::key & headset_ke
 			send_control(from_headset::crypto_handshake{});
 
 			to_headset::handshake h{std::get<to_headset::handshake>(receive(10s))};
-			lvrr_mac = h.lvrr_mac;
+			onevr_mac = h.onevr_mac;
 			if (h.stream_port > 0 && !tcp_only)
 			{
 				stream = decltype(stream)();
@@ -191,7 +191,7 @@ void wivrn_session::handshake(T address, bool tcp_only, crypto::key & headset_ke
 			break;
 		}
 
-		// LVRR: refusals, the lobby does not retry them
+		// oneVR: refusals, the lobby does not retry them
 		case to_headset::crypto_handshake::crypto_state::pairing_disabled:
 			spdlog::info("Pairing is disabled on server");
 			throw handshake_refused(_("Pairing is disabled on server"));
@@ -233,7 +233,7 @@ wivrn_session::wivrn_session(sockaddr_in6 address, bool tcp_only, crypto::key & 
 	}
 	catch (handshake_refused &)
 	{
-		// LVRR: keeps its type
+		// oneVR: keeps its type
 		throw;
 	}
 	catch (std::exception & e)
@@ -251,7 +251,7 @@ wivrn_session::wivrn_session(sockaddr_in address, bool tcp_only, crypto::key & h
 	}
 	catch (handshake_refused &)
 	{
-		// LVRR: keeps its type
+		// oneVR: keeps its type
 		throw;
 	}
 	catch (std::exception & e)

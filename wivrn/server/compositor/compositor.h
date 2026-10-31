@@ -106,7 +106,7 @@ private:
 #endif
 	status_type encode_request{-1}; // id of the image to encode
 	std::jthread encoder_thread;
-	std::atomic<uint32_t> skipped_frames = 0; // LVRR: encoders still busy with the previous one
+	std::atomic<uint32_t> skipped_frames = 0; // oneVR: encoders still busy with the previous one
 
 	struct
 	{
@@ -193,7 +193,7 @@ public:
 		return skipped_frames.exchange(0);
 	}
 
-	// LVRR: the left eye's encoder, fixed for the session
+	// oneVR: the left eye's encoder, fixed for the session
 	const encoder_settings & get_stream_settings() const
 	{
 		return settings[0];

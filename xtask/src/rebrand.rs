@@ -1,13 +1,13 @@
-//! `cargo xtask rebrand`: shows LVRR instead of WiVRn and WayVR to users.
+//! `cargo xtask rebrand`: shows oneVR instead of WiVRn and WayVR to users.
 //!
 //! Only user-visible strings and images change; identifiers (binaries, D-Bus names, config
 //! directories) keep their upstream names. Re-run it after merging an upstream: it is
 //! idempotent, and reports rules that no longer match and upstream images that changed under
-//! LVRR's replacements. `--accept-images` records those images once their replacements were
+//! oneVR's replacements. `--accept-images` records those images once their replacements were
 //! reviewed; `--check` changes nothing and also reports what still needs rebranding.
 //!
 //! WayVR's language files are rebranded when they are loaded (see
-//! `wayvr/lvrr-common/src/rebrand.rs`), so they never need editing here.
+//! `wayvr/onevr-common/src/rebrand.rs`), so they never need editing here.
 
 use std::collections::HashMap;
 use std::fs;
@@ -31,166 +31,166 @@ const RULES: &[Rule] = &[
     rule(
         "wivrn/client/render/ui_widgets.cpp",
         "ImGui::TextUnformatted(\"WiVRn\");",
-        "ImGui::TextUnformatted(\"LVRR\");",
+        "ImGui::TextUnformatted(\"oneVR\");",
     ),
     rule(
         "wivrn/client/scenes/lobby_gui.cpp",
         "std::string(\"WiVRn \")",
-        "std::string(\"LVRR \")",
+        "std::string(\"oneVR \")",
     ),
     // Server: names shown to OpenXR apps, in mixers, notifications and the terminal
     rule(
         "wivrn/server/dist/openxr_manifest.in.json",
         "\"name\": \"WiVRn\",",
-        "\"name\": \"LVRR\",",
+        "\"name\": \"oneVR\",",
     ),
     rule(
         "wivrn/server/u_git_tag.cpp.in",
         "u_runtime_description[] = \"WiVRn\";",
-        "u_runtime_description[] = \"LVRR\";",
+        "u_runtime_description[] = \"oneVR\";",
     ),
     rule(
         "wivrn/server/driver/wivrn_session.cpp",
         "\" on WiVRn\"",
-        "\" on LVRR\"",
+        "\" on oneVR\"",
     ),
     rule(
         "wivrn/server/driver/wivrn_session.cpp",
         "\"WiVRn(microphone)\",",
-        "\"LVRR (microphone)\",",
+        "\"oneVR (microphone)\",",
     ),
     rule(
         "wivrn/server/driver/wivrn_session.cpp",
         "\"WiVRn\",",
-        "\"LVRR\",",
+        "\"oneVR\",",
     ),
     rule(
         "wivrn/server/driver/wivrn_hmd.cpp",
         ".str = \"WiVRn HMD\",",
-        ".str = \"LVRR HMD\",",
+        ".str = \"oneVR HMD\",",
     ),
     rule(
         "wivrn/server/driver/wivrn_uinput.cpp",
         "\"WiVRn Keyboard\"",
-        "\"LVRR Headset Keyboard\"",
+        "\"oneVR Headset Keyboard\"",
     ),
     rule(
         "wivrn/server/driver/wivrn_uinput.cpp",
         "\"WiVRn Mouse\"",
-        "\"LVRR Headset Mouse\"",
+        "\"oneVR Headset Mouse\"",
     ),
     rule(
         "wivrn/server/driver/wivrn_uinput.cpp",
         "\"WiVRn Gamepad\"",
-        "\"LVRR Headset Gamepad\"",
+        "\"oneVR Headset Gamepad\"",
     ),
     rule(
         "wivrn/server/sleep_inhibitor.cpp",
         "\"WiVRn\",                     // Who",
-        "\"LVRR\",                      // Who",
+        "\"oneVR\",                     // Who",
     ),
     rule(
         "wivrn/server/sleep_inhibitor.cpp",
         "\"A WiVRn session is active\"",
-        "\"An LVRR session is active\"",
+        "\"A oneVR session is active\"",
     ),
     rule(
         "wivrn/server/avahi_publisher.cpp",
         "avahi_strdup(\"WiVRn\")",
-        "avahi_strdup(\"LVRR\")",
+        "avahi_strdup(\"oneVR\")",
     ),
     rule(
         "wivrn/server/start_systemd_unit.cpp",
         "\"Application spawned by WiVRn\"",
-        "\"Application spawned by LVRR\"",
+        "\"Application spawned by oneVR\"",
     ),
     rule(
         "wivrn/server/main.cpp",
         "\"If WiVRn is not running, delete \"",
-        "\"If LVRR is not running, delete \"",
+        "\"If oneVR is not running, delete \"",
     ),
     rule(
         "wivrn/server/main.cpp",
         "std::cerr << \"WiVRn \" <<",
-        "std::cerr << \"LVRR \" <<",
+        "std::cerr << \"oneVR \" <<",
     ),
     rule(
         "wivrn/server/main.cpp",
         "notify_init(\"WiVRn\")",
-        "notify_init(\"LVRR\")",
+        "notify_init(\"oneVR\")",
     ),
     rule(
         "wivrn/server/main.cpp",
         "std::cout << \"WiVRn version \"",
-        "std::cout << \"LVRR version \"",
+        "std::cout << \"oneVR version \"",
     ),
     // WayVR: notifications, CLI help, names shown by other software
     rule(
         "wayvr/wayvr/src/main.rs",
         "WayVR may have issues",
-        "LVRR may have issues",
+        "oneVR may have issues",
     ),
     rule(
         "wayvr/wayvr/src/main.rs",
         "Replace running WayVR instance",
-        "Replace running LVRR desktop instance",
+        "Replace running oneVR desktop instance",
     ),
     rule(
         "wayvr/wayvr/src/main.rs",
         "instances of WayVR",
-        "instances of the LVRR desktop",
+        "instances of the oneVR desktop",
     ),
     rule(
         "wayvr/wayvr/src/main.rs",
         "Looks like WayVR is already running.",
-        "Looks like the LVRR desktop is already running.",
+        "Looks like the oneVR desktop is already running.",
     ),
     rule(
         "wayvr/wayvr/src/main.rs",
         "notify_send(\"WayVR\",",
-        "notify_send(\"LVRR\",",
+        "notify_send(\"oneVR\",",
     ),
     rule(
         "wayvr/wayvr/src/overlays/screen/pw.rs",
         "notify_send(\"WayVR\",",
-        "notify_send(\"LVRR\",",
+        "notify_send(\"oneVR\",",
     ),
     rule(
         "wayvr/wayvr/src/backend/wayvr/mod.rs",
         "notify_send(\"WayVR\",",
-        "notify_send(\"LVRR\",",
+        "notify_send(\"oneVR\",",
     ),
     rule(
         "wayvr/wayvr/src/backend/wayvr/mod.rs",
         "\"Virtual WayVR Display\"",
-        "\"Virtual LVRR Display\"",
+        "\"Virtual oneVR Display\"",
     ),
     rule(
         "wayvr/wayvr/src/subsystem/dbus/mod.rs",
         "\"WayVR\",",
-        "\"LVRR\",",
+        "\"oneVR\",",
     ),
     // Not IGNORE_PREFIX ("WayVR";), which must match the uinput device names
     rule(
         "wayvr/wayvr/src/backend/wayvr/input_capture.rs",
         "\"WayVR\",",
-        "\"LVRR\",",
+        "\"oneVR\",",
     ),
     rule(
         "wayvr/wayvr/src/backend/openvr/manifest.rs",
         "name: \"WayVR\",",
-        "name: \"LVRR\",",
+        "name: \"oneVR\",",
     ),
     rule(
         "wayvr/wayvr/src/backend/openxr/input.rs",
         "\"WayVR Actions\"",
-        "\"LVRR Actions\"",
+        "\"oneVR Actions\"",
     ),
     // Follows the server's audio device name above
     rule(
         "wayvr/dash-frontend/src/views/audio_settings.rs",
         "device_desc.contains(\"WiVRn\")",
-        "device_desc.contains(\"LVRR\")",
+        "device_desc.contains(\"oneVR\")",
     ),
 ];
 
@@ -201,79 +201,79 @@ const MESSAGES: &[(&[&str], &str, &str)] = &[
     (
         &["wivrn/client/scenes/gui_settings.cpp"],
         "WiVRn can't directly change the refresh rate on this device. See your device's settings to change the refresh rate.",
-        "LVRR can't directly change the refresh rate on this device. See your device's settings to change the refresh rate.",
+        "oneVR can't directly change the refresh rate on this device. See your device's settings to change the refresh rate.",
     ),
     (
         &["wivrn/client/scenes/lobby_gui.cpp"],
         "Pick a PC running the WiVRn server to stream from.",
-        "Pick a PC running the LVRR server to stream from.",
+        "Pick a PC running the oneVR server to stream from.",
     ),
     (
         &["wivrn/client/scenes/lobby_gui.cpp"],
         "Start a WiVRn server on your local network.",
-        "Start an LVRR server on your local network.",
+        "Start a oneVR server on your local network.",
     ),
     (
         &["wivrn/client/scenes/lobby_gui.cpp"],
         "Welcome to WiVRn",
-        "Welcome to LVRR",
+        "Welcome to oneVR",
     ),
     (
         &["wivrn/client/scenes/lobby_gui.cpp"],
         "Open-source components bundled with WiVRn.",
-        "Open-source components bundled with LVRR.",
+        "Open-source components bundled with oneVR.",
     ),
     (
         &["wivrn/client/scenes/stream_gui.cpp"],
         "Press both thumbsticks to display the WiVRn window",
-        "Press both thumbsticks to display the LVRR window",
+        "Press both thumbsticks to display the oneVR window",
     ),
     (
         &["wivrn/client/scenes/lobby.cpp"],
         "Incompatible WiVRn server: no protocol field in TXT",
-        "Incompatible LVRR server: no protocol field in TXT",
+        "Incompatible oneVR server: no protocol field in TXT",
     ),
     (
         &["wivrn/client/scenes/lobby.cpp"],
         "Incompatible WiVRn server protocol (client: {}, server: {})",
-        "Incompatible LVRR server protocol (client: {}, server: {})",
+        "Incompatible oneVR server protocol (client: {}, server: {})",
     ),
 ];
 
-/// LVRR's logo, copied over upstream images.
+/// oneVR's logo, copied over upstream images.
 const COPIES: &[(&str, &str)] = &[
-    ("packaging/logo/lvrr.svg", "wivrn/images/wivrn.svg"),
-    ("packaging/logo/lvrr.svg", "wivrn/images/wivrn-pride.svg"),
+    ("packaging/logo/onevr.svg", "wivrn/images/wivrn.svg"),
+    ("packaging/logo/onevr.svg", "wivrn/images/wivrn-pride.svg"),
     (
-        "packaging/logo/lvrr.svg",
+        "packaging/logo/onevr.svg",
         "wivrn/images/wivrn-christmas.svg",
     ),
     (
-        "packaging/logo/lvrr-mono.svg",
-        "wayvr/dash-frontend/lvrr-assets/dashboard/wayvr_dashboard_mono.svg",
+        "packaging/logo/onevr-mono.svg",
+        "wayvr/dash-frontend/onevr-assets/dashboard/wayvr_dashboard_mono.svg",
     ),
     (
-        "packaging/logo/lvrr-mono.svg",
-        "wayvr/wayvr/lvrr-assets/watch/wayvr_dashboard_mono.svg",
+        "packaging/logo/onevr-mono.svg",
+        "wayvr/wayvr/onevr-assets/watch/wayvr_dashboard_mono.svg",
     ),
 ];
 
-/// Upstream images LVRR replaces, each with the LVRR file to compare and edit when upstream
-/// changes it: its `lvrr-assets` replacement, or the logo `COPIES` installs there. The
+/// Upstream images oneVR replaces, each with the oneVR file to compare and edit when upstream
+/// changes it: its `onevr-assets` replacement, or the logo `COPIES` installs there. The
 /// upstream images' git blob ids at the last review are in `packaging/rebrand-upstream.txt`;
 /// a changed blob means upstream changed the image.
 const REPLACED: &[(&str, &str)] = &[
     (
         "wayvr/dash-frontend/assets/dashboard/splash.png",
-        "wayvr/dash-frontend/lvrr-assets/dashboard/splash.png",
+        "wayvr/dash-frontend/onevr-assets/dashboard/splash.png",
     ),
     (
         "wayvr/dash-frontend/assets/dashboard/wayvr_dashboard_mono.svg",
-        "packaging/logo/lvrr-mono.svg",
+        "packaging/logo/onevr-mono.svg",
     ),
     (
         "wayvr/wayvr/src/assets/watch/wayvr_dashboard_mono.svg",
-        "packaging/logo/lvrr-mono.svg",
+        "packaging/logo/onevr-mono.svg",
     ),
 ];
 const REPLACED_RECORD: &str = "packaging/rebrand-upstream.txt";
@@ -404,7 +404,7 @@ pub fn run(args: &[String]) -> Result {
 /// header, whose metadata changes with every Weblate sync, nor for other sources naming
 /// WiVRn: they need a `MESSAGES` rule (`unbranded_messages` asks for one) and may hold a URL.
 fn rebrand_po(text: &str) -> String {
-    let rename = |line: &str| line.replace("WiVRn", "LVRR").replace("WinVRn", "LVRR");
+    let rename = |line: &str| line.replace("WiVRn", "oneVR").replace("WinVRn", "oneVR");
     let mut out = Vec::new();
     for entry in text.split("\n\n") {
         let lines: Vec<&str> = entry.lines().collect();
@@ -581,9 +581,9 @@ msgstr "Zobacz https://github.com/WiVRn/WiVRn"
 #~ msgstr "Połączono z WiVRn"
 "#;
         let rebranded = po
-            .replace("WiVRnについて", "LVRRについて")
-            .replace("PIN z WiVRn", "PIN z LVRR")
-            .replace("PINy z WinVRn", "PINy z LVRR");
+            .replace("WiVRnについて", "oneVRについて")
+            .replace("PIN z WiVRn", "PIN z oneVR")
+            .replace("PINy z WinVRn", "PINy z oneVR");
         assert_eq!(rebrand_po(po), rebranded);
         assert_eq!(rebrand_po(&rebranded), rebranded);
     }

@@ -89,9 +89,9 @@ Default value: unset
 
 Json object of additional encoder options, with string values, such as `{"quality": "0"}`.
 
-`vaapi` passes them directly to ffmpeg `avcodec_open2`'s `option` parameter. On AMD, LVRR asks Mesa for its balanced preset with pre-encode and VBAQ, which `compression_level` overrides.
+`vaapi` passes them directly to ffmpeg `avcodec_open2`'s `option` parameter. On AMD, oneVR asks Mesa for its balanced preset with pre-encode and VBAQ, which `compression_level` overrides.
 
-`vulkan` reads `quality`, the encode quality level. 0 is the driver's default, and a level above what the driver supports is lowered to its highest. On AMD, LVRR uses level 1. Mesa 26.1 and later map 0 to the speed preset (balanced for `h265` before RDNA 4), 1 to balanced, 2 to quality and, on RDNA 3 and later, 3 to high quality. Older Mesa ignores the level and uses the speed preset.
+`vulkan` reads `quality`, the encode quality level. 0 is the driver's default, and a level above what the driver supports is lowered to its highest. On AMD, oneVR uses level 1. Mesa 26.1 and later map 0 to the speed preset (balanced for `h265` before RDNA 4), 1 to balanced, 2 to quality and, on RDNA 3 and later, 3 to high quality. Older Mesa ignores the level and uses the speed preset.
 
 ## `application`
 Default value: unset
@@ -166,7 +166,7 @@ or loses its headset within a minute. While a headset streams the server only se
 tunnel. The tunnel is set up again every 10 seconds, since a restart of adb's server takes it down.
 
 The server runs `adb devices` every 2 seconds. With `systemd-run` it starts adb's server in its
-own systemd scope, so adb keeps running when LVRR stops.
+own systemd scope, so adb keeps running when oneVR stops.
 
 ## `debug-gui`
 Default value: `false`

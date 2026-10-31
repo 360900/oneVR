@@ -196,7 +196,7 @@ void end_sidebar();
 // Hairline dividers separating the top bar, sidebar and content, dimmed with the panel
 void shell_dividers(float top_bar_h, float tab_width);
 
-// LVRR: One depth, level 1 for cards and buttons, 2 for popovers, menus and tooltips, 3 for
+// oneVR: One depth, level 1 for cards and buttons, 2 for popovers, menus and tooltips, 3 for
 // dialogs; drawn outside min/max, under what is drawn next
 void shadow(ImDrawList * draw, const ImVec2 & min, const ImVec2 & max, float rounding, int level);
 
@@ -210,7 +210,7 @@ void push_float_style(const ImVec2 & padding);
 void pop_float_style();
 void float_frame(float rounding, int level, const ImVec4 * fill = nullptr);
 
-// LVRR: the lobby's One window, drawn at the cursor inside the main window: a flush sidebar
+// oneVR: the lobby's One window, drawn at the cursor inside the main window: a flush sidebar
 // with the app name and nav_item rows, a headerbar with the centred title and a close button,
 // the content in a centred column on the canvas
 

@@ -80,7 +80,7 @@ impl HidWrapper {
     }
 
     pub fn keymap_changed(&mut self, wvr_server: Option<&mut WvrServerState>, keymap: &XkbKeymap) {
-        // LVRR: also turns keys into text for the dashboard's edit boxes
+        // oneVR: also turns keys into text for the dashboard's edit boxes
         self.keymap = Some(keymap.clone());
         if let Some(wvr_server) = wvr_server {
             let _ = wvr_server

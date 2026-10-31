@@ -15,7 +15,7 @@ pub struct DmabufImportInfo {
 	pub fd: RawFd,
 	pub modifier: Option<u64>,
 	pub plane_layouts: Vec<DmabufPlaneLayout>,
-	/// LVRR: `SAMPLED`, plus `TRANSFER_SRC` to copy from the image
+	/// oneVR: `SAMPLED`, plus `TRANSFER_SRC` to copy from the image
 	pub usage: ImageUsage,
 }
 

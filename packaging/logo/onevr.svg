@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- oneVR logo: the "1VR" monogram from onevr-mono.svg on a blue circle. Also installed as
+     wivrn/images/wivrn*.svg by `cargo xtask rebrand`. WiVRn's build stylesheets tint #wivrn
+     through the filters below, which do nothing here, so every build shows the same logo. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">
+  <title>oneVR</title>
+  <defs>
+    <linearGradient id="onevr-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3584e4"/>
+      <stop offset="1" stop-color="#2474cf"/>
+    </linearGradient>
+    <filter id="filter60"><feColorMatrix type="hueRotate" values="0"/></filter>
+    <filter id="blue-tint"><feColorMatrix type="hueRotate" values="0"/></filter>
+  </defs>
+  <g id="night-sky" style="display:none"/>
+  <g id="wivrn">
+    <circle cx="90" cy="90" r="88" fill="url(#onevr-fill)"/>
+    <g transform="translate(90 90) scale(3.6) translate(-15 -15)" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M8.5,7.5 L11.5,4.5 V25.5"/>
+      <path d="M15.5,4.5 L19.25,13.5 L23,4.5"/>
+      <path d="M16,25.5 V16.5 H20 A2.7,2.7 0 0 1 20,21.9 H16 M19.5,21.9 L22.5,25.5"/>
+    </g>
+  </g>
+</svg>

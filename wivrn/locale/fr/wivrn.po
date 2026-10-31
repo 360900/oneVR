@@ -97,9 +97,9 @@ msgid "Refresh rate"
 msgstr "Taux de rafraîchissement"
 
 #: client/scenes/gui_settings.cpp:236
-msgid "LVRR can't directly change the refresh rate on this device. See your device's settings to change the refresh rate."
+msgid "oneVR can't directly change the refresh rate on this device. See your device's settings to change the refresh rate."
 msgstr ""
-"LVRR ne peut pas changer le taux de rafraîchissement sur ce casque. "
+"oneVR ne peut pas changer le taux de rafraîchissement sur ce casque. "
 "Consultez les paramètres du casque."
 
 #: client/scenes/gui_settings.cpp:237
@@ -722,14 +722,14 @@ msgid "Opacity of the panel and card backgrounds"
 msgstr "Opacité du panneau et du fond des cartes"
 
 #: client/scenes/lobby.cpp:232
-msgid "Incompatible LVRR server: no protocol field in TXT"
-msgstr "Serveur LVRR incompatible : pas de champ protocol dans le TXT"
+msgid "Incompatible oneVR server: no protocol field in TXT"
+msgstr "Serveur oneVR incompatible : pas de champ protocol dans le TXT"
 
 #: client/scenes/lobby.cpp:235
 #, c++-format
-msgid "Incompatible LVRR server protocol (client: {}, server: {})"
+msgid "Incompatible oneVR server protocol (client: {}, server: {})"
 msgstr ""
-"Version du protocole LVRR du serveur incompatible (client : {}, serveur : "
+"Version du protocole oneVR du serveur incompatible (client : {}, serveur : "
 "{})"
 
 #: client/scenes/lobby.cpp:250
@@ -840,16 +840,16 @@ msgstr "Ordinateurs"
 
 #: client/scenes/lobby_gui.cpp:370
 msgctxt "page header subtitle"
-msgid "Pick a PC running the LVRR server to stream from."
-msgstr "Choisissez un PC exécutant le serveur LVRR pour diffuser."
+msgid "Pick a PC running the oneVR server to stream from."
+msgstr "Choisissez un PC exécutant le serveur oneVR pour diffuser."
 
 #: client/scenes/lobby_gui.cpp:373
 msgid "Add server"
 msgstr "Ajouter un serveur"
 
 #: client/scenes/lobby_gui.cpp:401
-msgid "Start an LVRR server on your local network."
-msgstr "Démarrez un serveur LVRR sur votre réseau local."
+msgid "Start a oneVR server on your local network."
+msgstr "Démarrez un serveur oneVR sur votre réseau local."
 
 #: client/scenes/lobby_gui.cpp:424
 msgid "Connect"
@@ -952,16 +952,16 @@ msgid "Enable body tracking?"
 msgstr "Activer le suivi du corps ?"
 
 #: client/scenes/lobby_gui.cpp:858
-msgid "Welcome to LVRR"
-msgstr "Bienvenue sur LVRR"
+msgid "Welcome to oneVR"
+msgstr "Bienvenue sur oneVR"
 
 #: client/scenes/lobby_gui.cpp:914
 msgid "Licenses"
 msgstr "Licences"
 
 #: client/scenes/lobby_gui.cpp:914
-msgid "Open-source components bundled with LVRR."
-msgstr "Composants open source utilisés dans LVRR."
+msgid "Open-source components bundled with oneVR."
+msgstr "Composants open source utilisés dans oneVR."
 
 #: client/scenes/lobby_gui.cpp:949
 msgctxt ""
@@ -1291,8 +1291,8 @@ msgid "Press the grip button to move the window"
 msgstr "Serrez la gâchette latérale pour bouger la fenêtre"
 
 #: client/scenes/stream_gui.cpp:360 client/scenes/stream_gui.cpp:619
-msgid "Press both thumbsticks to display the LVRR window"
-msgstr "Appuyez sur les deux sticks pour afficher la fenêtre de LVRR"
+msgid "Press both thumbsticks to display the oneVR window"
+msgstr "Appuyez sur les deux sticks pour afficher la fenêtre de oneVR"
 
 #: client/scenes/stream_gui.cpp:380
 msgid "Motion to photon latency"

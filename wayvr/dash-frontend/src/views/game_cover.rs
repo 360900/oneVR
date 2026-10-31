@@ -53,7 +53,7 @@ pub struct View {
 	app_id: AppID,
 }
 
-// LVRR: oneDesign, no shine or shade over the art, an accent ring on hover
+// oneVR: oneDesign, no shine or shade over the art, an accent ring on hover
 const BORDER_COLOR_DEFAULT: WguiColor = WguiColorName::Accent.to_wgui_color().with_alpha(0.0);
 const BORDER_COLOR_HOVERED: WguiColor = WguiColorName::Accent.to_wgui_color();
 
@@ -66,7 +66,7 @@ impl View {
 			Ok(cover_art) => cover_art,
 			Err(e) => {
 				log::error!("request_cover_image failed: {:?}", e);
-				// LVRR: the placeholder instead of a spinner that never stops
+				// oneVR: the placeholder instead of a spinner that never stops
 				CoverArt {
 					compressed_image_data: Vec::new(),
 				}
@@ -139,7 +139,7 @@ impl View {
 		Ok(())
 	}
 
-	// LVRR: returns the decoded cover, None for the placeholder, so a caller can keep it and
+	// oneVR: returns the decoded cover, None for the placeholder, so a caller can keep it and
 	// mount it again with set_glyph
 	pub fn set_cover_art(
 		&mut self,
@@ -147,7 +147,7 @@ impl View {
 		layout: &mut Layout,
 		cover_art: &CoverArt,
 	) -> anyhow::Result<Option<CustomGlyphData>> {
-		// LVRR: clear the loading spinner and any image already mounted, so a cover applied
+		// oneVR: clear the loading spinner and any image already mounted, so a cover applied
 		// more than once never stacks two images side by side
 		layout.remove_children(self.id_image_parent);
 
@@ -159,7 +159,7 @@ impl View {
 					self.mount_image(layout, &glyph)?;
 					return Ok(Some(glyph));
 				}
-				// LVRR: the placeholder below instead of an empty frame
+				// oneVR: the placeholder below instead of an empty frame
 				Err(e) => log::warn!("failed to decode cover art image: {:?}", e),
 			}
 		}
@@ -172,14 +172,14 @@ impl View {
 		Ok(None)
 	}
 
-	// LVRR: mounts a cover set_cover_art returned, without decoding it again
+	// oneVR: mounts a cover set_cover_art returned, without decoding it again
 	pub fn set_glyph(&mut self, layout: &mut Layout, glyph: &CustomGlyphData) -> anyhow::Result<()> {
 		layout.remove_children(self.id_image_parent);
 		self.mount_image(layout, glyph)
 	}
 
 	pub fn new(params: Params) -> anyhow::Result<Self> {
-		// LVRR: split, mount builds the widgets
+		// oneVR: split, mount builds the widgets
 		let view = Self::mount(params.ess, params.manifest, params.scale)?;
 
 		// request cover image data from the internet or disk cache
@@ -194,7 +194,7 @@ impl View {
 		Ok(view)
 	}
 
-	// LVRR: new without the request, for a caller that loads and keeps the covers itself
+	// oneVR: new without the request, for a caller that loads and keeps the covers itself
 	pub fn mount(ess: &mut ConstructEssentials, manifest: &steam_utils::AppManifest, scale: f32) -> anyhow::Result<Self> {
 		let (widget_button, button) = components::button::construct(
 			ess,
@@ -239,7 +239,7 @@ impl View {
 			},
 		)?;
 
-		// LVRR: the loading spinner lives in image_parent and is cleared when the cover arrives
+		// oneVR: the loading spinner lives in image_parent and is cleared when the cover arrives
 		wgui_simple::create_loading(wgui_simple::CreateLoadingParams {
 			layout: ess.layout,
 			parent_id: image_parent.id,

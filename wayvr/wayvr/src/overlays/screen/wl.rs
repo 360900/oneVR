@@ -34,7 +34,7 @@ impl ScreenBackend {
         ))
     }
 
-    /// LVRR: ext-image-copy-capture, wlr-screencopy's successor on wlroots, Hyprland, niri, COSMIC
+    /// oneVR: ext-image-copy-capture, wlr-screencopy's successor on wlroots, Hyprland, niri, COSMIC
     pub fn new_ext_image_copy(output: &WlxOutput, app: &AppState) -> Option<Self> {
         let client = Box::new(WlxClient::new()?);
         let capture = new_wlx_capture!(app, ExtImageCopyCapture::new(client, output.id)?);
@@ -46,7 +46,7 @@ impl ScreenBackend {
         ))
     }
 
-    /// LVRR: GNOME's compositor records the monitor over D-Bus, without the portal's picker
+    /// oneVR: GNOME's compositor records the monitor over D-Bus, without the portal's picker
     pub fn new_mutter_screencast(output: &WlxOutput, app: &AppState) -> Option<Self> {
         let capture = new_wlx_capture!(
             app,
@@ -60,7 +60,7 @@ impl ScreenBackend {
         ))
     }
 
-    /// LVRR: KWin's own screencast, a PipeWire stream of the output without the portal's picker
+    /// oneVR: KWin's own screencast, a PipeWire stream of the output without the portal's picker
     pub fn new_kde_screencast(output: &WlxOutput, app: &AppState) -> Option<Self> {
         let client = Box::new(WlxClient::new()?);
         // the macro names the capture in each of its branches, the frame type differs
@@ -111,7 +111,7 @@ pub fn create_screen_renderer_wl(
         return Ok(Box::new(backend));
     }
 
-    // LVRR: KWin's and Mutter's screencasts are PipeWire streams like the portal's, so
+    // oneVR: KWin's and Mutter's screencasts are PipeWire streams like the portal's, so
     // PipeWire CPU takes them too and skips the picker; should_render keeps it off DMA-buf
     if matches!(
         app.session.config.capture_method,
@@ -169,7 +169,7 @@ pub fn create_screens_wayland(
             && wl.maybe_ext_output_source_mgr.is_some(),
         kde_screencast: wl.maybe_kde_screencast_mgr.is_some(),
     };
-    // LVRR: KWin before 6.8 offers its screencast only to clients whose desktop entry
+    // oneVR: KWin before 6.8 offers its screencast only to clients whose desktop entry
     // lists it; without the screencast, Home has no virtual monitors either. A compositor
     // with screen copy isn't KWin, whatever XDG_CURRENT_DESKTOP says for Qt themes
     if !protocols.kde_screencast
@@ -179,7 +179,7 @@ pub fn create_screens_wayland(
     {
         log::warn!(
             "KWin offers no screencast to wayvr, so screens use the portal and virtual monitors \
-             are unavailable: Plasma before 6.8 needs io.github.lvrr.wayvr.desktop in an \
+             are unavailable: Plasma before 6.8 needs io.github.onevr.wayvr.desktop in an \
              applications directory"
         );
         // from the first frame, so it queues behind the backend's "running" toast:
@@ -188,9 +188,9 @@ pub fn create_screens_wayland(
             Toast::new(
                 ToastTopic::Error,
                 Some(Translation::from_translation_key(
-                    "LVRR.KDE_SCREENCAST_HIDDEN",
+                    "ONEVR.KDE_SCREENCAST_HIDDEN",
                 )),
-                Translation::from_translation_key("LVRR.KDE_SCREENCAST_HOWTO"),
+                Translation::from_translation_key("ONEVR.KDE_SCREENCAST_HOWTO"),
             )
             .with_timeout(15.0)
             .submit(app);

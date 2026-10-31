@@ -196,7 +196,7 @@ pub(super) fn setup_custom_label<S: 'static>(
     );
 }
 
-// LVRR: oneDesign danger, text and accent_text
+// oneVR: oneDesign danger, text and accent_text
 const BAT_LOW: drawing::Color = drawing::Color::new(0.816, 0.169, 0.192, 1.);
 const BAT_NORMAL: drawing::Color = drawing::Color::new(0.071, 0.086, 0.106, 1.);
 const BAT_CHARGING: drawing::Color = drawing::Color::new(0.078, 0.404, 0.761, 1.);

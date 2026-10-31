@@ -139,7 +139,7 @@ pub struct MouseMeta {
     pub y: f32,
 }
 
-/// LVRR: why next_frame_allowed has no image
+/// oneVR: why next_frame_allowed has no image
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NoDmabuf {
     /// none of the allowed modifiers for the format, another format may have one
@@ -156,7 +156,7 @@ pub trait DmaExporter {
         fourcc: DrmFourcc,
     ) -> Option<(FramePlane, DrmModifier)>;
 
-    /// LVRR: next_frame with one of `modifiers`, any when empty. NoDmabuf::Modifier when the
+    /// oneVR: next_frame with one of `modifiers`, any when empty. NoDmabuf::Modifier when the
     /// exporter has none of them, so the caller can try another format.
     fn next_frame_allowed(
         &mut self,
@@ -175,7 +175,7 @@ pub trait DmaExporter {
         }
     }
 
-    /// LVRR: the DRM render node the exporter allocates on, as major and minor. None when
+    /// oneVR: the DRM render node the exporter allocates on, as major and minor. None when
     /// unknown or when there is no exporter.
     fn drm_render_node(&self) -> Option<(u32, u32)> {
         None

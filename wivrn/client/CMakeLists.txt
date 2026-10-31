@@ -311,7 +311,7 @@ if(WIVRN_COMPRESS_GLB)
 else()
     wivrn_copy_file(       SOURCE ${ASSETS_SRC_DIR}/ground.glb                          DESTINATION ${ASSETS_DIR}/ground.glb                          TARGET wivrn)
 endif()
-# LVRR: the lobby's sky dome
+# oneVR: the lobby's sky dome
 if(WIVRN_COMPRESS_GLB)
     wivrn_gltf_transform_uastc(SOURCE ${ASSETS_SRC_DIR}/meadow.glb                      DESTINATION ${ASSETS_DIR}/meadow.glb                          TARGET wivrn ZSTD 20)
 else()

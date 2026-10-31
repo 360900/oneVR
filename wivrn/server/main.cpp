@@ -35,8 +35,8 @@
 #include "driver/wivrn_connection.h"
 #include "exit_codes.h"
 #include "ipc_server_cb.h"
-#include "lvrr_dbus.h"
-#include "lvrr_usb.h"
+#include "onevr_dbus.h"
+#include "onevr_usb.h"
 #include "protocol_version.h"
 #include "start_application.h"
 #include "start_systemd_unit.h"
@@ -104,7 +104,7 @@ int create_listen_socket()
 	auto sock_file = socket_path();
 
 	addr.sun_family = AF_UNIX;
-	// LVRR: a longer path would overflow sun_path
+	// oneVR: a longer path would overflow sun_path
 	if (sock_file.native().size() >= sizeof(addr.sun_path))
 		throw std::runtime_error("Socket path " + sock_file.native() + " is longer than " + std::to_string(sizeof(addr.sun_path) - 1) + " bytes, use a shorter XDG_RUNTIME_DIR");
 	strcpy(addr.sun_path, sock_file.c_str());
@@ -132,7 +132,7 @@ int create_listen_socket()
 		std::cerr << "Could not bind socket to path " << sock_file << ": " << strerror(errno) << ". Is the service running already?" << std::endl;
 		if (errno == EADDRINUSE)
 		{
-			std::cerr << "If LVRR is not running, delete " << sock_file << " before starting a new instance" << std::endl;
+			std::cerr << "If oneVR is not running, delete " << sock_file << " before starting a new instance" << std::endl;
 		}
 		close(fd);
 		throw std::system_error(errno, std::system_category());
@@ -204,7 +204,7 @@ const AvahiPoll * poll_api;
 guint server_watch;
 guint server_kill_watch;
 pid_t server_pid;
-// LVRR: the session lost its headset and waits for it, see accept_connection. Unlike the
+// oneVR: the session lost its headset and waits for it, see accept_connection. Unlike the
 // HeadsetConnected property, not while a session starts.
 bool headset_lost;
 std::optional<std::jthread> connection_thread;
@@ -304,16 +304,16 @@ void start_server(configuration config)
 		assert(server_watch == 0);
 		assert(server_kill_watch == 0);
 		wivrn_server_set_session_running(dbus_server, true);
-		// LVRR: a packet of the previous session read after it ended may have set it
+		// oneVR: a packet of the previous session read after it ended may have set it
 		headset_lost = false;
 		server_watch = g_child_watch_add(server_pid, [](pid_t, int status, void *) {
 			wivrn_server_set_session_running(dbus_server, false);
-			// LVRR: a session can also end without headset_disconnected (headset app quit, StopSession,
+			// oneVR: a session can also end without headset_disconnected (headset app quit, StopSession,
 			// RestartSession, a refused headset, a crash), so release here what its handler releases
 			inhibitor.reset();
 			wivrn_server_set_headset_connected(dbus_server, false);
 			wivrn_server_set_client_tab(dbus_server, "");
-			lvrr_dbus::on_session_ended();
+			onevr_dbus::on_session_ended();
 			display_child_status(status, "Server");
 			g_source_remove(server_watch);
 			if (server_kill_watch)
@@ -383,9 +383,9 @@ void start_publishing()
 			        {"protocol", protocol_string},
 			        {"version", wivrn::display_version()},
 			        {"cookie", server_cookie()},
-			        // LVRR: lets the headset tell this server from another WiVRn server, which publishes the
+			        // oneVR: lets the headset tell this server from another WiVRn server, which publishes the
 			        // same keys. TXT isn't part of protocol_version, older headset apps still connect
-			        {"lvrr", "1"},
+			        {"onevr", "1"},
 			};
 			auto configuration = wivrn::configuration();
 			publisher.emplace(poll_api, configuration.hostname, "_wivrn._tcp", configuration.port, TXT);
@@ -401,14 +401,14 @@ void stop_publishing()
 void configure_usb()
 {
 	auto config = configuration();
-	lvrr_usb::configure(config.usb_auto_connect,
-	                    {
-	                            .port = config.port,
-	                            // LVRR: also while a session waits for its lost headset, so a headset whose
-	                            // adb dropped is started again pointed at it
-	                            .waiting = [] { return listener != nullptr or (server_watch != 0 and headset_lost); },
-	                            .pin = [] { return pin; },
-	                    });
+	onevr_usb::configure(config.usb_auto_connect,
+	                     {
+	                             .port = config.port,
+	                             // oneVR: also while a session waits for its lost headset, so a headset whose
+	                             // adb dropped is started again pointed at it
+	                             .waiting = [] { return listener != nullptr or (server_watch != 0 and headset_lost); },
+	                             .pin = [] { return pin; },
+	                     });
 }
 
 void update_fsm()
@@ -437,7 +437,7 @@ void update_fsm()
 		if (not server_running and app_running)
 			children->stop();
 
-		// LVRR: wait for the old session's applications to stop, children calls update_fsm again
+		// oneVR: wait for the old session's applications to stop, children calls update_fsm again
 		if (not server_running and not app_running)
 		{
 			runtime_setter.reset();
@@ -474,7 +474,7 @@ gboolean headset_connected_success(void *)
 
 	expose_known_keys_on_dbus();
 
-	lvrr_dbus::on_session_starting(connection->headset_public_key());
+	onevr_dbus::on_session_starting(connection->headset_public_key());
 	configuration c;
 	start_server(c);
 	try
@@ -548,7 +548,7 @@ gboolean headset_connected(gint fd, GIOCondition condition, gpointer user_data)
 	return G_SOURCE_CONTINUE;
 }
 
-// LVRR: starts an application from the list, or the configured one for an empty id
+// oneVR: starts an application from the list, or the configured one for an empty id
 void start_app_by_id(const std::string & app_id)
 {
 	if (app_id.empty())
@@ -556,19 +556,19 @@ void start_app_by_id(const std::string & app_id)
 		children->start_application(configuration().application);
 		return;
 	}
-	auto app = lvrr_dbus::find_application(app_id);
+	auto app = onevr_dbus::find_application(app_id);
 	if (not app)
 		throw std::runtime_error("unknown application " + app_id);
 	children->start_application(app->exec, app->path);
 }
 
-// LVRR: the configured application is the dashboard
+// oneVR: the configured application is the dashboard
 bool is_dashboard(const std::vector<std::string> & application)
 {
 	return not application.empty() and std::filesystem::path(application.front()).filename() == "wayvr";
 }
 
-// LVRR: the headset's "Restart desktop". wayvr runs once, and --replace ends the running one
+// oneVR: the headset's "Restart desktop". wayvr runs once, and --replace ends the running one
 // even when it hangs.
 void restart_application()
 {
@@ -581,7 +581,7 @@ void restart_application()
 gboolean control_received(gint fd, GIOCondition condition, gpointer user_data)
 {
 	auto packet = wivrn_ipc_socket_main_loop->receive();
-	// LVRR: the read keeps the other packets it took, which no longer wake the main loop
+	// oneVR: the read keeps the other packets it took, which no longer wake the main loop
 	while (packet)
 	{
 		std::visit(utils::overloaded{
@@ -611,7 +611,7 @@ gboolean control_received(gint fd, GIOCondition condition, gpointer user_data)
 			                   stop_publishing();
 			                   inhibitor.emplace();
 			                   wivrn_server_set_headset_connected(dbus_server, true);
-			                   // LVRR: see configure_usb
+			                   // oneVR: see configure_usb
 			                   headset_lost = false;
 		                   },
 		                   [&](const from_monado::headset_disconnected &) {
@@ -619,16 +619,16 @@ gboolean control_received(gint fd, GIOCondition condition, gpointer user_data)
 			                   inhibitor.reset();
 			                   wivrn_server_set_headset_connected(dbus_server, false);
 			                   wivrn_server_set_client_tab(dbus_server, "");
-			                   lvrr_dbus::on_headset_disconnected();
-			                   // LVRR: see configure_usb
+			                   onevr_dbus::on_headset_disconnected();
+			                   // oneVR: see configure_usb
 			                   headset_lost = true;
 		                   },
 		                   [&](const from_monado::headset_resumed & resumed) {
-			                   // LVRR: possibly not the headset the session started for, and its handshake
+			                   // oneVR: possibly not the headset the session started for, and its handshake
 			                   // updated the key's last connection
-			                   lvrr_dbus::on_headset_resumed(resumed.public_key);
+			                   onevr_dbus::on_headset_resumed(resumed.public_key);
 			                   expose_known_keys_on_dbus();
-			                   // LVRR: bring the dashboard back if it stopped while the session kept running; not
+			                   // oneVR: bring the dashboard back if it stopped while the session kept running; not
 			                   // another configured application, which would run twice
 			                   auto application = configuration().application;
 			                   if (resumed.dashboard_running or not is_dashboard(application))
@@ -648,9 +648,9 @@ gboolean control_received(gint fd, GIOCondition condition, gpointer user_data)
 		                   [&](const from_monado::server_error & e) {
 			                   wivrn_server_emit_server_error(dbus_server, e.where.c_str(), e.message.c_str());
 		                   },
-		                   [&](const wivrn::lvrr::headset_settings & settings) { lvrr_dbus::on_headset_settings(settings); },
-		                   [&](const wivrn::lvrr::stats & stats) { lvrr_dbus::on_headset_stats(stats); },
-		                   [&](const wivrn::to_headset::server_message & message) { lvrr_dbus::on_server_message(message); },
+		                   [&](const wivrn::onevr::headset_settings & settings) { onevr_dbus::on_headset_settings(settings); },
+		                   [&](const wivrn::onevr::stats & stats) { onevr_dbus::on_headset_stats(stats); },
+		                   [&](const wivrn::to_headset::server_message & message) { onevr_dbus::on_server_message(message); },
 		           },
 		           *packet);
 		packet = wivrn_ipc_socket_main_loop->receive_pending();
@@ -739,7 +739,7 @@ gboolean on_handle_revoke_key(WivrnServer * skeleton, GDBusMethodInvocation * in
 	g_variant_get_child(args, 0, "s", &publickey);
 
 	wivrn::remove_known_key(publickey);
-	lvrr_dbus::on_key_revoked(publickey);
+	onevr_dbus::on_key_revoked(publickey);
 
 	g_free(publickey);
 
@@ -968,13 +968,13 @@ void on_name_acquired(GDBusConnection * connection, const gchar * name, gpointer
 
 	g_signal_connect(dbus_server, "handle-set-client-tab", G_CALLBACK(on_handle_set_client_tab), NULL);
 
-	lvrr_dbus::setup(dbus_server,
-	                 {
-	                         .session_running = [] { return server_watch != 0; },
-	                         .send_to_session = [](to_monado::packets packet) { std::visit([](auto && p) { wivrn_ipc_socket_main_loop->send(std::move(p)); }, std::move(packet)); },
-	                         .start_application = start_app_by_id,
-	                         .headsets_file = configuration::get_config_file().parent_path() / "lvrr-headsets.json",
-	                 });
+	onevr_dbus::setup(dbus_server,
+	                  {
+	                          .session_running = [] { return server_watch != 0; },
+	                          .send_to_session = [](to_monado::packets packet) { std::visit([](auto && p) { wivrn_ipc_socket_main_loop->send(std::move(p)); }, std::move(packet)); },
+	                          .start_application = start_app_by_id,
+	                          .headsets_file = configuration::get_config_file().parent_path() / "onevr-headsets.json",
+	                  });
 
 	wivrn_server_set_steam_command(dbus_server, steam_command().c_str());
 
@@ -1043,7 +1043,7 @@ auto create_dbus_connection()
 
 int inner_main(int argc, char * argv[], bool show_instructions)
 {
-	std::cerr << "LVRR " << wivrn::display_version() << " starting" << std::endl;
+	std::cerr << "oneVR " << wivrn::display_version() << " starting" << std::endl;
 	if (show_instructions)
 	{
 		if (auto command = steam_command(); not command.empty())
@@ -1102,13 +1102,13 @@ int inner_main(int argc, char * argv[], bool show_instructions)
 	                             nullptr);
 
 	// Initialize libnotify
-	notify_init("LVRR");
+	notify_init("oneVR");
 
 	// Main loop
 	g_main_loop_run(main_loop);
 
 	// Cleanup
-	lvrr_usb::configure(false, {});
+	onevr_usb::configure(false, {});
 	notify_uninit();
 	runtime_setter.reset();
 	stop_publishing();
@@ -1143,7 +1143,7 @@ int main(int argc, char * argv[])
 
 	if (*version_flag)
 	{
-		std::cout << "LVRR version " << wivrn::display_version() << std::endl;
+		std::cout << "oneVR version " << wivrn::display_version() << std::endl;
 		return 0;
 	}
 

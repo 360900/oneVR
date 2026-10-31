@@ -66,11 +66,11 @@ struct pipewire_device : public audio_device
 	audio_data mic_current;
 	std::unique_ptr<pw_stream, deleter> microphone;
 	std::atomic<std::underlying_type_t<pw_stream_state>> mic_state{PW_STREAM_STATE_UNCONNECTED};
-	// LVRR: the stream pauses and resumes with its consumers, sometimes every second; the
+	// oneVR: the stream pauses and resumes with its consumers, sometimes every second; the
 	// headset only hears about a pause that lasts
 	spa_source * mic_off_timer = nullptr;
 	bool mic_on_sent = false;
-	// LVRR: resume() sends the microphone state from the network thread, the callbacks from
+	// oneVR: resume() sends the microphone state from the network thread, the callbacks from
 	// the PipeWire loop; held across each send so mic_on_sent matches the headset's last one
 	std::mutex mic_mutex;
 	static void mic_off_timeout(void * self_v, uint64_t expirations);
@@ -272,7 +272,7 @@ struct pipewire_device : public audio_device
 				pw_main_loop_run(pw_loop.get());
 				speaker.reset();
 				microphone.reset();
-				// LVRR: after the microphone, whose teardown re-arms the timer
+				// oneVR: after the microphone, whose teardown re-arms the timer
 				if (mic_off_timer)
 					pw_loop_destroy_source(pw_main_loop_get_loop(pw_loop.get()), std::exchange(mic_off_timer, nullptr));
 				; });
@@ -374,7 +374,7 @@ void pipewire_device::mic_state_changed(void * self_v, pw_stream_state old, pw_s
 			return;
 		case PW_STREAM_STATE_STREAMING: {
 			self->arm_mic_off(false);
-			// LVRR: see mic_mutex
+			// oneVR: see mic_mutex
 			std::lock_guard lock(self->mic_mutex);
 			if (self->mic_on_sent)
 				return;
@@ -461,7 +461,7 @@ void pipewire_device::pause()
 void pipewire_device::resume()
 {
 	session.send_control(to_headset::audio_stream_description{desc});
-	// LVRR: see mic_mutex
+	// oneVR: see mic_mutex
 	std::lock_guard lock(mic_mutex);
 	mic_on_sent = mic_state == PW_STREAM_STATE_STREAMING;
 	session.send_control(to_headset::feature_control{to_headset::feature_control::microphone, mic_on_sent});

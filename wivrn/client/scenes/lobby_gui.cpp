@@ -24,7 +24,7 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "lobby.h"
-#include "lvrr.h"
+#include "onevr.h"
 #include "render/ui_theme.h"
 #include "render/ui_widgets.h"
 #include "scenes/stream.h" // IWYU pragma: keep
@@ -58,7 +58,7 @@
 
 #include "IconsFontAwesome7.h"
 #include "IconsFontAwesome7Brands.h"
-#include "IconsLvrr.h"
+#include "IconsOneVr.h"
 
 using namespace std::chrono_literals;
 
@@ -145,11 +145,11 @@ void scenes::lobby::gui_connecting(locked_notifiable<pin_request_data> & pin_req
 
 		pin_request->pin_cancelled = true;
 
-		// LVRR: stops reconnecting, as lvrr_disconnect() does; calling it here would lock
+		// oneVR: stops reconnecting, as onevr_disconnect() does; calling it here would lock
 		// pin_request twice
-		if constexpr (not lvrr::stock_ui)
+		if constexpr (not onevr::stock_ui)
 		{
-			lvrr_reconnect_until = {};
+			onevr_reconnect_until = {};
 			autoconnect_enabled = false;
 		}
 
@@ -214,17 +214,17 @@ void scenes::lobby::gui_enter_pin(locked_notifiable<pin_request_data> & pin_requ
 		}
 	}
 
-	if (ui::button(ICON_LVRR_CLOSE, ui::button_style::danger, pin_entry_key_size))
+	if (ui::button(ICON_ONEVR_CLOSE, ui::button_style::danger, pin_entry_key_size))
 	{
 		async_session.cancel();
 		next_scene.reset();
 		pin_request->pin_cancelled = true;
 		pin_request.notify_one();
 
-		// LVRR: stops reconnecting, as the connecting popup's Disconnect does
-		if constexpr (not lvrr::stock_ui)
+		// oneVR: stops reconnecting, as the connecting popup's Disconnect does
+		if constexpr (not onevr::stock_ui)
 		{
-			lvrr_reconnect_until = {};
+			onevr_reconnect_until = {};
 			autoconnect_enabled = false;
 		}
 
@@ -238,7 +238,7 @@ void scenes::lobby::gui_enter_pin(locked_notifiable<pin_request_data> & pin_requ
 
 	ImGui::SameLine();
 	ImGui::BeginDisabled(pin_buffer.size() == 0);
-	if (ui::button(ICON_LVRR_BACKSPACE, ui::button_style::secondary, pin_entry_key_size))
+	if (ui::button(ICON_ONEVR_BACKSPACE, ui::button_style::secondary, pin_entry_key_size))
 		pin_buffer.resize(pin_buffer.size() - 1);
 	ImGui::EndDisabled();
 
@@ -254,9 +254,9 @@ void scenes::lobby::gui_enter_pin(locked_notifiable<pin_request_data> & pin_requ
 
 void scenes::lobby::gui_connected(XrTime predicted_display_time)
 {
-	if constexpr (not lvrr::stock_ui)
+	if constexpr (not onevr::stock_ui)
 	{
-		lvrr_gui_waiting();
+		onevr_gui_waiting();
 		return;
 	}
 
@@ -370,12 +370,12 @@ void scenes::lobby::gui_new_server()
 		};
 
 		auto & config = application::get_config();
-		// LVRR: lvrr_remember_mac finds the server by its cookie, as one loaded from client.json
+		// oneVR: onevr_remember_mac finds the server by its cookie, as one loaded from client.json
 		const std::string key = "manual-" + data.service.name;
 		data.service.txt["cookie"] = key;
 		if (add_server_cookie != "")
 		{
-			// LVRR: keep what was learnt about the PC, connecting to another one replaces the MAC
+			// oneVR: keep what was learnt about the PC, connecting to another one replaces the MAC
 			if (auto old = config.servers.find(add_server_cookie); old != config.servers.end())
 			{
 				data.autoconnect = old->second.autoconnect;
@@ -399,35 +399,35 @@ void scenes::lobby::gui_server_list()
 	const auto & t = ui::current();
 
 	const std::string add_label = _("Add server");
-	const float add_w = ui::button_width(ICON_LVRR_ADD, add_label);
+	const float add_w = ui::button_width(ICON_ONEVR_ADD, add_label);
 	bool add_server = false;
 
-	if constexpr (lvrr::stock_ui)
+	if constexpr (onevr::stock_ui)
 	{
 		// header with an Add server button on the right
 		const ImVec2 hstart = ImGui::GetCursorPos();
 		const float header_avail = ImGui::GetContentRegionAvail().x;
-		ui::page_header(_cS("page header title", "Computers"), _cS("page header subtitle", "Pick a PC running the LVRR server to stream from."));
+		ui::page_header(_cS("page header title", "Computers"), _cS("page header subtitle", "Pick a PC running the oneVR server to stream from."));
 		const ImVec2 hend = ImGui::GetCursorPos();
 
 		ImGui::SetCursorPos({hstart.x + header_avail - add_w, hstart.y});
-		add_server = ui::button(ICON_LVRR_ADD, add_label, ui::button_style::primary);
+		add_server = ui::button(ICON_ONEVR_ADD, add_label, ui::button_style::primary);
 		ImGui::SetCursorPos(hend);
 	}
 	else
 	{
-		// LVRR: the headerbar has the title, the hint and the Add server button head the list
+		// oneVR: the headerbar has the title, the hint and the Add server button head the list
 		const ImVec2 hstart = ImGui::GetCursorPos();
 		const float header_avail = ImGui::GetContentRegionAvail().x;
 		const float bh = ui::metrics::control_size;
 		ImGui::SetCursorPos({hstart.x + header_avail - add_w, hstart.y});
-		add_server = ui::button(ICON_LVRR_ADD, add_label, ui::button_style::primary);
+		add_server = ui::button(ICON_ONEVR_ADD, add_label, ui::button_style::primary);
 		const float below = ImGui::GetCursorPosY();
 		ImGui::SetCursorPos({hstart.x, hstart.y + (bh - ImGui::GetFontSize()) * 0.5f});
 		ImGui::PushTextWrapPos(hstart.x + header_avail - add_w - ImGui::GetStyle().ItemSpacing.x);
 		ImGui::PushStyleColor(ImGuiCol_Text, t.text_muted);
-		// LVRR: the stock header's msgctxt, the catalogs translate the text only under it
-		ImGui::TextUnformatted(_cS("page header subtitle", "Pick a PC running the LVRR server to stream from."));
+		// oneVR: the stock header's msgctxt, the catalogs translate the text only under it
+		ImGui::TextUnformatted(_cS("page header subtitle", "Pick a PC running the oneVR server to stream from."));
 		ImGui::PopStyleColor();
 		ImGui::PopTextWrapPos();
 		ImGui::SetCursorPosY(std::max(below, ImGui::GetCursorPosY()) + ui::metrics::card_title_gap - ImGui::GetStyle().ItemSpacing.y);
@@ -442,12 +442,12 @@ void scenes::lobby::gui_server_list()
 	bool open_delete = false;
 	bool open_forget = false;
 
-	// LVRR: a PC missing from the list is only known to be off once discovery heard from every
+	// oneVR: a PC missing from the list is only known to be off once discovery heard from every
 	// PC, or while the list keeps what the last one found
-	const bool servers_known = lvrr_discovery_settled() or lvrr_list_kept();
+	const bool servers_known = onevr_discovery_settled() or onevr_list_kept();
 
-	// LVRR: rows of a boxed list touch the hairlines between them
-	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {ui::metrics::card_item_spacing.x, lvrr::stock_ui ? ui::metrics::card_item_spacing.y : 0});
+	// oneVR: rows of a boxed list touch the hairlines between them
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {ui::metrics::card_item_spacing.x, onevr::stock_ui ? ui::metrics::card_item_spacing.y : 0});
 	ui::begin_list_card("##servers");
 	{
 		if (add_server)
@@ -461,12 +461,12 @@ void scenes::lobby::gui_server_list()
 		}
 		if (sorted_cookies.empty())
 		{
-			// LVRR: a list row's padding
-			const float pad = lvrr::stock_ui ? 0 : ui::metrics::list_row_pad - ui::metrics::list_card_padding.x;
+			// oneVR: a list row's padding
+			const float pad = onevr::stock_ui ? 0 : ui::metrics::list_row_pad - ui::metrics::list_card_padding.x;
 			ImGui::Dummy({0, pad * 0.5f});
 			ImGui::Indent(pad);
 			ImGui::PushStyleColor(ImGuiCol_Text, t.text_muted);
-			ImGui::TextUnformatted(_S("Start an LVRR server on your local network."));
+			ImGui::TextUnformatted(_S("Start a oneVR server on your local network."));
 			ImGui::PopStyleColor();
 			ImGui::Unindent(pad);
 			ImGui::Dummy({0, pad * 0.5f});
@@ -485,58 +485,58 @@ void scenes::lobby::gui_server_list()
 			// incompatible: discovered but protocol version differs, otherwise still searching
 			const bool reachable = (data.visible and data.compatible) or data.manual;
 			const bool incompatible = data.visible and data.service.txt.contains("protocol") and not data.compatible;
-			// LVRR: a remembered PC that is off can be woken up, then we wait for it to show up.
+			// oneVR: a remembered PC that is off can be woken up, then we wait for it to show up.
 			// Before discovery can tell it is off, it shows Searching…
 			const bool wakeable = not reachable and not incompatible and data.mac and servers_known;
-			// LVRR: manual PCs are always reachable, they stay woken until Connect is pressed
+			// oneVR: manual PCs are always reachable, they stay woken until Connect is pressed
 			if (reachable and not data.manual)
-				lvrr_woken.erase(cookie);
-			const auto woken = lvrr_woken.find(cookie);
-			const bool woken_recently = woken != lvrr_woken.end() and std::chrono::steady_clock::now() - woken->second < std::chrono::minutes(2);
+				onevr_woken.erase(cookie);
+			const auto woken = onevr_woken.find(cookie);
+			const bool woken_recently = woken != onevr_woken.end() and std::chrono::steady_clock::now() - woken->second < std::chrono::minutes(2);
 			const bool waking = wakeable and woken_recently;
-			const bool wake_failed = wakeable and woken != lvrr_woken.end() and not waking;
+			const bool wake_failed = wakeable and woken != onevr_woken.end() and not waking;
 			const float gap = ImGui::GetStyle().ItemSpacing.x;
-			const float bh = lvrr::stock_ui ? ImGui::GetFrameHeight() * ui::metrics::control_height : ui::metrics::control_size;
+			const float bh = onevr::stock_ui ? ImGui::GetFrameHeight() * ui::metrics::control_height : ui::metrics::control_size;
 			std::string sub = fmt::format("{} : {}", data.service.hostname, data.service.port);
-			// LVRR: a manual PC is never found on the network, its row says it was woken
+			// oneVR: a manual PC is never found on the network, its row says it was woken
 			if (data.manual and woken_recently)
-				sub = _("Waiting for the PC and LVRR to start");
+				sub = _("Waiting for the PC and oneVR to start");
 
 			// trailing controls [Auto chip] [Connect] [menu], measured up front to exclude from the row click area
-			const char * c_icon = reachable ? ICON_LVRR_PLAY : (incompatible ? ICON_LVRR_WARNING : ICON_LVRR_SEARCH);
+			const char * c_icon = reachable ? ICON_ONEVR_PLAY : (incompatible ? ICON_ONEVR_WARNING : ICON_ONEVR_SEARCH);
 			std::string c_label = ui::icon_label(c_icon, reachable ? _("Connect") : (incompatible ? _C("button label when the server has an incompatible version", "Incompatible") : _C("button label when the server is known but not visible", "Searching…")));
 			std::string c_tooltip = reachable ? std::string{} : (incompatible ? _("Incompatible server version") : _("Looking for this server on your network"));
-			// LVRR: the protocol changes with most updates, show both versions and how to match them.
-			// Another WiVRn server publishes the same keys, only an LVRR one adds "lvrr"
-			if (incompatible and not lvrr::stock_ui)
+			// oneVR: the protocol changes with most updates, show both versions and how to match them.
+			// Another WiVRn server publishes the same keys, only a oneVR one adds "onevr"
+			if (incompatible and not onevr::stock_ui)
 			{
 				const auto it = data.service.txt.find("version");
 				const std::string server_version = it == data.service.txt.end() ? "?" : it->second;
-				if (data.service.txt.contains("lvrr"))
+				if (data.service.txt.contains("onevr"))
 				{
-					sub += "\n" + fmt::format(_F("LVRR {} on the PC, {} on this headset"), server_version, wivrn::display_version());
-					c_tooltip = _("The PC and this headset run different LVRR versions.\nOn the PC, update LVRR, or run \"lvrr install APK\" to install the matching headset app.");
+					sub += "\n" + fmt::format(_F("oneVR {} on the PC, {} on this headset"), server_version, wivrn::display_version());
+					c_tooltip = _("The PC and this headset run different oneVR versions.\nOn the PC, update oneVR, or run \"onevr install APK\" to install the matching headset app.");
 				}
 				else
 				{
-					// LVRR: also an LVRR built before the key. xtask rebrand refuses WiVRn in headset strings
-					sub += "\n" + fmt::format(_F("Server {} on the PC, LVRR {} on this headset"), server_version, wivrn::display_version());
-					c_tooltip = _("This PC runs another VR streaming server, or an older LVRR.\nQuit it and start LVRR, or update LVRR on the PC.");
+					// oneVR: also a oneVR built before the key. xtask rebrand refuses WiVRn in headset strings
+					sub += "\n" + fmt::format(_F("Server {} on the PC, oneVR {} on this headset"), server_version, wivrn::display_version());
+					c_tooltip = _("This PC runs another VR streaming server, or an older oneVR.\nQuit it and start oneVR, or update oneVR on the PC.");
 				}
 			}
 			if (wakeable)
 			{
-				c_label = ui::icon_label(ICON_LVRR_POWER, waking ? _("Waking…") : _("Wake"));
-				// LVRR: the server only runs once LVRR is started, a woken PC waits at its login screen
+				c_label = ui::icon_label(ICON_ONEVR_POWER, waking ? _("Waking…") : _("Wake"));
+				// oneVR: the server only runs once oneVR is started, a woken PC waits at its login screen
 				if (waking)
-					c_tooltip = _("Waiting for the PC and LVRR to start");
+					c_tooltip = _("Waiting for the PC and oneVR to start");
 				else if (wake_failed)
-					c_tooltip = _("LVRR didn't show up. If the PC is on, start LVRR on it.\nIf it stayed off, check that wake-on-LAN is on in its BIOS and on its network card.");
+					c_tooltip = _("oneVR didn't show up. If the PC is on, start oneVR on it.\nIf it stayed off, check that wake-on-LAN is on in its BIOS and on its network card.");
 				else
-					c_tooltip = _("Not found on your network. If the PC is off, wake it; if it's on, start LVRR on it.");
+					c_tooltip = _("Not found on your network. If the PC is off, wake it; if it's on, start oneVR on it.");
 			}
 			const float cw = ui::button_width(c_label);
-			const std::string chip_label = ui::icon_label(ICON_LVRR_AUTO, _C("chip displayed in server list when autoconnect is enabled", "Auto"));
+			const std::string chip_label = ui::icon_label(ICON_ONEVR_AUTO, _C("chip displayed in server list when autoconnect is enabled", "Auto"));
 			const ImVec2 chip_sz = ui::chip_size(chip_label);
 			float trailing = bh + gap + cw + (data.autoconnect ? gap + chip_sz.x : 0) + ui::metrics::list_row_pad;
 
@@ -545,11 +545,11 @@ void scenes::lobby::gui_server_list()
 				{
 					const auto & interface = service.addresses.front().interface;
 					if (interface.starts_with("usb"))
-						return ICON_LVRR_USB;
+						return ICON_ONEVR_USB;
 					if (interface.starts_with("w"))
-						return ICON_LVRR_NETWORK_WIRELESS;
+						return ICON_ONEVR_NETWORK_WIRELESS;
 				}
-				return ICON_LVRR_NETWORK_SERVER;
+				return ICON_ONEVR_NETWORK_SERVER;
 			}(data.service);
 
 			const auto row = ui::begin_list_row("##row", server_icon, 0, name, sub, false, trailing);
@@ -565,11 +565,11 @@ void scenes::lobby::gui_server_list()
 			ImGui::SetCursorScreenPos(row.trailing(x, {bh, bh}));
 			if (data.manual)
 			{
-				actions.push_back({ICON_LVRR_EDIT, edit_l.c_str(), false, false});
-				actions.push_back({ICON_LVRR_TRASH, del_l.c_str(), true, false});
+				actions.push_back({ICON_ONEVR_EDIT, edit_l.c_str(), false, false});
+				actions.push_back({ICON_ONEVR_TRASH, del_l.c_str(), true, false});
 				if (data.mac)
-					actions.push_back({ICON_LVRR_POWER, wake_l.c_str(), false, false});
-				switch (ui::action_menu("##menu", ICON_LVRR_MORE, actions))
+					actions.push_back({ICON_ONEVR_POWER, wake_l.c_str(), false, false});
+				switch (ui::action_menu("##menu", ICON_ONEVR_MORE, actions))
 				{
 					case 0:
 						add_server_cookie = cookie;
@@ -584,19 +584,19 @@ void scenes::lobby::gui_server_list()
 						open_delete = true;
 						break;
 					case 2:
-						lvrr_wake(data);
-						// LVRR: the row then says it waits for the PC
-						lvrr_woken[cookie] = std::chrono::steady_clock::now();
+						onevr_wake(data);
+						// oneVR: the row then says it waits for the PC
+						onevr_woken[cookie] = std::chrono::steady_clock::now();
 						break;
 				}
 			}
 			else
 			{
-				actions.push_back({ICON_LVRR_AUTO, auto_l.c_str(), false, data.autoconnect});
-				// LVRR: PCs with a known MAC are remembered, let them go
+				actions.push_back({ICON_ONEVR_AUTO, auto_l.c_str(), false, data.autoconnect});
+				// oneVR: PCs with a known MAC are remembered, let them go
 				if (data.mac)
-					actions.push_back({ICON_LVRR_TRASH, forget_l.c_str(), true, false});
-				switch (ui::action_menu("##menu", ICON_LVRR_MORE, actions))
+					actions.push_back({ICON_ONEVR_TRASH, forget_l.c_str(), true, false});
+				switch (ui::action_menu("##menu", ICON_ONEVR_MORE, actions))
 				{
 					case 0:
 						data.autoconnect = not data.autoconnect;
@@ -617,13 +617,13 @@ void scenes::lobby::gui_server_list()
 			{
 				if (wakeable)
 				{
-					lvrr_wake(data);
-					lvrr_woken[cookie] = std::chrono::steady_clock::now();
+					onevr_wake(data);
+					onevr_woken[cookie] = std::chrono::steady_clock::now();
 				}
 				else
 				{
-					// LVRR: ends the wait of a woken manual PC
-					lvrr_woken.erase(cookie);
+					// oneVR: ends the wait of a woken manual PC
+					onevr_woken.erase(cookie);
 					connect(data);
 				}
 				// popup opened at window scope below, outside begin_card's PushID so the id matches BeginPopupModal
@@ -706,7 +706,7 @@ void scenes::lobby::gui_server_list()
 		}
 	}
 
-	// LVRR: a visible PC stays listed once forgotten, so say what changes
+	// oneVR: a visible PC stays listed once forgotten, so say what changes
 	if (not forget_server_cookie.empty())
 	{
 		std::string name;
@@ -717,7 +717,7 @@ void scenes::lobby::gui_server_list()
 		{
 			case 1:
 				config.servers.erase(forget_server_cookie);
-				lvrr_woken.erase(forget_server_cookie);
+				onevr_woken.erase(forget_server_cookie);
 				config.save();
 				forget_server_cookie = "";
 				break;
@@ -967,7 +967,7 @@ void scenes::lobby::gui_debug()
 void scenes::lobby::gui_about()
 {
 	ImGui::PushFont(nullptr, constants::gui::font_size_large);
-	CenterTextH(std::string("LVRR ") + wivrn::display_version());
+	CenterTextH(std::string("oneVR ") + wivrn::display_version());
 	ImGui::PopFont();
 
 	ImGui::Dummy(ImVec2(0, 60));
@@ -1017,7 +1017,7 @@ void scenes::lobby::gui_first_run()
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {20, 40});
 
 	ImGui::PushFont(nullptr, constants::gui::font_size_large);
-	CenterTextH(_("Welcome to LVRR"));
+	CenterTextH(_("Welcome to oneVR"));
 	ImGui::PopFont();
 
 	config.set_feature(feature::hand_tracking, true);
@@ -1073,9 +1073,9 @@ void scenes::lobby::gui_licenses()
 	namespace ui = wivrn::ui;
 	const auto & t = ui::current();
 
-	if constexpr (lvrr::stock_ui)
-		ui::page_header(_S("Licenses"), _S("Open-source components bundled with LVRR."));
-	lvrr_gui_version();
+	if constexpr (onevr::stock_ui)
+		ui::page_header(_S("Licenses"), _S("Open-source components bundled with oneVR."));
+	onevr_gui_version();
 
 	// Components shipping a license file, probed once
 	static const std::vector<std::string> components = [] {
@@ -1215,13 +1215,13 @@ std::vector<std::pair<int, XrCompositionLayerQuad>> scenes::lobby::draw_gui(XrTi
 	update_file_picker();
 
 	ImGuiStyle & style = ImGui::GetStyle();
-	// LVRR: the whole One style, colors included
-	if constexpr (not lvrr::stock_ui)
+	// oneVR: the whole One style, colors included
+	if constexpr (not onevr::stock_ui)
 		wivrn::ui::current().apply();
 	style.FontScaleMain = wivrn::ui::current().font_scale * wivrn::ui::metrics::font_base;
 
 	// rounding follows the theme so every window/popup gets rounded corners
-	if constexpr (lvrr::stock_ui)
+	if constexpr (onevr::stock_ui)
 		style.WindowRounding = wivrn::ui::current().card_rounding;
 	style.ChildRounding = wivrn::ui::current().card_rounding;
 	style.PopupRounding = wivrn::ui::current().card_rounding;
@@ -1267,10 +1267,10 @@ std::vector<std::pair<int, XrCompositionLayerQuad>> scenes::lobby::draw_gui(XrTi
 		ImGui::End();
 		ImGui::PopStyleVar(4); // ImGuiStyleVar_FrameRounding, ImGuiStyleVar_WindowPadding, ImGuiStyleVar_WindowRounding, ImGuiStyleVar_WindowBorderSize
 	}
-	else if (not lvrr::stock_ui)
+	else if (not onevr::stock_ui)
 	{
-		// LVRR: every page sits in the dashboard's shell
-		lvrr_gui_shell(predicted_display_time);
+		// oneVR: every page sits in the dashboard's shell
+		onevr_gui_shell(predicted_display_time);
 	}
 	else if (current_tab == tab::connected)
 	{
@@ -1296,8 +1296,8 @@ std::vector<std::pair<int, XrCompositionLayerQuad>> scenes::lobby::draw_gui(XrTi
 
 		// feature toggle slot: reads its state, toggles on click
 		auto toggle_item = [&](const char * icon, const std::string & label, feature f) {
-			// LVRR: features are set from the dashboard
-			if constexpr (not lvrr::stock_ui)
+			// oneVR: features are set from the dashboard
+			if constexpr (not onevr::stock_ui)
 				return;
 			top_items.push_back({side, [icon, label, f] {
 				                     const float s = ImGui::GetFrameHeight() * wivrn::ui::metrics::control_height;

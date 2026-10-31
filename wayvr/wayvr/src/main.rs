@@ -24,7 +24,7 @@ mod config;
 mod graphics;
 mod gui;
 mod ipc;
-mod lvrr;
+mod onevr;
 mod overlays;
 mod shaders;
 mod state;
@@ -86,15 +86,15 @@ struct Args {
     #[arg(long)]
     uninstall: bool,
 
-    /// Install SteamVR manifest (not recommended; LVRR may have issues when auto-started by SteamVR!)
+    /// Install SteamVR manifest (not recommended; oneVR may have issues when auto-started by SteamVR!)
     #[arg(long)]
     install: bool,
 
-    /// Replace running LVRR desktop instance
+    /// Replace running oneVR desktop instance
     #[arg(long)]
     replace: bool,
 
-    /// Allow multiple running instances of the LVRR desktop (things may break!)
+    /// Allow multiple running instances of the oneVR desktop (things may break!)
     #[arg(long)]
     multi: bool,
 
@@ -134,7 +134,7 @@ fn init_run_params(no_audio: bool) -> backend::RunParams {
         get_config_file_path(&theme_path),
     )
     .expect("Failed to init Globals, can't proceed");
-    // LVRR: no dim behind menus, its square corners show past the rounded panels
+    // oneVR: no dim behind menus, its square corners show past the rounded panels
     wgui_globals.get().popup_backdrop_dim = false;
 
     backend::RunParams {
@@ -153,9 +153,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     if !args.multi && !ensure_single_instance(args.replace) {
-        // LVRR: a --replace that gave up printed why
+        // oneVR: a --replace that gave up printed why
         if !args.replace {
-            println!("Looks like the LVRR desktop is already running.");
+            println!("Looks like the oneVR desktop is already running.");
             println!("Use --replace and I will terminate it for you.");
         }
         return Ok(());
@@ -190,7 +190,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
         log::warn!("Restarting...");
         let mut exe = std::env::current_exe()?;
-        // LVRR: once an update replaced the binary, /proc/self/exe ends in " (deleted)"
+        // oneVR: once an update replaced the binary, /proc/self/exe ends in " (deleted)"
         if let Some(path) = exe.as_os_str().as_bytes().strip_suffix(b" (deleted)") {
             exe = PathBuf::from(OsStr::from_bytes(path));
         }
@@ -202,7 +202,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => {}
         }
 
-        // LVRR: in place, so the systemd unit the server started this in keeps running
+        // oneVR: in place, so the systemd unit the server started this in keeps running
         let err = std::os::unix::process::CommandExt::exec(Command::new(exe).args(args));
         log::error!("Could not restart: {err}");
     }
@@ -269,8 +269,8 @@ fn auto_run(args: Args, used_backend: &mut Option<XrBackend>) {
     log::error!("No more backends to try");
 
     let instructions_key = match (tried_xr, tried_vr) {
-        // LVRR: LVRR's server becomes the runtime when a headset connects
-        (true, _) | (_, true) => "LVRR.NOT_RUNNING",
+        // oneVR: oneVR's server becomes the runtime when a headset connects
+        (true, _) | (_, true) => "ONEVR.NOT_RUNNING",
         _ => "NOTIFICATION.INVALID_ARGS",
     };
 
@@ -285,7 +285,7 @@ fn auto_run(args: Args, used_backend: &mut Option<XrBackend>) {
 
     let instructions = format!("{instructions_title}\n{instructions_str}");
 
-    let _ = DbusConnector::notify_send("LVRR", &instructions, 1, 30000, 0, false);
+    let _ = DbusConnector::notify_send("oneVR", &instructions, 1, 30000, 0, false);
 
     #[cfg(not(any(feature = "openvr", feature = "openxr")))]
     compile_error!("No VR support! Enable either openvr or openxr features!");
@@ -395,8 +395,8 @@ fn logging_init(args: &mut Args) {
     log_panics::init();
 }
 
-/// LVRR: a frozen instance ignores SIGTERM, so it gets SIGKILL after a while
-fn lvrr_wait_or_kill(system: &mut sysinfo::System, pid: Pid) {
+/// oneVR: a frozen instance ignores SIGTERM, so it gets SIGKILL after a while
+fn onevr_wait_or_kill(system: &mut sysinfo::System, pid: Pid) {
     let alive = |system: &mut sysinfo::System| {
         system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[pid]), true);
         system
@@ -417,10 +417,10 @@ fn lvrr_wait_or_kill(system: &mut sysinfo::System, pid: Pid) {
     }
 }
 
-/// LVRR: the process if it's a wayvr other than this one. A pid file left by a crash can name
+/// oneVR: the process if it's a wayvr other than this one. A pid file left by a crash can name
 /// another program by now, so the process name has to match ours. Not the binary's path: an
 /// update replaces the binary under a running instance.
-fn lvrr_find_wayvr(system: &mut sysinfo::System, pid: u32) -> Option<&sysinfo::Process> {
+fn onevr_find_wayvr(system: &mut sysinfo::System, pid: u32) -> Option<&sysinfo::Process> {
     let (pid, own) = (Pid::from_u32(pid), Pid::from_u32(std::process::id()));
     // a restart in place keeps the pid
     if pid == own {
@@ -435,25 +435,25 @@ fn lvrr_find_wayvr(system: &mut sysinfo::System, pid: u32) -> Option<&sysinfo::P
         .filter(|p| p.name() == name && p.status() != sysinfo::ProcessStatus::Zombie)
 }
 
-/// LVRR: the pid in the file
-fn lvrr_read_pid(mut file: &std::fs::File) -> Option<u32> {
+/// oneVR: the pid in the file
+fn onevr_read_pid(mut file: &std::fs::File) -> Option<u32> {
     use std::io::Seek;
     file.rewind().ok()?;
     std::io::read_to_string(file).ok()?.trim().parse().ok()
 }
 
-/// LVRR: --replace waits for the instance holding the lock to quit: SIGTERM, and SIGKILL 3 s later
+/// oneVR: --replace waits for the instance holding the lock to quit: SIGTERM, and SIGKILL 3 s later
 /// for a frozen one. False when it's still there 3 s after that, or when another --replace took
 /// the lock first, so pressing Restart desktop twice starts one desktop.
-fn lvrr_replace_locked(file: &std::fs::File) -> bool {
+fn onevr_replace_locked(file: &std::fs::File) -> bool {
     let mut system = sysinfo::System::new();
     let mut target = None;
     let mut killed = false;
     let mut since = Instant::now();
     while matches!(file.try_lock(), Err(std::fs::TryLockError::WouldBlock)) {
         // the holder writes its pid right after taking the lock
-        if let Some(pid) = lvrr_read_pid(file)
-            && let Some(proc) = lvrr_find_wayvr(&mut system, pid)
+        if let Some(pid) = onevr_read_pid(file)
+            && let Some(proc) = onevr_find_wayvr(&mut system, pid)
         {
             match target {
                 None => {
@@ -482,7 +482,7 @@ fn lvrr_replace_locked(file: &std::fs::File) -> bool {
     true
 }
 
-/// LVRR: never closed, so the pid file stays locked as long as the process runs
+/// oneVR: never closed, so the pid file stays locked as long as the process runs
 static PID_LOCK: std::sync::OnceLock<std::fs::File> = std::sync::OnceLock::new();
 
 fn ensure_single_instance(replace: bool) -> bool {
@@ -492,7 +492,7 @@ fn ensure_single_instance(replace: bool) -> bool {
         std::env::var("XDG_RUNTIME_DIR").map_or_else(|_| PathBuf::from("/tmp"), PathBuf::from);
     path.push("wayvr.pid");
 
-    // LVRR: the running instance holds a lock on the pid file, which a crash or the in-place
+    // oneVR: the running instance holds a lock on the pid file, which a crash or the in-place
     // restart's exec drops, so a pid left in the file doesn't count. The file is never removed:
     // a waiter could lock the removed one while a new start creates another.
     let file = std::fs::OpenOptions::new()
@@ -507,20 +507,20 @@ fn ensure_single_instance(replace: bool) -> bool {
         Err(TryLockError::Error(e)) => println!("Failed to lock {}: {e}", path.display()),
         Err(TryLockError::WouldBlock) if !replace => return false,
         Err(TryLockError::WouldBlock) => {
-            if !lvrr_replace_locked(&file) {
+            if !onevr_replace_locked(&file) {
                 return false;
             }
         }
     }
 
-    // LVRR: a wayvr that doesn't lock, upstream's or LVRR's from before the lock
+    // oneVR: a wayvr that doesn't lock, upstream's or oneVR's from before the lock
     let mut system = sysinfo::System::new();
-    if let Some(pid) = lvrr_read_pid(&file)
-        && let Some(proc) = lvrr_find_wayvr(&mut system, pid)
+    if let Some(pid) = onevr_read_pid(&file)
+        && let Some(proc) = onevr_find_wayvr(&mut system, pid)
     {
         if replace {
             proc.kill_with(sysinfo::Signal::Term);
-            lvrr_wait_or_kill(&mut system, Pid::from_u32(pid));
+            onevr_wait_or_kill(&mut system, Pid::from_u32(pid));
         } else {
             return false;
         }

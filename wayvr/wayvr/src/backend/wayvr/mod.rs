@@ -209,7 +209,7 @@ impl WvrServerState {
                 size: (530, 300).into(), //physical size in millimeters
                 subpixel: smithay::output::Subpixel::None,
                 make: String::from("Completely Legit"),
-                model: String::from("Virtual LVRR Display"),
+                model: String::from("Virtual oneVR Display"),
             },
         );
 
@@ -824,7 +824,7 @@ impl WvrServerState {
                     let text = &globals
                         .i18n()
                         .translate("NOTIFICATION.CANNOT_CAPTURE_KBD_MOUSE");
-                    let _ = DbusConnector::notify_send("LVRR", text, 1, 5000, 0, true);
+                    let _ = DbusConnector::notify_send("oneVR", text, 1, 5000, 0, true);
                     return;
                 }
             }
@@ -956,7 +956,7 @@ impl WvrServerState {
                     if !self.grab_toast_sent {
                         self.grab_toast_sent = true;
                         let text = &globals.i18n().translate("NOTIFICATION.WE_ARE_GRABBING");
-                        let _ = DbusConnector::notify_send("LVRR", text, 1, 5000, 0, true);
+                        let _ = DbusConnector::notify_send("oneVR", text, 1, 5000, 0, true);
                     }
                 }
                 input_capture::CapturedEvent::Ungrabbed => {

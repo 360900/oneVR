@@ -130,7 +130,7 @@ where
 pub fn load_general_config() -> GeneralConfig {
     let mut config =
         load_config_with_conf_d::<GeneralConfig>("config.yaml", config_io::ConfigRoot::Generic);
-    // LVRR: the watch is the way to the dashboard, a config that turned it off is ignored
+    // oneVR: the watch is the way to the dashboard, a config that turned it off is ignored
     config.enable_watch = true;
     config
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Report upstream commits LVRR has not merged.
+"""Report upstream commits oneVR has not merged.
 
-Run from the LVRR checkout. Exits 1 when something needs attention, so the
+Run from the oneVR checkout. Exits 1 when something needs attention, so the
 scheduled workflow fails and GitHub sends an email.
 
 Upstreams come from the `## Upstreams` table in CHANGES.md. Subtrees are
@@ -11,7 +11,7 @@ anything upstream that HEAD can't reach is missing.
 Checks, per upstream:
   * upstream commits not in HEAD, unless acked
   * for subtrees without local edits (xrizer/ changes go to xrizer-edge
-    first): changes made in LVRR since the last merge
+    first): changes made in oneVR since the last merge
 
 Acks go in .github/upstream-watch.ack, one per line:
   `commit <sha>`       a single upstream commit
@@ -24,7 +24,7 @@ import re
 import subprocess
 import sys
 
-HEAD = os.environ.get("LVRR_REF", "HEAD")
+HEAD = os.environ.get("ONEVR_REF", "HEAD")
 MAX_LISTED = 40
 ROOT = subprocess.run(
     ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True

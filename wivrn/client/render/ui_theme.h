@@ -39,7 +39,7 @@ struct theme
 
 	// Surfaces, back to front
 	ImVec4 background;
-	ImVec4 background_contrast; // LVRR: pills and bars of the dashboard shell, the fill of modals, menus and tooltips
+	ImVec4 background_contrast; // oneVR: pills and bars of the dashboard shell, the fill of modals, menus and tooltips
 	ImVec4 card;
 	ImVec4 card_hovered;
 	ImVec4 control; // slider rail, secondary button, input
@@ -49,7 +49,7 @@ struct theme
 	// Content
 	ImVec4 text;
 	ImVec4 text_muted;
-	ImVec4 heading; // LVRR: card titles, the dashboard's secondary color
+	ImVec4 heading; // oneVR: card titles, the dashboard's secondary color
 	ImVec4 border;
 
 	// Semantic
@@ -61,7 +61,7 @@ struct theme
 	// Dimming when a modal popup is visible
 	ImVec4 dimming;
 
-	// LVRR: the rest of the One design tokens
+	// oneVR: the rest of the One design tokens
 	ImVec4 sidebar;
 	ImVec4 surface_alt; // hovered rows of a boxed list
 	ImVec4 text_faint;  // placeholders
@@ -98,7 +98,7 @@ struct theme
 // fixed design tokens shared by the widgets
 namespace metrics
 {
-// LVRR: the lobby is drawn at 1.4x the dashboard's logical pixels, the One spec's sizes are in
+// oneVR: the lobby is drawn at 1.4x the dashboard's logical pixels, the One spec's sizes are in
 // those pixels
 constexpr float one = 1.4;
 
@@ -112,7 +112,7 @@ constexpr ImVec2 card_padding = {16 * one, 14 * one};    // regular cards
 constexpr ImVec2 list_card_padding = {6 * one, 6 * one}; // cards holding a list of rows
 
 // shared height of every full-width control so they line up in a setting row, x frame height
-// LVRR: the widgets use control_size below instead
+// oneVR: the widgets use control_size below instead
 constexpr float control_height = 1.65;
 constexpr float control_size = 36 * one;
 
@@ -157,7 +157,7 @@ constexpr float sidebar_width = 300;
 constexpr float top_bar_height = 72;
 constexpr float content_margin = 20; // gap around the main content panel
 
-// LVRR: the lobby shell, a One window: sidebar, headerbar, content on the canvas
+// oneVR: the lobby shell, a One window: sidebar, headerbar, content on the canvas
 constexpr float shell_sidebar_width = 220 * one;
 constexpr float shell_sidebar_pad = 8 * one; // around the nav rows
 constexpr float shell_nav_row = 40 * one;    // nav row height
@@ -196,7 +196,7 @@ constexpr float pin_entry_popup_width = 3 * pin_entry_key_size.x + 2 * pin_entry
 // theme in effect, call current().apply() after mutating
 theme & current();
 
-// LVRR: the bold and semibold faces of the UI font, set by the imgui context that owns them,
+// oneVR: the bold and semibold faces of the UI font, set by the imgui context that owns them,
 // null when none
 ImFont *& bold_font();
 ImFont *& semibold_font();

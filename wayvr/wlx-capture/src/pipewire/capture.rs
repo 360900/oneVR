@@ -65,7 +65,7 @@ where
     name: Arc<str>,
     data: Option<CaptureData<R>>,
     node_id: u32,
-    /// LVRR: the only frame size offered
+    /// oneVR: the only frame size offered
     size: Option<(u32, u32)>,
     handle: Option<JoinHandle<Result<(), Error>>>,
 }
@@ -84,7 +84,7 @@ where
         }
     }
 
-    /// LVRR: offers only this frame size. A Mutter virtual monitor takes the size the
+    /// oneVR: offers only this frame size. A Mutter virtual monitor takes the size the
     /// consumer asks for.
     pub fn with_size(name: Arc<str>, node_id: u32, width: u32, height: u32) -> Self {
         let mut capture = Self::new(name, node_id);

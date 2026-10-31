@@ -51,7 +51,7 @@ void avahi_publisher::create_service(AvahiClient * client)
 	}
 
 	if (!name)
-		name = avahi_strdup("LVRR");
+		name = avahi_strdup("oneVR");
 
 	std::vector<const char *> txt_array;
 	for (const auto & i: txt)

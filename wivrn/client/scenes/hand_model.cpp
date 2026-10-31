@@ -112,7 +112,7 @@ static const vk::VertexInputAttributeDescription & find_hand_mesh_fb_attribute(c
 	throw std::runtime_error("Missing hand mesh FB vertex attribute");
 }
 
-// LVRR: a translucent hand with a bright rim instead of a grey solid one, see hand.frag
+// oneVR: a translucent hand with a bright rim instead of a grey solid one, see hand.frag
 static std::shared_ptr<renderer::material> create_hand_material(scene & scene, XrHandEXT hand)
 {
 	return scene.create_material([hand](renderer::material & material) {

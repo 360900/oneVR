@@ -69,12 +69,12 @@ pub struct DashInterfaceEmulated {
 	brightness: f32,
 	debug_frame_id: u64,
 	debug_counter: u64,
-	// LVRR: None in tests
+	// oneVR: None in tests
 	gfx: Option<Arc<WGfx>>,
-	// LVRR: LVRR_EMU=connected (default), offline, absent or none
-	lvrr: Option<lvrr_common::emulator::LvrrEmulator>,
-	lvrr_perf_overlay: bool,
-	lvrr_virtual_monitors: Vec<lvrr_common::state::VirtualMonitor>,
+	// oneVR: ONEVR_EMU=connected (default), offline, absent or none
+	onevr: Option<onevr_common::emulator::OneVrEmulator>,
+	onevr_perf_overlay: bool,
+	onevr_virtual_monitors: Vec<onevr_common::state::VirtualMonitor>,
 }
 
 impl DashInterfaceEmulated {
@@ -82,10 +82,10 @@ impl DashInterfaceEmulated {
 		Self::new_inner(Some(gfx), locale)
 	}
 
-	/// LVRR: without a GPU, for tests; `lvrr` is the LVRR server to emulate
-	pub fn new_headless(locale: &Locale, lvrr: Option<lvrr_common::emulator::LvrrEmulator>) -> Self {
+	/// oneVR: without a GPU, for tests; `onevr` is the oneVR server to emulate
+	pub fn new_headless(locale: &Locale, onevr: Option<onevr_common::emulator::OneVrEmulator>) -> Self {
 		Self {
-			lvrr,
+			onevr,
 			..Self::new_inner(None, locale)
 		}
 	}
@@ -151,43 +151,43 @@ impl DashInterfaceEmulated {
 			debug_counter: 0,
 			debug_frame_id: 0,
 			gfx,
-			lvrr: match std::env::var("LVRR_EMU").as_deref() {
+			onevr: match std::env::var("ONEVR_EMU").as_deref() {
 				Ok("none") => None,
-				Ok("absent") => Some(lvrr_common::emulator::LvrrEmulator::new(false)),
-				Ok("offline") => Some(lvrr_common::emulator::LvrrEmulator::offline()),
-				_ => Some(lvrr_common::emulator::LvrrEmulator::new(true)),
+				Ok("absent") => Some(onevr_common::emulator::OneVrEmulator::new(false)),
+				Ok("offline") => Some(onevr_common::emulator::OneVrEmulator::offline()),
+				_ => Some(onevr_common::emulator::OneVrEmulator::new(true)),
 			},
-			lvrr_perf_overlay: false,
-			lvrr_virtual_monitors: Vec::new(),
+			onevr_perf_overlay: false,
+			onevr_virtual_monitors: Vec::new(),
 		}
 	}
 }
 
 impl DashInterface<()> for DashInterfaceEmulated {
-	fn lvrr_state<'a>(&'a mut self, _data: &'a mut ()) -> Option<&'a lvrr_common::state::LvrrState> {
-		use lvrr_common::state::LvrrBackend;
-		let lvrr = self.lvrr.as_mut()?;
-		for notice in lvrr.poll() {
-			log::info!("LVRR: {notice:?}");
+	fn onevr_state<'a>(&'a mut self, _data: &'a mut ()) -> Option<&'a onevr_common::state::OneVrState> {
+		use onevr_common::state::OneVrBackend;
+		let onevr = self.onevr.as_mut()?;
+		for notice in onevr.poll() {
+			log::info!("oneVR: {notice:?}");
 		}
-		Some(lvrr.state())
+		Some(onevr.state())
 	}
 
-	fn lvrr_request(&mut self, _data: &mut (), request: lvrr_common::state::LvrrRequest) -> anyhow::Result<()> {
-		use lvrr_common::state::LvrrBackend;
-		match self.lvrr.as_mut() {
-			Some(lvrr) => lvrr.request(request),
-			None => anyhow::bail!("The LVRR server is not running"),
+	fn onevr_request(&mut self, _data: &mut (), request: onevr_common::state::OneVrRequest) -> anyhow::Result<()> {
+		use onevr_common::state::OneVrBackend;
+		match self.onevr.as_mut() {
+			Some(onevr) => onevr.request(request),
+			None => anyhow::bail!("The oneVR server is not running"),
 		}
 	}
 
-	fn lvrr_batteries(&mut self, _data: &mut ()) -> Vec<lvrr_common::state::Battery> {
-		use lvrr_common::state::{Battery, BatteryDevice, Link, LvrrBackend};
-		// LVRR: only a connected headset has batteries to read
+	fn onevr_batteries(&mut self, _data: &mut ()) -> Vec<onevr_common::state::Battery> {
+		use onevr_common::state::{Battery, BatteryDevice, Link, OneVrBackend};
+		// oneVR: only a connected headset has batteries to read
 		let connected = self
-			.lvrr
+			.onevr
 			.as_ref()
-			.map(LvrrBackend::state)
+			.map(OneVrBackend::state)
 			.is_some_and(|s| s.link == Link::Online && s.headset_connected);
 		if !connected {
 			return Vec::new();
@@ -211,30 +211,30 @@ impl DashInterface<()> for DashInterfaceEmulated {
 		]
 	}
 
-	fn lvrr_perf_overlay(&mut self, _data: &mut ()) -> bool {
-		self.lvrr_perf_overlay
+	fn onevr_perf_overlay(&mut self, _data: &mut ()) -> bool {
+		self.onevr_perf_overlay
 	}
 
-	fn lvrr_set_perf_overlay(&mut self, _data: &mut (), visible: bool) {
-		self.lvrr_perf_overlay = visible;
+	fn onevr_set_perf_overlay(&mut self, _data: &mut (), visible: bool) {
+		self.onevr_perf_overlay = visible;
 	}
 
-	fn lvrr_virtual_monitors(&mut self, _data: &mut ()) -> Option<Vec<lvrr_common::state::VirtualMonitor>> {
-		Some(self.lvrr_virtual_monitors.clone())
+	fn onevr_virtual_monitors(&mut self, _data: &mut ()) -> Option<Vec<onevr_common::state::VirtualMonitor>> {
+		Some(self.onevr_virtual_monitors.clone())
 	}
 
-	fn lvrr_add_virtual_monitor(&mut self, _data: &mut (), width: u32, height: u32) {
-		let monitors = &mut self.lvrr_virtual_monitors;
-		if let Some(name) = (1..=lvrr_common::state::MAX_VIRTUAL_MONITORS)
-			.map(|i| format!("LVRR-{i}"))
+	fn onevr_add_virtual_monitor(&mut self, _data: &mut (), width: u32, height: u32) {
+		let monitors = &mut self.onevr_virtual_monitors;
+		if let Some(name) = (1..=onevr_common::state::MAX_VIRTUAL_MONITORS)
+			.map(|i| format!("oneVR-{i}"))
 			.find(|n| monitors.iter().all(|m| m.name != *n))
 		{
-			monitors.push(lvrr_common::state::VirtualMonitor { name, width, height });
+			monitors.push(onevr_common::state::VirtualMonitor { name, width, height });
 		}
 	}
 
-	fn lvrr_remove_virtual_monitor(&mut self, _data: &mut (), name: &str) {
-		self.lvrr_virtual_monitors.retain(|m| m.name != name);
+	fn onevr_remove_virtual_monitor(&mut self, _data: &mut (), name: &str) {
+		self.onevr_virtual_monitors.retain(|m| m.name != name);
 	}
 
 	fn enumerate_vulkan_devices(&mut self, _: &mut ()) -> anyhow::Result<Vec<String>> {
@@ -367,12 +367,12 @@ impl DashInterface<()> for DashInterfaceEmulated {
 		_data: &mut (),
 		_filtered: bool,
 	) -> anyhow::Result<Vec<dash_interface::MonadoClient>> {
-		use lvrr_common::state::{Link, LvrrBackend};
-		// LVRR: apps run in the emulated server's session; LVRR_EMU=none is WayVR without LVRR
+		use onevr_common::state::{Link, OneVrBackend};
+		// oneVR: apps run in the emulated server's session; ONEVR_EMU=none is WayVR without oneVR
 		let stopped = self
-			.lvrr
+			.onevr
 			.as_ref()
-			.map(LvrrBackend::state)
+			.map(OneVrBackend::state)
 			.is_some_and(|s| s.link != Link::Online || !s.session_running);
 		if stopped {
 			return Ok(Vec::new());

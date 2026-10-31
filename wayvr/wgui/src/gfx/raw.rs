@@ -520,7 +520,7 @@ impl Context {
 			max_image_dimension_2d: properties.limits.max_image_dimension2_d,
 		};
 
-		// LVRR: only LowPower ranks by the boot display, so only it reads sysfs
+		// oneVR: only LowPower ranks by the boot display, so only it reads sysfs
 		let boot_display = matches!(create_info.device_preference, DevicePreference::LowPower)
 			&& info.drm_render_node.is_some_and(drives_boot_display);
 		let score = device_score(
@@ -2805,7 +2805,7 @@ fn matches_preference(info: &DeviceInfo, preference: &DevicePreference) -> bool 
 		}
 		DevicePreference::Uuid(uuid) => info.uuid == *uuid,
 		DevicePreference::DrmRenderNode { major, minor } => info.drm_render_node == Some((*major, *minor)),
-		// LVRR: any device, device_score ranks them
+		// oneVR: any device, device_score ranks them
 		DevicePreference::LowPower => true,
 	}
 }
@@ -2816,7 +2816,7 @@ fn device_score(
 	has_capture_queue: bool,
 	boot_display: bool,
 ) -> i32 {
-	// LVRR: LowPower ranks first the GPU that drove the boot display, nearly always the one the
+	// oneVR: LowPower ranks first the GPU that drove the boot display, nearly always the one the
 	// compositor uses (a hybrid laptop's integrated GPU, a desktop's card); surface support can't
 	// tell, Mesa reports it on every GPU. Then an integrated GPU before a discrete one.
 	let low_power = matches!(preference, DevicePreference::LowPower);
@@ -2832,7 +2832,7 @@ fn device_score(
 	base + i32::from(low_power && boot_display) * 1000 + i32::from(has_capture_queue) * 10
 }
 
-/// LVRR: whether the GPU of this DRM render node drove the boot display. DRM's `boot_display`
+/// oneVR: whether the GPU of this DRM render node drove the boot display. DRM's `boot_display`
 /// (newer kernels) also marks a GPU outside the VGA class, which has no PCI `boot_vga`.
 fn drives_boot_display((major, minor): (u32, u32)) -> bool {
 	["boot_display", "device/boot_vga"].into_iter().any(|attr| {
@@ -3073,7 +3073,7 @@ mod tests {
 		assert!(flags.contains(vk::BufferUsageFlags::VERTEX_BUFFER));
 	}
 
-	// LVRR: with LowPower the boot display outweighs the device type, which outweighs the capture
+	// oneVR: with LowPower the boot display outweighs the device type, which outweighs the capture
 	// queue with either preference; Default ignores the boot display
 	#[test]
 	fn low_power_ranks_boot_display_then_integrated_gpu_first() {

@@ -33,7 +33,7 @@
 #include <vector>
 #include <openxr/openxr.h>
 
-#include "lvrr_packets.h"
+#include "onevr_packets.h"
 #include "packed_quaternion.h"
 #include "smp.h"
 #include "wivrn_serialization_types.h"
@@ -753,8 +753,8 @@ using packets = std::variant<
         hid::input,
         stop_application,
         foveation,
-        lvrr::headset_settings,
-        lvrr::headset_stats>;
+        onevr::headset_settings,
+        onevr::headset_stats>;
 } // namespace from_headset
 
 namespace to_headset
@@ -789,8 +789,8 @@ struct handshake
 {
 	// -1 if stream socket should not be used
 	int stream_port;
-	// LVRR: the PC's MAC address, for wake-on-LAN
-	std::optional<std::array<uint8_t, 6>> lvrr_mac;
+	// oneVR: the PC's MAC address, for wake-on-LAN
+	std::optional<std::array<uint8_t, 6>> onevr_mac;
 };
 
 struct server_message
@@ -989,10 +989,10 @@ using packets = std::variant<
         application_list,
         application_icon,
         running_applications,
-        lvrr::set_headset_settings,
-        lvrr::expect_reconnect,
-        lvrr::server_stopping,
-        lvrr::show_hands>;
+        onevr::set_headset_settings,
+        onevr::expect_reconnect,
+        onevr::server_stopping,
+        onevr::show_hands>;
 } // namespace to_headset
 } // namespace wivrn
 

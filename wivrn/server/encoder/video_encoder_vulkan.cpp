@@ -226,11 +226,11 @@ wivrn::video_encoder_vulkan::video_encoder_vulkan(
 		rate_control.reset();
 	}
 
-	// LVRR: from Mesa 26.1 RADV maps the level to a preset: 0 speed (balanced for HEVC before VCN5),
+	// oneVR: from Mesa 26.1 RADV maps the level to a preset: 0 speed (balanced for HEVC before VCN5),
 	// 1 balanced, 2 quality. Older RADV takes the speed preset from the ultra-low-latency tuning.
 	if (vk.physical_device.getProperties().vendorID == 0x1002 and encode_caps.maxQualityLevels > 1)
 		quality_level.qualityLevel = 1;
-	// LVRR: "quality" in the encoder's options overrides the level, as in ffmpeg's Vulkan encoders
+	// oneVR: "quality" in the encoder's options overrides the level, as in ffmpeg's Vulkan encoders
 	const uint32_t max_quality_level = std::max(encode_caps.maxQualityLevels, 1u) - 1;
 	if (auto it = settings.options.find("quality"); it != settings.options.end())
 	{

@@ -50,8 +50,8 @@ sleep_inhibitor::sleep_inhibitor()
 	        g_variant_new(
 	                "(ssss)",
 	                "sleep:idle",                // What
-	                "LVRR",                      // Who
-	                "An LVRR session is active", // Why
+	                "oneVR",                     // Who
+	                "A oneVR session is active", // Why
 	                "block"),                    // Mode
 	        G_DBUS_CALL_FLAGS_NONE,
 	        -1,       // timeout_msec

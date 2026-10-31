@@ -17,14 +17,14 @@ struct MoverData<T> {
     pose: Affine3A,
     hand: usize,
     hand_pose: T,
-    /// LVRR: the hand left the dead zone; until then `hand_pose` stays where it was pressed
+    /// oneVR: the hand left the dead zone; until then `hand_pose` stays where it was pressed
     moved: bool,
 }
 
-/// LVRR: how far the hand moves before a drag moves the playspace. Every move tells all apps
+/// oneVR: how far the hand moves before a drag moves the playspace. Every move tells all apps
 /// that their reference spaces changed, and the button may be meant for the game.
 const DRAG_DEADZONE: f32 = 0.03;
-/// LVRR: how far the hand turns before a rotate turns the playspace, in radians
+/// oneVR: how far the hand turns before a rotate turns the playspace, in radians
 const ROTATE_DEADZONE: f32 = 0.09;
 
 pub(super) struct PlayspaceMover {
@@ -233,7 +233,7 @@ impl PlayspaceMover {
             }
             data.hand_pose = new_hand;
 
-            // LVRR: a drag multiplier of 0 doesn't move anything
+            // oneVR: a drag multiplier of 0 doesn't move anything
             if relative_pos != Vec3A::ZERO {
                 apply_offset(data.pose, &mut monado.ipc);
             }
@@ -392,7 +392,7 @@ impl PlayspaceMover {
 
         self.gravity.reset();
         let offset = self.playspace_state.openxr_space_center;
-        // LVRR: every write tells all apps that their reference spaces changed, and the button
+        // oneVR: every write tells all apps that their reference spaces changed, and the button
         // may be meant for the game. The tolerance covers the matrix to quaternion round trip.
         if before.abs_diff_eq(offset, 1e-4) {
             log::debug!("Space reset: already at the center");

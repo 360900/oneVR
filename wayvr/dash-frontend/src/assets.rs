@@ -2,16 +2,16 @@
 #[folder = "assets/"]
 pub struct Asset;
 
-/// LVRR's replacements and additions, looked up before `Asset`.
+/// oneVR's replacements and additions, looked up before `Asset`.
 #[derive(rust_embed::Embed)]
-#[folder = "lvrr-assets/"]
-struct LvrrAsset;
+#[folder = "onevr-assets/"]
+struct OneVrAsset;
 
 impl wgui::assets::AssetProvider for Asset {
 	fn load_from_path(&mut self, path: &str) -> anyhow::Result<Vec<u8>> {
-		lvrr_common::rebrand::load(
+		onevr_common::rebrand::load(
 			path,
-			|p| LvrrAsset::get(p).map(|f| f.data),
+			|p| OneVrAsset::get(p).map(|f| f.data),
 			|p| Asset::get(p).map(|f| f.data),
 		)
 	}
@@ -23,7 +23,7 @@ mod tests {
 	use wgui::assets::AssetProvider;
 
 	/// These credit the WayVR project
-	const CREDITS: &[&str] = &["DONATE.", "LVRR.PC.CREDITS", "LVRR.PC.SUPPORT_UPSTREAM"];
+	const CREDITS: &[&str] = &["DONATE.", "ONEVR.PC.CREDITS", "ONEVR.PC.SUPPORT_UPSTREAM"];
 
 	fn assert_rebranded(file: &str, key: &str, value: &serde_json::Value) {
 		match value {
@@ -45,13 +45,13 @@ mod tests {
 	}
 
 	#[test]
-	fn lvrr_branding() {
+	fn onevr_branding() {
 		for file in Asset::iter().filter(|f| f.starts_with("lang/") && f.ends_with(".json")) {
 			let data = Asset.load_from_path(&file).unwrap();
 			let root: serde_json::Value = serde_json::from_slice(&data).unwrap();
 			assert_rebranded(&file, "", &root);
 		}
 		let splash = Asset.load_from_path("dashboard/splash.png").unwrap();
-		assert_eq!(splash, LvrrAsset::get("dashboard/splash.png").unwrap().data.as_ref());
+		assert_eq!(splash, OneVrAsset::get("dashboard/splash.png").unwrap().data.as_ref());
 	}
 }

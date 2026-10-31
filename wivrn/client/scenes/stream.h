@@ -163,17 +163,17 @@ private:
 	std::optional<input_profile> input;
 	static inline const uint32_t layer_controllers = 1 << 0;
 	static inline const uint32_t layer_rays = 1 << 1;
-	static inline const uint32_t layer_hands = 1 << 2; // LVRR
+	static inline const uint32_t layer_hands = 1 << 2; // oneVR
 
-	// LVRR: hands drawn over the stream, render thread only; the tracking thread has its own trackers
-	std::optional<xr::hand_tracker> lvrr_left_hand;
-	std::optional<xr::hand_tracker> lvrr_right_hand;
-	std::atomic<bool> lvrr_hands_requested = true; // until the server says otherwise
-	void lvrr_setup_hands();
-	bool lvrr_locate_hands(XrTime predicted_display_time);
-	void lvrr_render_hands(XrTime predicted_display_time);
-	// LVRR: the black layer under a see-through stream; false when it could not be added
-	bool lvrr_render_see_through(XrTime predicted_display_time, float opacity);
+	// oneVR: hands drawn over the stream, render thread only; the tracking thread has its own trackers
+	std::optional<xr::hand_tracker> onevr_left_hand;
+	std::optional<xr::hand_tracker> onevr_right_hand;
+	std::atomic<bool> onevr_hands_requested = true; // until the server says otherwise
+	void onevr_setup_hands();
+	bool onevr_locate_hands(XrTime predicted_display_time);
+	void onevr_render_hands(XrTime predicted_display_time);
+	// oneVR: the black layer under a see-through stream; false when it could not be added
+	bool onevr_render_see_through(XrTime predicted_display_time, float opacity);
 
 	// Size of the composition layer used for the controllers
 	uint32_t width;
@@ -244,23 +244,23 @@ private:
 	XrTime running_application_req = 0;
 	thread_safe<to_headset::running_applications> running_applications;
 
-	// LVRR dashboard, see stream_lvrr.cpp
-	thread_safe<std::vector<lvrr::set_headset_settings>> lvrr_requests;
-	std::atomic<bool> lvrr_report_needed = false;
+	// oneVR dashboard, see stream_onevr.cpp
+	thread_safe<std::vector<onevr::set_headset_settings>> onevr_requests;
+	std::atomic<bool> onevr_report_needed = false;
 	std::atomic<bool> reconnect_expected_ = false;
-	std::atomic<uint32_t> lvrr_reconnect_timeout_ms = 0; // from expect_reconnect, stored before reconnect_expected_
-	std::atomic<bool> lvrr_end_reported = false;         // why the connection ends is in stream_error_queue
-	void lvrr_connection_lost(const std::exception &);
-	void lvrr_end_stream(std::string message);
+	std::atomic<uint32_t> onevr_reconnect_timeout_ms = 0; // from expect_reconnect, stored before reconnect_expected_
+	std::atomic<bool> onevr_end_reported = false;         // why the connection ends is in stream_error_queue
+	void onevr_connection_lost(const std::exception &);
+	void onevr_end_stream(std::string message);
 	// thrown by packet handlers that failed on the headset, the connection is fine
-	struct lvrr_headset_failure : std::runtime_error
+	struct onevr_headset_failure : std::runtime_error
 	{
 		using std::runtime_error::runtime_error;
 	};
 	// runs a handler step that can only fail on the headset (decoders, audio device); its errors
-	// reach process_packets() as lvrr_headset_failure
+	// reach process_packets() as onevr_headset_failure
 	template <typename F>
-	static void lvrr_on_headset(F && f)
+	static void onevr_on_headset(F && f)
 	{
 		try
 		{
@@ -268,34 +268,34 @@ private:
 		}
 		catch (std::exception & e)
 		{
-			throw lvrr_headset_failure(e.what());
+			throw onevr_headset_failure(e.what());
 		}
 	}
-	void lvrr_headset_error(const std::exception &);
-	// network thread only: the byte count lvrr_check_alive() last saw, and when it changed
-	uint64_t lvrr_bytes_seen = 0;
-	std::chrono::steady_clock::time_point lvrr_bytes_time{}; // unset until the server's first packet
-	void lvrr_check_alive();
-	std::atomic<uint8_t> lvrr_permission_pending = 0;
-	std::atomic<uint8_t> lvrr_permission_denied = 0;
-	std::atomic<float> lvrr_fov_horizontal = 1; // read by the tracking thread
-	std::atomic<float> lvrr_fov_vertical = 1;
-	std::atomic<bool> lvrr_simultaneous_hands = false;
-	std::atomic<float> lvrr_refresh_rate = 0; // the last rate this stream asked for; network and render threads
-	uint8_t lvrr_prompts_waiting = 0;         // feature_bit mask: permission prompts held while the session is stopped
-	void lvrr_set_feature(feature, bool);
-	lvrr::headset_config lvrr_session_config; // connection-time settings of this stream
-	bool lvrr_see_through_supported = false;  // set once by lvrr_start(): render() checks it every frame
-	XrTime lvrr_last_stats = 0;
-	int lvrr_stats_offset = 0;
-	void lvrr_start();
-	void lvrr_stats(XrTime now);
-	void lvrr_report(uint32_t request_id);
-	lvrr::headset_capabilities lvrr_capabilities();
-	lvrr::headset_config lvrr_config();
+	void onevr_headset_error(const std::exception &);
+	// network thread only: the byte count onevr_check_alive() last saw, and when it changed
+	uint64_t onevr_bytes_seen = 0;
+	std::chrono::steady_clock::time_point onevr_bytes_time{}; // unset until the server's first packet
+	void onevr_check_alive();
+	std::atomic<uint8_t> onevr_permission_pending = 0;
+	std::atomic<uint8_t> onevr_permission_denied = 0;
+	std::atomic<float> onevr_fov_horizontal = 1; // read by the tracking thread
+	std::atomic<float> onevr_fov_vertical = 1;
+	std::atomic<bool> onevr_simultaneous_hands = false;
+	std::atomic<float> onevr_refresh_rate = 0; // the last rate this stream asked for; network and render threads
+	uint8_t onevr_prompts_waiting = 0;         // feature_bit mask: permission prompts held while the session is stopped
+	void onevr_set_feature(feature, bool);
+	onevr::headset_config onevr_session_config; // connection-time settings of this stream
+	bool onevr_see_through_supported = false;   // set once by onevr_start(): render() checks it every frame
+	XrTime onevr_last_stats = 0;
+	int onevr_stats_offset = 0;
+	void onevr_start();
+	void onevr_stats(XrTime now);
+	void onevr_report(uint32_t request_id);
+	onevr::headset_capabilities onevr_capabilities();
+	onevr::headset_config onevr_config();
 	// Returns whether the server must get a settings_changed
-	bool lvrr_apply(const lvrr::headset_config &);
-	void lvrr_send_settings_changed();
+	bool onevr_apply(const onevr::headset_config &);
+	void onevr_send_settings_changed();
 
 	stream(std::string server_name, scene & parent_scene);
 
@@ -340,25 +340,25 @@ public:
 	void operator()(to_headset::application_icon &&);
 	void operator()(to_headset::running_applications &&);
 	void operator()(audio_data &&);
-	// LVRR, see stream_lvrr.cpp
-	void operator()(lvrr::set_headset_settings &&);
-	void operator()(lvrr::expect_reconnect &&);
-	void operator()(lvrr::server_stopping &&);
-	void operator()(lvrr::show_hands &&);
+	// oneVR, see stream_onevr.cpp
+	void operator()(onevr::set_headset_settings &&);
+	void operator()(onevr::expect_reconnect &&);
+	void operator()(onevr::server_stopping &&);
+	void operator()(onevr::show_hands &&);
 
-	// Applies settings sent by the LVRR dashboard, on the render thread
-	void lvrr_update();
-	// LVRR: lvrr_update() while the session is stopped
-	void lvrr_idle() override;
+	// Applies settings sent by the oneVR dashboard, on the render thread
+	void onevr_update();
+	// oneVR: onevr_update() while the session is stopped
+	void onevr_idle() override;
 	// The server closed the connection on purpose and expects a silent reconnect
 	bool reconnect_expected() const
 	{
 		return reconnect_expected_;
 	}
-	// LVRR: how long the server said to keep reconnecting, 0 when it gave no time
+	// oneVR: how long the server said to keep reconnecting, 0 when it gave no time
 	std::chrono::milliseconds reconnect_timeout() const
 	{
-		return std::chrono::milliseconds(lvrr_reconnect_timeout_ms.load());
+		return std::chrono::milliseconds(onevr_reconnect_timeout_ms.load());
 	}
 
 	void push_blit_handle(wivrn::shard_accumulator * decoder, std::shared_ptr<wivrn::shard_accumulator::blit_handle> handle);

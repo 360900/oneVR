@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- oneVR logo in one color: the dashboard's home button and the watch. onevr.svg puts it on its circle. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">
+  <g fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M8.5,7.5 L11.5,4.5 V25.5"/>
+      <path d="M15.5,4.5 L19.25,13.5 L23,4.5"/>
+      <path d="M16,25.5 V16.5 H20 A2.7,2.7 0 0 1 20,21.9 H16 M19.5,21.9 L22.5,25.5"/>
+  </g>
+</svg>

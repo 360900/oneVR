@@ -192,7 +192,7 @@ protected:
 	        XrColor4f clear_color,
 	        bool render_debug_draws = false);
 
-	// LVRR: whether render_world would draw anything for this layer mask
+	// oneVR: whether render_world would draw anything for this layer mask
 	bool layer_has_content(uint32_t layer_mask) const;
 
 	void set_color_scale_bias(XrColor4f scale, XrColor4f bias);
@@ -212,8 +212,8 @@ public:
 	void set_focused(bool status);
 	virtual void render(const XrFrameState &) = 0;
 	virtual void on_xr_event(const xr::event &);
-	// LVRR: called instead of render(), about every 250 ms, while the XR session is not running
-	virtual void lvrr_idle() {}
+	// oneVR: called instead of render(), about every 250 ms, while the XR session is not running
+	virtual void onevr_idle() {}
 
 	virtual bool on_input_key_down(uint8_t key_code);
 	virtual bool on_input_key_up(uint8_t key_code);

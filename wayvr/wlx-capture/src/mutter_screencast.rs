@@ -1,4 +1,4 @@
-//! LVRR: GNOME's compositor records a monitor on request over D-Bus
+//! oneVR: GNOME's compositor records a monitor on request over D-Bus
 //! (org.gnome.Mutter.ScreenCast), the way the GNOME portal gets its streams, so no
 //! picker dialog is involved.
 

@@ -1,0 +1,24 @@
+[package]
+name = "onevr-common"
+version = "0.1.0"
+edition = "2024"
+description = "oneVR integration shared by the WayVR crates"
+license = "GPL-3.0-only"
+repository = "https://github.com/360900/oneVR"
+
+[dependencies]
+anyhow.workspace = true
+dbus = { workspace = true, optional = true }
+libc = { workspace = true, optional = true }
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[features]
+default = []
+# Talk to the oneVR server; without it only the emulator is available
+dbus = ["dep:dbus", "dep:libc"]
+
+[[example]]
+name = "onevr_probe"
+required-features = ["dbus"]

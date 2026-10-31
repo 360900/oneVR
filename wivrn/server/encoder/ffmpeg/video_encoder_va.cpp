@@ -262,7 +262,7 @@ video_encoder_va::video_encoder_va(wivrn::vk_bundle & vk,
 		case video_codec::raw:
 			throw std::runtime_error("raw codec not supported");
 	}
-	// LVRR: Mesa's VA quality bits (valid, preset, pre-encode, VBAQ), the default is the speed preset with neither
+	// oneVR: Mesa's VA quality bits (valid, preset, pre-encode, VBAQ), the default is the speed preset with neither
 	if (vk.physical_device.getProperties().vendorID == 0x1002)
 	{
 		constexpr int preset_balance = 1;

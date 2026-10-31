@@ -52,7 +52,7 @@ class session : public utils::handle<XrSession, xrDestroySession>
 	XrBoundaryVisibilityMETA runtime_boundary_visibility = XR_BOUNDARY_VISIBILITY_NOT_SUPPRESSED_META;
 	bool passthrough_boundary_enabled = true;
 	bool boundary_request_failed = false;
-	// LVRR: set by enable_passthrough, only a backdrop passthrough may hide the boundary
+	// oneVR: set by enable_passthrough, only a backdrop passthrough may hide the boundary
 	bool passthrough_background = true;
 
 	void update_boundary_visibility();
@@ -104,7 +104,7 @@ public:
 
 	void sync_actions(std::span<XrActionSet> action_sets);
 
-	// LVRR: background false: passthrough only shows through a faded opaque stream (see-through)
+	// oneVR: background false: passthrough only shows through a faded opaque stream (see-through)
 	void enable_passthrough(xr::system &, bool background = true);
 	void disable_passthrough();
 	xr::passthrough & get_passthrough()
@@ -113,7 +113,7 @@ public:
 	}
 
 	void set_performance_level(XrPerfSettingsDomainEXT, XrPerfSettingsLevelEXT);
-	// LVRR: the power governor stays off without XR_EXT_performance_settings
+	// oneVR: the power governor stays off without XR_EXT_performance_settings
 	bool performance_settings_supported() const
 	{
 		return xrPerfSettingsSetPerformanceLevelEXT;

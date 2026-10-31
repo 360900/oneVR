@@ -28,9 +28,9 @@ impl TestbedDashboard {
 			theme: Rc::new(WguiTheme::default()),
 			executor: executor.clone(),
 		})?;
-		// LVRR: open a page directly, e.g. LVRR_PAGE=headset:streaming
-		if let Ok(page) = std::env::var("LVRR_PAGE") {
-			frontend.lvrr_open(&page);
+		// oneVR: open a page directly, e.g. ONEVR_PAGE=headset:streaming
+		if let Ok(page) = std::env::var("ONEVR_PAGE") {
+			frontend.onevr_open(&page);
 		}
 		Ok(Self { frontend, executor })
 	}

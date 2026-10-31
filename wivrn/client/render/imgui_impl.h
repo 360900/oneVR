@@ -179,7 +179,7 @@ private:
 
 	xr::swapchain swapchain;
 	int image_index;
-	// LVRR: the swapchain keeps showing its last image while the draw data and the quad rects do not change
+	// oneVR: the swapchain keeps showing its last image while the draw data and the quad rects do not change
 	uint64_t last_draw_hash = 0;                  // draw data hash of the image last released
 	std::vector<std::array<int, 5>> drawn_layout; // z_index and imageRect of each quad of that image
 	bool have_image = false;
@@ -208,9 +208,9 @@ private:
 #endif
 
 	beman::inplace_vector::inplace_vector<utils::mapped_file, 3> font_awesome;
-	beman::inplace_vector::inplace_vector<utils::mapped_file, 3> ui_font; // LVRR: regular, semibold and bold
-	utils::mapped_file icons;                                             // LVRR: Adwaita icons, tools/lvrr_icons.py
-	std::vector<utils::mapped_file> system_fonts;                         // LVRR: mapped once, merged into every family
+	beman::inplace_vector::inplace_vector<utils::mapped_file, 3> ui_font; // oneVR: regular, semibold and bold
+	utils::mapped_file icons;                                             // oneVR: Adwaita icons, tools/onevr_icons.py
+	std::vector<utils::mapped_file> system_fonts;                         // oneVR: mapped once, merged into every family
 	ImFont * semibold = nullptr;
 	ImFont * bold = nullptr;
 	void initialize_fonts();

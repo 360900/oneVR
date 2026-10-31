@@ -31,7 +31,7 @@ pub struct AppManifest {
 	pub name: String,
 	pub raw_state_flags: u64, // documentation: https://github.com/lutris/lutris/blob/master/docs/steam.rst
 	pub last_played: Option<u64>, // unix timestamp
-	/// LVRR: a Steam tool such as Proton or a Steam Linux Runtime
+	/// oneVR: a Steam tool such as Proton or a Steam Linux Runtime
 	#[serde(default)]
 	pub tool: bool,
 }
@@ -120,7 +120,7 @@ fn vdf_parse_appstate<'a>(app_id: AppID, vdf_root: &'a Vdf<'a>) -> Option<AppMan
 		name: String::from(name),
 		raw_state_flags,
 		last_played,
-		// LVRR: set by get_app_manifest, which knows the library folder
+		// oneVR: set by get_app_manifest, which knows the library folder
 		tool: false,
 	})
 }
@@ -260,7 +260,7 @@ impl SteamUtils {
 			anyhow::bail!("Failed to parse AppState");
 		};
 
-		// LVRR: every Proton build and Steam Linux Runtime ships a toolmanifest.vdf
+		// oneVR: every Proton build and Steam Linux Runtime ships a toolmanifest.vdf
 		if let Some(app_state) = vdf_root.value.get_obj()
 			&& let Some(install_dir) = get_str_first(app_state, "installdir")
 		{

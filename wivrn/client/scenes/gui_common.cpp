@@ -24,7 +24,7 @@
 #include "render/ui_widgets.h"
 
 #include "imgui.h"
-#include <IconsLvrr.h>
+#include <IconsOneVr.h>
 #include <cmath>
 #include <spdlog/fmt/fmt.h>
 
@@ -41,7 +41,7 @@ std::optional<battery_indicator> battery_status_indicator(XrTime now)
 	if (not battery.charge)
 		return std::nullopt;
 
-	const char * icon = ICON_LVRR_BATTERY_100;
+	const char * icon = ICON_ONEVR_BATTERY_100;
 	int icon_nr;
 	if (battery.charging)
 		icon_nr = *battery.charge > 0.995 ? 5 : now / 500'000'000 % 5;
@@ -50,22 +50,22 @@ std::optional<battery_indicator> battery_status_indicator(XrTime now)
 	switch (icon_nr)
 	{
 		case 0:
-			icon = ICON_LVRR_BATTERY_0;
+			icon = ICON_ONEVR_BATTERY_0;
 			break;
 		case 1:
-			icon = ICON_LVRR_BATTERY_20;
+			icon = ICON_ONEVR_BATTERY_20;
 			break;
 		case 2:
-			icon = ICON_LVRR_BATTERY_50;
+			icon = ICON_ONEVR_BATTERY_50;
 			break;
 		case 3:
-			icon = ICON_LVRR_BATTERY_80;
+			icon = ICON_ONEVR_BATTERY_80;
 			break;
 		case 4:
-			icon = ICON_LVRR_BATTERY_100;
+			icon = ICON_ONEVR_BATTERY_100;
 			break;
 		case 5:
-			icon = ICON_LVRR_BATTERY_CHARGED;
+			icon = ICON_ONEVR_BATTERY_CHARGED;
 			break;
 	}
 

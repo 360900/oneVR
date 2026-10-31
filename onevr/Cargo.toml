@@ -1,0 +1,17 @@
+[package]
+name = "onevr"
+description = "Launcher for the oneVR desktop app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+ash = { version = "0.38", default-features = false, features = ["loaded", "std"] }
+dbus = "0.9.12"
+libc = "0.2"
+serde_json = "1"
+
+[lints]
+workspace = true

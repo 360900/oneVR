@@ -26,7 +26,7 @@ pub struct Globals {
 	pub font_system: WguiFontSystem,
 	pub custom_glyph_cache: CustomGlyphCache,
 	pub palette: WguiColorPalette,
-	/// LVRR: dim the layout behind a window that closes on an outside click. The dim is a
+	/// oneVR: dim the layout behind a window that closes on an outside click. The dim is a
 	/// plain rectangle over the whole layout, so its square corners show past a panel with
 	/// rounded corners, like the panels in VR.
 	pub popup_backdrop_dim: bool,

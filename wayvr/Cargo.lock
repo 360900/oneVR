@@ -1454,7 +1454,7 @@ dependencies = [
  "glam",
  "keyvalues-parser",
  "log",
- "lvrr-common",
+ "onevr-common",
  "lz4_flex",
  "rand 0.10.2",
  "rust-embed",
@@ -3068,7 +3068,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lvrr-common"
+name = "onevr-common"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -3080,7 +3080,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "lvrr-ui"
+name = "onevr-ui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -3089,7 +3089,7 @@ dependencies = [
  "glam",
  "ksni",
  "log",
- "lvrr-common",
+ "onevr-common",
  "serde_json",
  "tracing-subscriber",
  "wayland-client",
@@ -6422,7 +6422,7 @@ dependencies = [
  "libmonado",
  "log",
  "log-panics",
- "lvrr-common",
+ "onevr-common",
  "mint",
  "openxr",
  "ovr_overlay",
@@ -7052,7 +7052,7 @@ dependencies = [
  "idmap",
  "idmap-derive",
  "log",
- "lvrr-common",
+ "onevr-common",
  "rodio",
  "serde",
  "serde_json",

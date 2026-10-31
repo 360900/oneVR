@@ -552,7 +552,7 @@ layer_squasher::do_layers(
 				        .angle_down = std::min(layer_fov.angle_down, all_layers_fov.angle_down),
 				};
 			ubo.layers[cur_layer].layer_data.unpremultiplied_alpha = is_layer_unpremultiplied(&layer.data);
-			// LVRR: the count comes from the app's process, and layer.comp only has sample
+			// oneVR: the count comes from the app's process, and layer.comp only has sample
 			// positions for 1, 2, 4, 8 and 16 samples
 			ubo.layers[cur_layer].layer_data.sample_count = std::bit_floor(std::clamp<uint32_t>(layer.data.sample_count, 1, 16));
 			apply_bias_and_scale_from_layer(

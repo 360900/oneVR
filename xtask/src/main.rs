@@ -1,4 +1,4 @@
-//! Builds, installs and packages LVRR from its components.
+//! Builds, installs and packages oneVR from its components.
 //!
 //! Each component keeps its own build system: xrizer and wayvr are separate
 //! cargo workspaces, WiVRn is CMake (and Gradle for the APK).
@@ -16,30 +16,30 @@ const USAGE: &str = "usage: cargo xtask <command>
 
 commands:
   build [--release] [--prefix P] [--i686] [--only C,...]
-        build the components (xrizer, wivrn, wayvr, lvrr) for prefix P
-        (default /opt/lvrr); --i686 also builds the 32-bit xrizer; --only
+        build the components (xrizer, wivrn, wayvr, onevr) for prefix P
+        (default /opt/onevr); --i686 also builds the 32-bit xrizer; --only
         rebuilds some of them and needs the same options as the last full build
   install [--destdir D]
         install the last build into its prefix, under D if given
   dist [--prefix P]
-        release build with --i686, packed into target/dist/lvrr-<version>-x86_64.tar.gz
+        release build with --i686, packed into target/dist/onevr-<version>-x86_64.tar.gz
   apk [--debug] [-- GRADLE_ARGS...]
         build the headset APK into target/dist (needs the Android SDK and NDK)
-  run [BUILD_ARGS...] [-- LVRR_ARGS...]
-        build into target/stage, install there and start its lvrr, for testing
+  run [BUILD_ARGS...] [-- ONEVR_ARGS...]
+        build into target/stage, install there and start its onevr, for testing
         from the tree; BUILD_ARGS as for build, without --prefix
   client
         build WiVRn's desktop headset client into target/client-stage, for testing
         the server without a headset
   rebrand [--check | --accept-images]
-        show LVRR instead of WiVRn and WayVR to users; run after merging an
-        upstream; --accept-images records upstream images LVRR replaces once
+        show oneVR instead of WiVRn and WayVR to users; run after merging an
+        upstream; --accept-images records upstream images oneVR replaces once
         their replacements were reviewed
   version
-        print the LVRR version";
+        print the oneVR version";
 
-const COMPONENTS: [&str; 4] = ["xrizer", "wivrn", "wayvr", "lvrr"];
-const DEFAULT_PREFIX: &str = "/opt/lvrr";
+const COMPONENTS: [&str; 4] = ["xrizer", "wivrn", "wayvr", "onevr"];
+const DEFAULT_PREFIX: &str = "/opt/onevr";
 const I686: &str = "i686-unknown-linux-gnu";
 
 /// Set by `cargo run` for xtask itself. RUSTUP_TOOLCHAIN would also override
@@ -96,7 +96,7 @@ struct Build {
 
 impl Build {
     fn path() -> PathBuf {
-        target().join("lvrr-build")
+        target().join("onevr-build")
     }
 
     fn save(&self) -> Result {
@@ -162,7 +162,7 @@ fn build(args: &[String]) -> Result {
         return Err("--prefix must be an absolute path".into());
     }
     // A desktop entry's program path can't contain '=', and a newline would
-    // also break target/lvrr-build.
+    // also break target/onevr-build.
     let prefix = b.prefix.to_string_lossy();
     if prefix.contains(|c: char| c == '=' || c.is_control()) {
         return Err("--prefix can't contain '=' or control characters".into());
@@ -198,7 +198,7 @@ fn build(args: &[String]) -> Result {
             "xrizer" => build_xrizer(&b, &ver)?,
             "wivrn" => build_wivrn(&b, &ver)?,
             "wayvr" => build_wayvr(&b)?,
-            "lvrr" => build_lvrr(&b, &ver)?,
+            "onevr" => build_onevr(&b, &ver)?,
             _ => unreachable!(),
         }
     }
@@ -210,9 +210,9 @@ fn build_xrizer(b: &Build, ver: &str) -> Result {
     // A version that changes every commit would rebuild all of xrizer, so dev
     // builds use a fixed one.
     let xrizer_version = if b.release {
-        format!("lvrr-{ver}")
+        format!("onevr-{ver}")
     } else {
-        "lvrr-dev".into()
+        "onevr-dev".into()
     };
     let targets = if b.i686 {
         vec![None, Some(I686)]
@@ -237,7 +237,7 @@ fn build_xrizer(b: &Build, ver: &str) -> Result {
 
 fn build_wivrn(b: &Build, ver: &str) -> Result {
     let dir = b.wivrn_dir();
-    // Put LVRR's xrizer ahead of the places WiVRn searches by default.
+    // Put oneVR's xrizer ahead of the places WiVRn searches by default.
     let compat = format!(
         "{}:{}",
         b.prefix.join("lib/xrizer").display(),
@@ -266,7 +266,7 @@ fn build_wivrn(b: &Build, ver: &str) -> Result {
             "-DWIVRN_BUILD_WIVRNCTL=ON",
             "-DWIVRN_BUILD_TEST=ON",
         ])
-        // WiVRn would describe the LVRR checkout anyway; passing it keeps the
+        // WiVRn would describe the oneVR checkout anyway; passing it keeps the
         // server and APK on the same string.
         .arg(format!("-DGIT_DESC={ver}"))
         .arg(format!("-DGIT_COMMIT={}", git(&["rev-parse", "HEAD"])?))
@@ -301,7 +301,7 @@ fn wivrn_install_prefix(dir: &Path) -> Result<PathBuf> {
 fn build_wayvr(b: &Build) -> Result {
     let mut cmd = cargo(&root().join("wayvr"));
     cmd.args([
-        "build", "--locked", "-p", "wayvr", "-p", "wayvrctl", "-p", "lvrr-ui",
+        "build", "--locked", "-p", "wayvr", "-p", "wayvrctl", "-p", "onevr-ui",
     ])
     .env("CARGO_TARGET_DIR", target().join("wayvr"));
     if b.release {
@@ -310,11 +310,11 @@ fn build_wayvr(b: &Build) -> Result {
     run(cmd)
 }
 
-fn build_lvrr(b: &Build, ver: &str) -> Result {
+fn build_onevr(b: &Build, ver: &str) -> Result {
     let mut cmd = cargo(root());
-    cmd.args(["build", "--locked", "-p", "lvrr"])
+    cmd.args(["build", "--locked", "-p", "onevr"])
         .env("CARGO_TARGET_DIR", target())
-        .env("LVRR_VERSION", ver);
+        .env("ONEVR_VERSION", ver);
     if b.release {
         cmd.arg("--release");
     }
@@ -385,7 +385,7 @@ fn install(args: &[String]) -> Result {
         );
     }
 
-    for bin in ["wayvr", "wayvrctl", "lvrr-ui"] {
+    for bin in ["wayvr", "wayvrctl", "onevr-ui"] {
         copy(
             &target().join("wayvr").join(profile).join(bin),
             &prefix.join("bin").join(bin),
@@ -393,36 +393,36 @@ fn install(args: &[String]) -> Result {
         )?;
     }
     copy(
-        &target().join(profile).join("lvrr"),
-        &prefix.join("bin/lvrr"),
+        &target().join(profile).join("onevr"),
+        &prefix.join("bin/onevr"),
         0o755,
     )?;
 
-    // WiVRn's dashboard installed the icon; LVRR doesn't build it.
+    // WiVRn's dashboard installed the icon; oneVR doesn't build it.
     copy(
-        &root().join("packaging/logo/lvrr.svg"),
-        &prefix.join("share/icons/hicolor/scalable/apps/io.github.lvrr.svg"),
+        &root().join("packaging/logo/onevr.svg"),
+        &prefix.join("share/icons/hicolor/scalable/apps/io.github.onevr.svg"),
         0o644,
     )?;
     let applications = prefix.join("share/applications");
     let exec = |bin: &str| desktop_exec_arg(&b.prefix.join(bin).display().to_string());
     for (template, entry) in [
         // named after the window's app id, so desktops match the two
-        ("lvrr.desktop.in", "io.github.lvrr.desktop"),
+        ("onevr.desktop.in", "io.github.onevr.desktop"),
         // not in menus; KWin before 6.8 offers its screencast only to
         // clients whose entry lists it
-        ("lvrr-wayvr.desktop.in", "io.github.lvrr.wayvr.desktop"),
+        ("onevr-wayvr.desktop.in", "io.github.onevr.wayvr.desktop"),
     ] {
         let template = root().join("packaging").join(template);
         let desktop = fs::read_to_string(&template)
             .map_err(|e| format!("{}: {e}", template.display()))?
-            .replace("@LVRR@", &exec("bin/lvrr"))
+            .replace("@ONEVR@", &exec("bin/onevr"))
             .replace("@WAYVR@", &exec("bin/wayvr"))
             .replace("@PREFIX@", &desktop_string(&b.prefix.display().to_string()));
         write(&applications.join(entry), &desktop)?;
     }
-    // io.github.lvrr.desktop's old name
-    remove_file(&applications.join("lvrr.desktop"))?;
+    // io.github.onevr.desktop's old name
+    remove_file(&applications.join("onevr.desktop"))?;
 
     eprintln!("xtask: installed to {}", prefix.display());
     Ok(())
@@ -448,7 +448,7 @@ fn dist(args: &[String]) -> Result {
     remove_dir(&stage)?;
     install(&strings(&["--destdir", &stage.display().to_string()]))?;
 
-    let tarball = dist.join(format!("lvrr-{}-x86_64.tar.gz", version()?));
+    let tarball = dist.join(format!("onevr-{}-x86_64.tar.gz", version()?));
     // Extracted into / as root, tar sets the owner and mode of every directory
     // in the archive, existing ones too. So pack only the prefix, not / or
     // /opt, owned by root and with modes that don't depend on the builder.
@@ -488,9 +488,9 @@ fn apk(args: &[String]) -> Result {
     let ver = version()?;
     let wivrn = root().join("wivrn");
     let (suffix, name, task, kind) = if debug {
-        (".debug", "LVRR Debug", "assembleDebug", "debug")
+        (".debug", "oneVR Debug", "assembleDebug", "debug")
     } else {
-        ("", "LVRR", "assembleRelease", "release")
+        ("", "oneVR", "assembleRelease", "release")
     };
     let mut cmd = Command::new(wivrn.join("gradlew"));
     cmd.current_dir(&wivrn)
@@ -527,7 +527,7 @@ fn apk(args: &[String]) -> Result {
         }
         let unsigned = file.contains("unsigned");
         let dst = dist.join(format!(
-            "lvrr-{ver}{}{}.apk",
+            "onevr-{ver}{}{}.apk",
             if debug { "-debug" } else { "" },
             if unsigned { "-unsigned" } else { "" }
         ));
@@ -581,7 +581,7 @@ fn client(args: &[String]) -> Result {
     Ok(())
 }
 
-/// The LVRR version. WiVRn's GitVersion.cmake runs the same command, so the
+/// The oneVR version. WiVRn's GitVersion.cmake runs the same command, so the
 /// APK, which Gradle configures on its own, reports the same string.
 fn version() -> Result<String> {
     git(&["describe", "--tags", "--always"])
@@ -706,11 +706,11 @@ fn value<'a>(it: &mut impl Iterator<Item = &'a String>, flag: &str) -> Result<&'
         .ok_or_else(|| format!("{flag} needs a value"))
 }
 
-/// Builds and installs into target/stage, then becomes its lvrr
+/// Builds and installs into target/stage, then becomes its onevr
 fn run_staged(args: &[String]) -> Result {
     use std::os::unix::process::CommandExt;
 
-    let (build_args, lvrr_args) = match args.iter().position(|a| a == "--") {
+    let (build_args, onevr_args) = match args.iter().position(|a| a == "--") {
         Some(i) => (&args[..i], &args[i + 1..]),
         None => (args, &[][..]),
     };
@@ -722,9 +722,9 @@ fn run_staged(args: &[String]) -> Result {
     b.extend_from_slice(build_args);
     build(&b)?;
     install(&[])?;
-    let lvrr = stage.join("bin/lvrr");
-    let err = Command::new(&lvrr).args(lvrr_args).exec();
-    Err(format!("running {}: {err}", lvrr.display()))
+    let onevr = stage.join("bin/onevr");
+    let err = Command::new(&onevr).args(onevr_args).exec();
+    Err(format!("running {}: {err}", onevr.display()))
 }
 
 fn strings(args: &[&str]) -> Vec<String> {
@@ -737,23 +737,26 @@ mod tests {
 
     #[test]
     fn desktop_exec_args() {
-        assert_eq!(desktop_exec_arg("/opt/lvrr/bin/lvrr"), "/opt/lvrr/bin/lvrr");
         assert_eq!(
-            desktop_exec_arg("/home/Jane Doe/lvrr/bin/lvrr"),
-            r#""/home/Jane Doe/lvrr/bin/lvrr""#
+            desktop_exec_arg("/opt/onevr/bin/onevr"),
+            "/opt/onevr/bin/onevr"
         );
         assert_eq!(
-            desktop_exec_arg("/opt/100%/bin/lvrr"),
-            "/opt/100%%/bin/lvrr"
+            desktop_exec_arg("/home/Jane Doe/onevr/bin/onevr"),
+            r#""/home/Jane Doe/onevr/bin/onevr""#
+        );
+        assert_eq!(
+            desktop_exec_arg("/opt/100%/bin/onevr"),
+            "/opt/100%%/bin/onevr"
         );
         // the spec's examples: \\$ for a dollar sign, \\\\ for a backslash
         assert_eq!(
-            desktop_exec_arg("/opt/a$b/bin/lvrr"),
-            r#""/opt/a\\$b/bin/lvrr""#
+            desktop_exec_arg("/opt/a$b/bin/onevr"),
+            r#""/opt/a\\$b/bin/onevr""#
         );
         assert_eq!(
-            desktop_exec_arg(r"/opt/a\b/bin/lvrr"),
-            r#""/opt/a\\\\b/bin/lvrr""#
+            desktop_exec_arg(r"/opt/a\b/bin/onevr"),
+            r#""/opt/a\\\\b/bin/onevr""#
         );
     }
 }

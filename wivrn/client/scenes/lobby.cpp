@@ -25,7 +25,7 @@
 #include "glm/geometric.hpp"
 #include "hand_model.h"
 #include "imgui.h"
-#include "lvrr.h"
+#include "onevr.h"
 #include "openxr/openxr.h"
 #include "protocol_version.h"
 #include "render/animation.h"
@@ -173,14 +173,14 @@ scenes::lobby::lobby() :
 
 	apply_theme_settings();
 
-	if (lvrr::stock_ui and config.first_run)
+	if (onevr::stock_ui and config.first_run)
 		current_tab = tab::first_run;
 
 	const auto keypair_path = application::get_config_path() / "private_key.pem";
 	try
 	{
 		std::ifstream f{keypair_path};
-		// LVRR: shared with the connect thread
+		// oneVR: shared with the connect thread
 		keypair = std::make_shared<crypto::key>(crypto::key::from_private_key(std::string{(std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>()}));
 	}
 	catch (...)
@@ -215,7 +215,7 @@ static std::string ip_address_to_string(const sockaddr_in6 & addr)
 	return ip_address_to_string(addr.sin6_addr);
 }
 
-// LVRR: runs on the connect thread, which outlives the lobby when it is closed during an
+// oneVR: runs on the connect thread, which outlives the lobby when it is closed during an
 // attempt: future::cancel() only drops the result. It uses nothing from the lobby.
 std::unique_ptr<wivrn_session> scenes::lobby::connect_to_session(wivrn_discover::service service, bool manual_connection, std::shared_ptr<crypto::key> key, std::shared_ptr<thread_safe_notifyable<pin_request_data>> pin_request)
 {
@@ -233,10 +233,10 @@ std::unique_ptr<wivrn_session> scenes::lobby::connect_to_session(wivrn_discover:
 
 		auto protocol = service.txt.find("protocol");
 		if (protocol == service.txt.end())
-			throw std::runtime_error(_("Incompatible LVRR server: no protocol field in TXT"));
+			throw std::runtime_error(_("Incompatible oneVR server: no protocol field in TXT"));
 
 		if (protocol->second != protocol_string)
-			throw std::runtime_error(fmt::format(_F("Incompatible LVRR server protocol (client: {}, server: {})"), protocol_string, protocol->second));
+			throw std::runtime_error(fmt::format(_F("Incompatible oneVR server protocol (client: {}, server: {})"), protocol_string, protocol->second));
 	}
 
 	// Only the automatically discovered servers already have their IP addresses available
@@ -334,8 +334,8 @@ std::unique_ptr<wivrn_session> scenes::lobby::connect_to_session(wivrn_discover:
 				});
 			},
 			                          entry.address);
-			// LVRR: lvrr_remember_mac() skips a USB networking link
-			session->lvrr_interface = entry.interface;
+			// oneVR: onevr_remember_mac() skips a USB networking link
+			session->onevr_interface = entry.interface;
 			return session;
 		}
 		catch (connection_cancelled)
@@ -347,7 +347,7 @@ std::unique_ptr<wivrn_session> scenes::lobby::connect_to_session(wivrn_discover:
 		{
 			spdlog::warn("Error during handshake to {} ({}): {}", service.hostname, address_string, e.what());
 			std::string txt = fmt::format(_F("Cannot connect to {} ({}): {}"), service.hostname, address_string, e.what());
-			// LVRR: a refusal keeps its type, render() does not reconnect after it
+			// oneVR: a refusal keeps its type, render() does not reconnect after it
 			if (dynamic_cast<handshake_refused *>(&e))
 				throw handshake_refused(txt);
 			throw std::runtime_error(txt);
@@ -379,16 +379,16 @@ void scenes::lobby::update_server_list()
 
 	// TODO: only if discovered_services changed
 	auto & servers = application::get_config().servers;
-	// LVRR: a restarted discovery has not heard from every PC yet, see lvrr_list_kept()
-	if (not lvrr_list_kept())
+	// oneVR: a restarted discovery has not heard from every PC yet, see onevr_list_kept()
+	if (not onevr_list_kept())
 	{
 		for (auto & [cookie, data]: servers)
 		{
 			data.visible = false;
 		}
 	}
-	if (lvrr_discovery_settled())
-		lvrr_list_checked = std::chrono::steady_clock::now();
+	if (onevr_discovery_settled())
+		onevr_list_checked = std::chrono::steady_clock::now();
 
 	char protocol_string[17];
 	sprintf(protocol_string, "%016lx", wivrn::protocol_version);
@@ -440,9 +440,9 @@ void scenes::lobby::update_server_list()
 void scenes::lobby::connect(const configuration::server_data & data)
 {
 	server_name = data.service.name;
-	lvrr_server = data;
+	onevr_server = data;
 	async_error.reset();
-	// LVRR: cleared here, the connect thread does not touch the lobby
+	// oneVR: cleared here, the connect thread does not touch the lobby
 	pin_buffer = "";
 
 	async_session = utils::async<std::unique_ptr<wivrn_session>, std::string>(
@@ -892,9 +892,9 @@ void scenes::lobby::render(const XrFrameState & frame_state)
 			auto session = async_session.get();
 			if (session)
 			{
-				lvrr_remember_mac(session->lvrr_mac, session->lvrr_interface);
+				onevr_remember_mac(session->onevr_mac, session->onevr_interface);
 				next_scene = stream::create(std::move(session), 1'000'000'000.f / frame_state.predictedDisplayPeriod, server_name, *this);
-				lvrr_connected();
+				onevr_connected();
 			}
 
 			async_session.reset();
@@ -903,11 +903,11 @@ void scenes::lobby::render(const XrFrameState & frame_state)
 		{
 			spdlog::error("Error connecting to server: {}", e.what());
 			async_session.cancel();
-			// LVRR: retried silently while the server restarts the session, unless it refused
+			// oneVR: retried silently while the server restarts the session, unless it refused
 			// the headset: then the error shows at once
 			if (dynamic_cast<handshake_refused *>(&e))
-				lvrr_reconnect_until = {};
-			if (not lvrr_connect_failed())
+				onevr_reconnect_until = {};
+			if (not onevr_connect_failed())
 				async_error = e.what();
 		}
 	}
@@ -915,20 +915,20 @@ void scenes::lobby::render(const XrFrameState & frame_state)
 	if (next_scene)
 	{
 		server_hid_forwarding = next_scene->hid_forwarding_enabled();
-		// LVRR: the stream only renders once frames arrive, settings may come before
-		next_scene->lvrr_update();
+		// oneVR: the stream only renders once frames arrive, settings may come before
+		next_scene->onevr_update();
 
 		switch (next_scene->current_state())
 		{
 			case scenes::stream::state::streaming:
-				// LVRR: the desktop shows, a Restart desktop pressed before is done
-				lvrr_restart_pressed = {};
+				// oneVR: the desktop shows, a Restart desktop pressed before is done
+				onevr_restart_pressed = {};
 				application::push_scene(next_scene);
 				break;
 
 			case scenes::stream::state::shutdown:
-				// LVRR: reconnects silently when the server restarts the session
-				if (not lvrr_stream_ended())
+				// oneVR: reconnects silently when the server restarts the session
+				if (not onevr_stream_ended())
 					current_tab = tab::server_list;
 				break;
 
@@ -937,12 +937,12 @@ void scenes::lobby::render(const XrFrameState & frame_state)
 		}
 	}
 
-	// LVRR: discovery holds the Wi-Fi multicast lock, which keeps the radio awake for every
+	// oneVR: discovery holds the Wi-Fi multicast lock, which keeps the radio awake for every
 	// multicast packet on the network; it only runs while a PC is being looked for. A silent
 	// reconnect dials the saved addresses with the list hidden, so it does not look
-	if constexpr (not lvrr::stock_ui)
+	if constexpr (not onevr::stock_ui)
 	{
-		const bool looking = not async_session.valid() and not next_scene and lvrr_reconnect_until == std::chrono::steady_clock::time_point{};
+		const bool looking = not async_session.valid() and not next_scene and onevr_reconnect_until == std::chrono::steady_clock::time_point{};
 		if (looking and not discover)
 			discover.emplace();
 		else if (not looking and discover)
@@ -950,7 +950,7 @@ void scenes::lobby::render(const XrFrameState & frame_state)
 	}
 
 	update_server_list();
-	lvrr_tick();
+	onevr_tick();
 
 	imgui_ctx->set_current();
 	if (!async_session.valid() && !next_scene && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopup))
@@ -978,7 +978,7 @@ void scenes::lobby::render(const XrFrameState & frame_state)
 		}
 	}
 
-	// LVRR: missed frames at power savings step the clocks up, see power_governor
+	// oneVR: missed frames at power savings step the clocks up, see power_governor
 	application::get_power().set_visible(frame_state.shouldRender);
 	if (frame_state.shouldRender and lobby_last_display_time)
 		application::get_power().frame(instance.now(), frame_state.predictedDisplayPeriod, frame_state.predictedDisplayTime - lobby_last_display_time, application::get_cpu_time().count() * 1e-9f, 0);
@@ -1137,7 +1137,7 @@ void scenes::lobby::render(const XrFrameState & frame_state)
 	render_start(application::get_config().passthrough_enabled, frame_state.predictedDisplayTime);
 
 	const XrColor4f clear_color = application::get_config().passthrough_enabled ? XrColor4f{0, 0, 0, 0} : constants::lobby::sky_color;
-	// LVRR: an eye pass with nothing in it (passthrough room, no hand or controller in
+	// oneVR: an eye pass with nothing in it (passthrough room, no hand or controller in
 	// view) is not rendered, the compositor has one layer less to blend as well
 	const uint32_t first_pass = composition_layer_depth_test_supported ? layer_lobby | layer_controllers : layer_lobby;
 	const uint32_t second_pass = composition_layer_depth_test_supported ? layer_rays : layer_rays | layer_controllers;
@@ -1213,9 +1213,9 @@ void scenes::lobby::on_focused()
 
 	auto & config = application::get_config();
 
-	// LVRR: picks the meadow, so it runs before the environment loads: client.json from an
+	// oneVR: picks the meadow, so it runs before the environment loads: client.json from an
 	// older build may name another environment
-	lvrr_focused();
+	onevr_focused();
 
 	try
 	{
@@ -1279,7 +1279,7 @@ void scenes::lobby::on_focused()
 			const auto * right_hand_mesh_fb = right_hand->mesh();
 			if (left_hand_mesh_fb and right_hand_mesh_fb)
 			{
-				// LVRR: translucent hands go in the pass drawn over the panels, like the rays
+				// oneVR: translucent hands go in the pass drawn over the panels, like the rays
 				hand_model::add_hand(*this, XR_HAND_LEFT_EXT, *left_hand_mesh_fb, layer_rays);
 				hand_model::add_hand(*this, XR_HAND_RIGHT_EXT, *right_hand_mesh_fb, layer_rays);
 				using_hand_mesh_fb = true;
@@ -1432,12 +1432,12 @@ void scenes::lobby::on_focused()
 	std::ranges::sort(local_environments, std::less{});
 
 	setup_passthrough();
-	// LVRR: render() starts it once the lobby looks for a PC, not under a stream that is
+	// oneVR: render() starts it once the lobby looks for a PC, not under a stream that is
 	// still pending
-	if constexpr (lvrr::stock_ui)
+	if constexpr (onevr::stock_ui)
 		discover.emplace();
 
-	// LVRR: a menu does not need high clocks or the fastest refresh rate, but under 72 Hz
+	// oneVR: a menu does not need high clocks or the fastest refresh rate, but under 72 Hz
 	// the panels flicker (Meta keeps 60 Hz for video players): take the lowest rate from
 	// 72 Hz up, else the highest. The stream asks for its own rate when it starts or comes back
 	application::get_power().idle();
@@ -1450,7 +1450,7 @@ void scenes::lobby::on_focused()
 		session.set_refresh_rate(rate);
 	}
 
-	// LVRR: the last lobby frame predates the stream or a stopped session, and the governor
+	// oneVR: the last lobby frame predates the stream or a stopped session, and the governor
 	// would count the gap as a missed frame; render() does not measure the first frame
 	lobby_last_display_time = 0;
 }

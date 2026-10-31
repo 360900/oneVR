@@ -80,9 +80,9 @@ pub struct WlxClient {
     pub xdg_output_mgr: ZxdgOutputManagerV1,
     pub maybe_wlr_dmabuf_mgr: Option<ZwlrExportDmabufManagerV1>,
     pub maybe_wlr_screencopy_mgr: Option<ZwlrScreencopyManagerV1>,
-    /// LVRR: KWin streams an output over PipeWire on request, without the portal's picker
+    /// oneVR: KWin streams an output over PipeWire on request, without the portal's picker
     pub maybe_kde_screencast_mgr: Option<ZkdeScreencastUnstableV1>,
-    /// LVRR: ext-image-copy-capture-v1, the standard successor of wlr-screencopy
+    /// oneVR: ext-image-copy-capture-v1, the standard successor of wlr-screencopy
     pub maybe_ext_image_copy_capture_mgr: Option<ExtImageCopyCaptureManagerV1>,
     pub maybe_ext_output_source_mgr: Option<ExtOutputImageCaptureSourceManagerV1>,
     pub maybe_zwp_linux_dmabuf: Option<ZwpLinuxDmabufV1>,
@@ -194,7 +194,7 @@ impl WlxClient {
         }
     }
 
-    /// LVRR: wait until the compositor sent something, or the deadline passed.
+    /// oneVR: wait until the compositor sent something, or the deadline passed.
     pub fn wait_readable(&self, deadline: Instant) {
         let timeout = deadline.saturating_duration_since(Instant::now());
         let mut fds = [libc::pollfd {
@@ -240,7 +240,7 @@ impl WlxClient {
         }
     }
 
-    /// LVRR: dispatch_pending that tells the caller when the connection failed. A failed read
+    /// oneVR: dispatch_pending that tells the caller when the connection failed. A failed read
     /// fails again on every call, so a loop that only logs it spins.
     pub fn try_dispatch_pending(&mut self) -> Result<(), String> {
         let queue = self.queue.clone();
@@ -473,7 +473,7 @@ impl Dispatch<ZwlrExportDmabufManagerV1, ()> for WlxClient {
     }
 }
 
-/// LVRR: the answer to a KDE screencast request: the PipeWire node, or why there is none
+/// oneVR: the answer to a KDE screencast request: the PipeWire node, or why there is none
 pub type KdeStreamResult = Arc<Mutex<Option<Result<u32, String>>>>;
 
 impl Dispatch<ZkdeScreencastUnstableV1, ()> for WlxClient {
@@ -611,7 +611,7 @@ impl Dispatch<ZwpLinuxBufferParamsV1, ()> for WlxClient {
     }
 }
 
-// LVRR: buffer plumbing shared by the screencopy and image copy capture backends
+// oneVR: buffer plumbing shared by the screencopy and image copy capture backends
 
 impl Dispatch<WlShmPool, ()> for WlxClient {
     fn event(

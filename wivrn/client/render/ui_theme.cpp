@@ -168,7 +168,7 @@ static theme light()
 	return t;
 }
 
-// LVRR: alpha that darkens a light backdrop as much as black at alpha a does in sRGB, the GUI
+// oneVR: alpha that darkens a light backdrop as much as black at alpha a does in sRGB, the GUI
 // blends in linear light (see imgui_context::end_frame)
 static float ink(float a)
 {
@@ -193,7 +193,7 @@ static ImVec4 over(uint32_t c, float a, uint32_t backdrop)
 	return {f.x * a + b.x * (1 - a), f.y * a + b.y * (1 - a), f.z * a + b.z * (1 - a), 1};
 }
 
-// LVRR: the oneDesign "One" language, light, blue accent, shared with the dashboard
+// oneVR: the oneDesign "One" language, light, blue accent, shared with the dashboard
 static theme one()
 {
 	theme t = dark_default();

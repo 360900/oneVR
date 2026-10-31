@@ -1,0 +1,28 @@
+<layout version="2">
+  <!-- oneVR: the performance overlay, see src/onevr/perf_overlay.rs -->
+
+  <!-- id, translation -->
+  <template name="Stat">
+    <div flex_direction="row" justify_content="space_between" gap="24" width="100%">
+      <label translation="${translation}" size="18" color="text2" />
+      <label id="${id}" text="-" size="18" weight="semibold" color="text" />
+    </div>
+  </template>
+
+  <elements>
+    <rectangle padding="12" flex_direction="column" gap="4" min_width="300" color="glass" border_color="stroke" border="1" round="14">
+      <Stat id="refresh_rate" translation="ONEVR.PERF.REFRESH_RATE" />
+      <Stat id="game_fps" translation="ONEVR.PERF.GAME_FPS" />
+      <Stat id="game_missed" translation="ONEVR.PERF.GAME_MISSED" />
+      <Stat id="encoder_skipped" translation="ONEVR.PERF.ENCODER_SKIPPED" />
+      <Stat id="latency" translation="ONEVR.PERF.LATENCY" />
+      <Stat id="encode" translation="ONEVR.PERF.ENCODE" />
+      <Stat id="send" translation="ONEVR.PERF.SEND" />
+      <Stat id="transfer" translation="ONEVR.PERF.TRANSFER" />
+      <Stat id="decode" translation="ONEVR.PERF.DECODE" />
+      <Stat id="display" translation="ONEVR.PERF.DISPLAY" />
+      <Stat id="network" translation="ONEVR.PERF.NETWORK" />
+      <Stat id="headset_gpu" translation="ONEVR.PERF.HEADSET_GPU" />
+    </rectangle>
+  </elements>
+</layout>

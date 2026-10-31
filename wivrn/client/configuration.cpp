@@ -153,7 +153,7 @@ config_field scalar(const char * key, T configuration::* member)
 	};
 }
 
-// LVRR: "aa:bb:cc:dd:ee:ff"
+// oneVR: "aa:bb:cc:dd:ee:ff"
 std::string mac_string(const std::array<uint8_t, 6> & mac)
 {
 	char s[18];

@@ -123,7 +123,7 @@ private:
 	xr::instance xr_instance;
 	xr::system xr_system_id;
 	xr::session xr_session;
-	power_governor power; // LVRR: clock levels, see power_governor.h
+	power_governor power; // oneVR: clock levels, see power_governor.h
 	XrSessionState session_state = XR_SESSION_STATE_UNKNOWN;
 
 	std::array<xr::space, size_t(xr::spaces::count)> spaces;

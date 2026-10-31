@@ -8,12 +8,12 @@
 
   <blueprint name="context_menu_power_options">
     <context_menu>
-      <!-- LVRR: restarts only the desktop, upstream's string would say "Restart LVRR" -->
-      <cell translation="LVRR.RESTART_DESKTOP" action="restart" sprite_src_builtin="@/dashboard/refresh.svg"/>
-      <!-- LVRR: closing the dashboard would leave no UI, the headset can disconnect instead -->
-      <cell translation="LVRR.RESTART_SESSION" action="lvrr_restart_session" sprite_src_builtin="@/dashboard/refresh.svg"/>
-      <cell translation="LVRR.DISCONNECT" action="lvrr_disconnect" sprite_src_builtin="@/dashboard/close.svg"/>
-      <cell translation="LVRR.QUIT" action="lvrr_quit" sprite_src_builtin="@/dashboard/power.svg"/>
+      <!-- oneVR: restarts only the desktop, upstream's string would say "Restart oneVR" -->
+      <cell translation="ONEVR.RESTART_DESKTOP" action="restart" sprite_src_builtin="@/dashboard/refresh.svg"/>
+      <!-- oneVR: closing the dashboard would leave no UI, the headset can disconnect instead -->
+      <cell translation="ONEVR.RESTART_SESSION" action="onevr_restart_session" sprite_src_builtin="@/dashboard/refresh.svg"/>
+      <cell translation="ONEVR.DISCONNECT" action="onevr_disconnect" sprite_src_builtin="@/dashboard/close.svg"/>
+      <cell translation="ONEVR.QUIT" action="onevr_quit" sprite_src_builtin="@/dashboard/power.svg"/>
       <separator/>
       <cell translation="POWER_OPTIONS.SUSPEND" action="suspend" sprite_src_builtin="@/dashboard/sleep.svg"/>
       <cell translation="POWER_OPTIONS.SHUTDOWN" action="shutdown" sprite_src_builtin="@/dashboard/power.svg"/>
@@ -43,7 +43,7 @@
 
   <elements>
     <div width="100%" height="100%" padding="4" interactable="0">
-      <!-- LVRR: oneDesign window, a sidebar and an inset content card; the desktop window resizes from its edges -->
+      <!-- oneVR: oneDesign window, a sidebar and an inset content card; the desktop window resizes from its edges -->
       <rectangle
         id="rect_window"
         flex_direction="row"
@@ -67,12 +67,12 @@
           padding_bottom="8"
           gap="4">
           <SideButton id="btn_side_home" src_builtin="@/dashboard/wayvr_dashboard_mono.svg" tooltip="HOME_SCREEN" tooltip_side="right" />
-          <!-- LVRR: VR library, running apps, headset and PC; Games and Monado open from those pages -->
-          <SideButton id="btn_side_library" src_builtin="@/dashboard/games.svg" tooltip="LVRR.LIBRARY.TITLE" tooltip_side="right" />
+          <!-- oneVR: VR library, running apps, headset and PC; Games and Monado open from those pages -->
+          <SideButton id="btn_side_library" src_builtin="@/dashboard/games.svg" tooltip="ONEVR.LIBRARY.TITLE" tooltip_side="right" />
           <SideButton id="btn_side_apps" src_builtin="@/dashboard/apps.svg" tooltip="APPLICATIONS" tooltip_side="right" />
-          <SideButton id="btn_side_running" src_builtin="@/dashboard/play.svg" tooltip="LVRR.RUNNING.TITLE" tooltip_side="right" />
-          <SideButton id="btn_side_headset" src_builtin="@/dashboard/wivrn_head_symbolic.svg" tooltip="LVRR.HEADSET.TITLE" tooltip_side="right" />
-          <SideButton id="btn_side_pc" src_builtin="@/dashboard/display.svg" tooltip="LVRR.PC.TITLE" tooltip_side="right" />
+          <SideButton id="btn_side_running" src_builtin="@/dashboard/play.svg" tooltip="ONEVR.RUNNING.TITLE" tooltip_side="right" />
+          <SideButton id="btn_side_headset" src_builtin="@/dashboard/wivrn_head_symbolic.svg" tooltip="ONEVR.HEADSET.TITLE" tooltip_side="right" />
+          <SideButton id="btn_side_pc" src_builtin="@/dashboard/display.svg" tooltip="ONEVR.PC.TITLE" tooltip_side="right" />
           <div display="none">
             <SideButton id="btn_side_games" src_builtin="@/dashboard/games.svg" tooltip="GAMES" tooltip_side="right" />
             <SideButton id="btn_side_monado" src_builtin="@/dashboard/monado.svg" tooltip="MONADO_RUNTIME" tooltip_side="right" />
@@ -107,7 +107,7 @@
           >
             <!-- HEADERBAR -->
             <div position="relative" width="100%" height="~top_size" min_height="~top_size" max_height="~top_size" align_items="center" justify_content="center">
-              <!-- LVRR: the desktop window lets presses on the title move it -->
+              <!-- oneVR: the desktop window lets presses on the title move it -->
               <rectangle id="titlebar" min_width="300" height="100%" consume_mouse_events="1" color="#00000000" align_items="center" justify_content="center" gap="8">
                 <sprite id="sprite_titlebar_icon" width="18" height="18" color="text2" />
                 <label id="label_titlebar_title" weight="bold" size="15" text="Title" color="text" />

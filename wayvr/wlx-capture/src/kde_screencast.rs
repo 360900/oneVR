@@ -1,4 +1,4 @@
-//! LVRR: KWin streams an output over PipeWire on request (zkde_screencast_unstable_v1),
+//! oneVR: KWin streams an output over PipeWire on request (zkde_screencast_unstable_v1),
 //! the way the KDE portal gets its streams, so no picker dialog is involved.
 
 use std::{

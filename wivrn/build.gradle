@@ -103,7 +103,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "io.github.lvrr"
+        applicationId "io.github.onevr"
         // for Vulkan, need at least 24
         // for AImage_getHardwareBuffer, API 26
         minSdkVersion 29

@@ -35,7 +35,7 @@
 #include "boost/pfr/core.hpp"
 #include "decoder/shard_accumulator.h"
 #include "inplace_vector.hpp"
-#include "lvrr.h"
+#include "onevr.h"
 #include "spdlog/spdlog.h"
 #include "utils/i18n.h"
 #include "utils/named_thread.h"
@@ -367,7 +367,7 @@ std::shared_ptr<scenes::stream> scenes::stream::create(std::unique_ptr<wivrn_ses
 		return info;
 	}());
 
-	self->lvrr_start();
+	self->onevr_start();
 
 	self->network_session->send_control(from_headset::session_state_changed{
 	        .state = application::get_session_state(),
@@ -474,22 +474,22 @@ void scenes::stream::on_focused()
 	foveation_ok = get_action("foveation_ok").first;
 	foveation_cancel = get_action("foveation_cancel").first;
 
-	// LVRR: clocks start low and follow the load, unless the setting pins them high
+	// oneVR: clocks start low and follow the load, unless the setting pins them high
 	application::get_power().set_pinned_high(application::get_config().high_power_mode);
 
-	// LVRR: the lobby lowers the refresh rate when it shows, also while a stalled stream waits
+	// oneVR: the lobby lowers the refresh rate when it shows, also while a stalled stream waits
 	// for frames. Not compared with the current rate: the lobby's request may still be pending
-	if (float hz = lvrr_refresh_rate; hz > 0)
+	if (float hz = onevr_refresh_rate; hz > 0)
 		session.set_refresh_rate(hz);
 
-	// LVRR: the last frame predates a stall or a stopped session, and the governor would
+	// oneVR: the last frame predates a stall or a stopped session, and the governor would
 	// count the gap as a missed frame; render() takes the first period as the nominal one
 	last_display_time = 0;
 
-	lvrr_setup_hands();
+	onevr_setup_hands();
 
-	// LVRR: the rest builds the in-stream window, which render() never draws
-	if constexpr (not lvrr::stock_ui)
+	// oneVR: the rest builds the in-stream window, which render() never draws
+	if constexpr (not onevr::stock_ui)
 		return;
 
 	const auto & profile = application::get_hmd_traits().controller_profile;
@@ -605,8 +605,8 @@ void scenes::stream::on_unfocused()
 	input.reset();
 	left_hand.reset();
 	right_hand.reset();
-	lvrr_left_hand.reset();
-	lvrr_right_hand.reset();
+	onevr_left_hand.reset();
+	onevr_right_hand.reset();
 	apps.reset();
 
 	imgui_ctx.reset();
@@ -845,7 +845,7 @@ void scenes::stream::render(const XrFrameState & frame_state)
 	if (state_ == state::shutdown)
 		application::pop_scene();
 
-	lvrr_update();
+	onevr_update();
 
 	display_time_phase = frame_state.predictedDisplayPeriod ? frame_state.predictedDisplayTime % frame_state.predictedDisplayPeriod : 0;
 	display_time_period = frame_state.predictedDisplayPeriod;
@@ -868,8 +868,8 @@ void scenes::stream::render(const XrFrameState & frame_state)
 
 	if (state_ == state::stalled)
 	{
-		// LVRR: the lobby has no app launcher, the list and its icons would go unused
-		if constexpr (lvrr::stock_ui)
+		// oneVR: the lobby has no app launcher, the list and its icons would go unused
+		if constexpr (onevr::stock_ui)
 			network_session->send_control(from_headset::get_application_list{
 			        .language = application::get_messages_info().language,
 			        .country = application::get_messages_info().country,
@@ -1055,8 +1055,8 @@ void scenes::stream::render(const XrFrameState & frame_state)
 		}
 	}
 
-	// LVRR: hands move between video frames
-	const bool hands = lvrr_locate_hands(frame_state.predictedDisplayTime);
+	// oneVR: hands move between video frames
+	const bool hands = onevr_locate_hands(frame_state.predictedDisplayTime);
 
 	// Allow the headset to time warp if we are redisplaying a frame
 	if ((not application::get_hmd_traits().discard_frame) or
@@ -1178,13 +1178,13 @@ void scenes::stream::render(const XrFrameState & frame_state)
 #endif
 		swapchain.release();
 
-		// LVRR: see-through fades the opaque stream over passthrough
+		// oneVR: see-through fades the opaque stream over passthrough
 		float see_through = 0;
-		if (not use_alpha and lvrr_see_through_supported)
-			see_through = std::clamp(application::get_config().see_through, 0.f, lvrr::max_see_through);
+		if (not use_alpha and onevr_see_through_supported)
+			see_through = std::clamp(application::get_config().see_through, 0.f, onevr::max_see_through);
 		const bool passthrough = use_alpha or see_through > 0;
 
-		// LVRR: see-through alone never hides the boundary, the user is still playing in VR
+		// oneVR: see-through alone never hides the boundary, the user is still playing in VR
 		if (passthrough)
 			session.enable_passthrough(system, use_alpha);
 		else
@@ -1196,9 +1196,9 @@ void scenes::stream::render(const XrFrameState & frame_state)
 		if (auto layer = foveation_center.get_layer())
 			add_projection_layer(layer->flags, layer->space, layer->views);
 
-		// LVRR: see-through dims the room over the full FOV, not just where the stream is. Before
+		// oneVR: see-through dims the room over the full FOV, not just where the stream is. Before
 		// the stream's layer, so set_color_scale_bias() and set_layer_settings() still target it
-		const bool room_dimmed = see_through > 0 and lvrr_render_see_through(frame_state.predictedDisplayTime, 1 - see_through);
+		const bool room_dimmed = see_through > 0 and onevr_render_see_through(frame_state.predictedDisplayTime, 1 - see_through);
 
 		// Add the layer with the streamed content
 		std::array<XrCompositionLayerProjectionView, view_count> layer_view;
@@ -1238,12 +1238,12 @@ void scenes::stream::render(const XrFrameState & frame_state)
 			set_layer_settings(openxr_post_processing.sharpening | openxr_post_processing.super_sampling);
 
 		if (hands)
-			lvrr_render_hands(frame_state.predictedDisplayTime);
+			onevr_render_hands(frame_state.predictedDisplayTime);
 
 		accumulate_metrics(frame_state.predictedDisplayTime, current_blit_handles, timestamps);
 
-		// LVRR: no in-stream window or toasts, the dashboard shows them
-		if constexpr (lvrr::stock_ui)
+		// oneVR: no in-stream window or toasts, the dashboard shows them
+		if constexpr (onevr::stock_ui)
 			draw_gui(frame_state.predictedDisplayTime, frame_state.predictedDisplayPeriod);
 
 		try
@@ -1258,8 +1258,8 @@ void scenes::stream::render(const XrFrameState & frame_state)
 				throw;
 		}
 
-		// LVRR: may block on the control socket, so after submission, and only for rendered frames
-		lvrr_stats(frame_state.predictedDisplayTime);
+		// oneVR: may block on the control socket, so after submission, and only for rendered frames
+		onevr_stats(frame_state.predictedDisplayTime);
 	}
 
 	// Network operations may be blocking, do them once everything was submitted
@@ -1331,7 +1331,7 @@ void scenes::stream::render(const XrFrameState & frame_state)
 
 	read_actions();
 
-	if (lvrr::stock_ui and application::get_config().enable_stream_gui and menu_chord.check(now))
+	if (onevr::stock_ui and application::get_config().enable_stream_gui and menu_chord.check(now))
 	{
 		// Arbitrary transitions can happen from network commands
 		// Ensure we can't have a set of 2 non interactable states
@@ -1348,9 +1348,9 @@ void scenes::stream::render(const XrFrameState & frame_state)
 
 void scenes::stream::exit()
 {
-	// LVRR: a deliberate exit tells the PC, which ends the session instead of waiting
-	// for the headset to come back. Errors don't come here: lvrr_connection_lost() and
-	// lvrr_headset_error() end the stream without it, so the PC waits for a reconnect
+	// oneVR: a deliberate exit tells the PC, which ends the session instead of waiting
+	// for the headset to come back. Errors don't come here: onevr_connection_lost() and
+	// onevr_headset_error() end the stream without it, so the PC waits for a reconnect
 	if (state_ != state::shutdown and network_session)
 	{
 		try
@@ -1369,8 +1369,8 @@ void scenes::stream::setup(const to_headset::video_stream_description & descript
 {
 	spdlog::info("setup, refresh rate {}", description.refresh_rate);
 	session.set_refresh_rate(description.refresh_rate);
-	// LVRR: asked for again when the stream comes back from the lobby
-	lvrr_refresh_rate = description.refresh_rate;
+	// oneVR: asked for again when the stream comes back from the lobby
+	onevr_refresh_rate = description.refresh_rate;
 
 	std::unique_lock lock(decoder_mutex);
 	if (video_stream_description == description)
@@ -1394,9 +1394,9 @@ void scenes::stream::setup_reprojection_swapchain(uint32_t swapchain_width, uint
 	assert(swapchain_width);
 	assert(swapchain_height);
 	device.waitIdle();
-	// LVRR: the rate last asked for, video_stream_description misses the dashboard's changes.
+	// oneVR: the rate last asked for, video_stream_description misses the dashboard's changes.
 	// setup() sets it before any frame, so it is set by the first swapchain
-	float hz = lvrr_refresh_rate;
+	float hz = onevr_refresh_rate;
 	spdlog::info("swapchain setup, refresh rate {}", hz);
 	session.set_refresh_rate(hz);
 
@@ -1552,11 +1552,11 @@ std::optional<std::string> scenes::stream::pop_stream_error()
 }
 
 void scenes::stream::on_xr_event(const xr::event & event)
-// LVRR: a send on a connection that just died must not quit the app, the network thread
+// oneVR: a send on a connection that just died must not quit the app, the network thread
 // ends the stream and the lobby shows why
 try
 {
-	// LVRR: the lobby passes its events on to a stream that ended, its connection is gone
+	// oneVR: the lobby passes its events on to a stream that ended, its connection is gone
 	if (state_ == state::shutdown)
 		return;
 
@@ -1612,11 +1612,11 @@ bool scenes::stream::forward_hid_input(from_headset::hid::input_t packet, bool d
 	// hid_forwarding is whether the server permits it; device_enabled is the headset toggle.
 	if (not hid_forwarding or not device_enabled)
 		return false;
-	// LVRR: input meant for the PC stays handled when it can't get there, so Android doesn't act on
+	// oneVR: input meant for the PC stays handled when it can't get there, so Android doesn't act on
 	// it. A stream that ended stays in front until its next frame, its connection is gone
 	if (state_ == state::shutdown)
 		return true;
-	// LVRR: this runs on the main thread, whose event loop catches nothing: a send on a connection
+	// oneVR: this runs on the main thread, whose event loop catches nothing: a send on a connection
 	// that just died must not quit the app
 	try
 	{

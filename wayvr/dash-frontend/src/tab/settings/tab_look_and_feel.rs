@@ -20,17 +20,17 @@ impl State {
 			"APP_SETTINGS.LOOK_AND_FEEL",
 			"@/dashboard/palette.svg",
 		)?;
-		// LVRR: no color palettes, gradient or rounding knobs, the UI follows oneDesign
+		// oneVR: no color palettes, gradient or rounding knobs, the UI follows oneDesign
 		options_dropdown::<wlx_common::locale::Language>(par.mp, c, &SettingType::Language)?;
 		options_checkbox(par.mp, c, SettingType::OpaqueBackground)?;
-		// LVRR: no Hide username, LVRR's Home shows no user name
+		// oneVR: no Hide username, oneVR's Home shows no user name
 		options_checkbox(par.mp, c, SettingType::HideGrabHelp)?;
 		options_slider_f32(par.mp, c, SettingType::DefaultCurvature, 0.0, 0.5, 0.05)?; // min, max, step
 		options_slider_f32(par.mp, c, SettingType::DefaultOpacity, 0.05, 1.0, 0.05)?; // min, max, step
 		options_slider_f32(par.mp, c, SettingType::DefaultOverlayScale, 0.7, 1.5, 0.05)?; // min, max, step
 		options_dropdown::<wlx_common::config::DefaultPositioning>(par.mp, c, &SettingType::DefaultPositioning)?;
 		options_slider_f32(par.mp, c, SettingType::UiAnimationSpeed, 0.5, 5.0, 0.1)?; // min, max, step
-		// LVRR: the watch stays, it is the way to the dashboard
+		// oneVR: the watch stays, it is the way to the dashboard
 		options_checkbox(par.mp, c, SettingType::SetsOnWatch)?;
 		options_checkbox(par.mp, c, SettingType::Clock12h)?;
 		Ok(State {})

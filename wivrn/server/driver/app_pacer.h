@@ -45,7 +45,7 @@ public:
 
 	int64_t get_frame_time();
 
-	// LVRR: compositor frames that latched the main application's frames since the last
+	// oneVR: compositor frames that latched the main application's frames since the last
 	// call, new ones and repeats of the last, counted per application rather than by commits
 	struct game_frames
 	{
@@ -53,7 +53,7 @@ public:
 		uint32_t repeated;
 	};
 	game_frames take_game_frames();
-	// LVRR: which kinds of applications have a session
+	// oneVR: which kinds of applications have a session
 	struct running_apps
 	{
 		bool game;

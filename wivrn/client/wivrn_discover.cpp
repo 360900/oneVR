@@ -223,7 +223,7 @@ private:
 
 	// pollfds[0] is used for inter-thread communication, the others are for mDNS
 	std::vector<pollfd> pollfds;
-	// LVRR: one pipe for the cache's life: one per socket reopen leaked its write end, and
+	// oneVR: one pipe for the cache's life: one per socket reopen leaked its write end, and
 	// stop_polling() writes to it while the dnssd thread may reopen the sockets
 	int itc_read = -1, itc_write = -1;
 
@@ -256,7 +256,7 @@ private:
 
 	void close_client_sockets()
 	{
-		// LVRR: the mDNS sockets only, the pipe stays open
+		// oneVR: the mDNS sockets only, the pipe stays open
 		for (auto [socket, _]: if_names)
 			mdns_socket_close(socket);
 
@@ -517,7 +517,7 @@ public:
 
 	dnssd_cache()
 	{
-		// LVRR: see itc_read
+		// oneVR: see itc_read
 		int fds[2];
 		if (pipe2(fds, O_CLOEXEC) < 0)
 		{
@@ -536,7 +536,7 @@ public:
 	~dnssd_cache()
 	{
 		close_client_sockets();
-		// LVRR: the dnssd thread has stopped
+		// oneVR: the dnssd thread has stopped
 		close(itc_read);
 		close(itc_write);
 	}

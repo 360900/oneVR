@@ -23,7 +23,7 @@ struct DesktopEntryOwned {
 	app_name: Box<str>,
 	icon_path: Option<Box<str>>,
 	categories: Box<[Box<str>]>,
-	// LVRR: see DesktopEntry::path
+	// oneVR: see DesktopEntry::path
 	path: Box<str>,
 }
 
@@ -34,7 +34,7 @@ pub struct DesktopEntry {
 	pub app_name: Rc<str>,
 	pub icon_path: Option<Rc<str>>,
 	pub categories: Rc<[Rc<str>]>,
-	/// LVRR: the file the entry was read from, which the Library copies to add the app
+	/// oneVR: the file the entry was read from, which the Library copies to add the app
 	#[serde(default)]
 	pub path: Rc<str>,
 }
@@ -183,7 +183,7 @@ impl DesktopFinder {
 					continue;
 				}
 
-				// LVRR: browsers often register their https handler as a NoDisplay entry; keep the
+				// oneVR: browsers often register their https handler as a NoDisplay entry; keep the
 				// default one so a web browser can still be opened in VR
 				let hidden_default_browser = desktop.no_display() && default_browser.as_deref() == Some(app_id);
 				if desktop.only_show_in().is_some()
@@ -349,7 +349,7 @@ impl DesktopFinder {
 	}
 }
 
-/// LVRR: the desktop entry id of the default https handler, without `.desktop`
+/// oneVR: the desktop entry id of the default https handler, without `.desktop`
 fn default_https_handler() -> Option<String> {
 	let output = std::process::Command::new("xdg-mime")
 		.args(["query", "default", "x-scheme-handler/https"])

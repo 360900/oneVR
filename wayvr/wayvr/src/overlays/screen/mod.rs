@@ -77,7 +77,7 @@ pub fn create_screens(app: &mut AppState) -> anyhow::Result<(ScreenCreateData, D
 
     #[cfg(feature = "wayland")]
     {
-        // LVRR: or they would show as screens
+        // oneVR: or they would show as screens
         virtual_monitor::remove_orphans();
         if let Some(mut wl) = wlx_capture::wayland::WlxClient::new() {
             log::info!("Wayland detected.");

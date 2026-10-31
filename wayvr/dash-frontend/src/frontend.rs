@@ -33,7 +33,7 @@ use wlx_common::{
 use crate::{
 	assets,
 	tab::{
-		Tab, TabType, apps::TabApps, donate::TabDonate, games::TabGames, lvrr::home::TabLvrrHome, monado::TabMonado,
+		Tab, TabType, apps::TabApps, donate::TabDonate, games::TabGames, monado::TabMonado, onevr::home::TabOneVrHome,
 		settings::TabSettings, welcome::TabWelcome,
 	},
 	util::{
@@ -44,10 +44,10 @@ use crate::{
 	views::{self, ViewUpdateParams},
 };
 
-// LVRR: side buttons, power menu actions and confirmations for the LVRR pages
-mod lvrr_ext;
-// LVRR: WayVR's tick looks for the session of an app the Library started
-pub use lvrr_ext::lvrr_poll_start;
+// oneVR: side buttons, power menu actions and confirmations for the oneVR pages
+mod onevr_ext;
+// oneVR: WayVR's tick looks for the session of an app the Library started
+pub use onevr_ext::onevr_poll_start;
 
 pub struct FrontendWidgets {
 	id_label_time: WidgetID,
@@ -135,10 +135,10 @@ pub enum FrontendTask {
 	HideDashboard,
 	MarkTutorialGraduated,
 	BackendTask(DashBackendTask),
-	Lvrr(lvrr_common::state::LvrrRequest),
+	OneVr(onevr_common::state::OneVrRequest),
 	/// Ends the session if needed and lets a new headset pair
-	LvrrPair,
-	LvrrStartServer,
+	OneVrPair,
+	OneVrStartServer,
 }
 
 impl<T: 'static> Frontend<T> {
@@ -307,8 +307,8 @@ impl<T: 'static> Frontend<T> {
 	fn process_power_action(&mut self, action: &str, data: &mut T) {
 		match action {
 			"restart" => {
-				// LVRR: the dashboard comes back on the same page
-				self.lvrr_save_page();
+				// oneVR: the dashboard comes back on the same page
+				self.onevr_save_page();
 				self.interface.restart(data);
 			}
 			"close" => {
@@ -320,7 +320,7 @@ impl<T: 'static> Frontend<T> {
 			"shutdown" => {
 				self.power_action_confirm(PowerAction::Poweroff);
 			}
-			other => self.lvrr_power_action(other),
+			other => self.onevr_power_action(other),
 		}
 	}
 
@@ -413,7 +413,7 @@ impl<T: 'static> Frontend<T> {
 			anyhow::bail!("");
 		};
 
-		// LVRR: only the window around the content card shows through
+		// oneVR: only the window around the content card shows through
 		let alpha = if self.interface.general_config(data).opaque_background {
 			1.0
 		} else {
@@ -443,9 +443,9 @@ impl<T: 'static> Frontend<T> {
 			FrontendTask::RunCommand(program, args) => self.action_run_command(program, args),
 			FrontendTask::MarkTutorialGraduated => self.action_tutorial_graduated(params.data),
 			FrontendTask::BackendTask(task) => self.interface.backend_task(params.data, task)?,
-			FrontendTask::Lvrr(request) => self.lvrr_request(params.data, request),
-			FrontendTask::LvrrPair => self.lvrr_pair(params.data),
-			FrontendTask::LvrrStartServer => self.lvrr_start_server(params.data),
+			FrontendTask::OneVr(request) => self.onevr_request(params.data, request),
+			FrontendTask::OneVrPair => self.onevr_pair(params.data),
+			FrontendTask::OneVrStartServer => self.onevr_start_server(params.data),
 		};
 		Ok(())
 	}
@@ -497,20 +497,20 @@ impl<T: 'static> Frontend<T> {
 			TabType::Monado => ("MONADO_RUNTIME", "dashboard/monado.svg"),
 			TabType::Settings => ("SETTINGS", "dashboard/settings.svg"),
 			TabType::Donate => ("DONATE.SUPPORT_US", "dashboard/opencollective.svg"),
-			TabType::Lvrr(page) => page.title_icon(),
+			TabType::OneVr(page) => page.title_icon(),
 		};
 
 		self.set_tab_title(tab_translation, icon_path)?;
 
 		let tab: Box<dyn Tab<T>> = match tab_type {
 			TabType::Welcome => Box::new(TabWelcome::new(self, widget_content.id, data)?),
-			TabType::Home => Box::new(TabLvrrHome::new(self, widget_content.id, data)?),
+			TabType::Home => Box::new(TabOneVrHome::new(self, widget_content.id, data)?),
 			TabType::Apps => Box::new(TabApps::new(self, widget_content.id, data)?),
 			TabType::Games => Box::new(TabGames::new(self, widget_content.id)?),
 			TabType::Monado => Box::new(TabMonado::new(self, widget_content.id)?),
 			TabType::Settings => Box::new(TabSettings::new(self, widget_content.id, data)?),
 			TabType::Donate => Box::new(TabDonate::new(self, widget_content.id, data)?),
-			TabType::Lvrr(page) => crate::tab::lvrr::create(page, self, widget_content.id, data)?,
+			TabType::OneVr(page) => crate::tab::onevr::create(page, self, widget_content.id, data)?,
 		};
 
 		self.current_tab = Some(tab);
@@ -520,8 +520,8 @@ impl<T: 'static> Frontend<T> {
 			alterables: &mut self.layout.alterables,
 		};
 
-		// LVRR: a page opened from an LVRR page lights that page's button
-		let lit = lvrr_ext::lvrr_side_tab(tab_type);
+		// oneVR: a page opened from a oneVR page lights that page's button
+		let lit = onevr_ext::onevr_side_tab(tab_type);
 		for (t, btn) in self.side_buttons.iter() {
 			btn.set_sticky_state(&mut common, lit == *t);
 		}
@@ -565,7 +565,7 @@ impl<T: 'static> Frontend<T> {
 		self.tasks.handle_button(&btn, FrontendTask::SetTab(TabType::Settings));
 		self.side_buttons.push((TabType::Settings, btn));
 
-		self.lvrr_register_widgets()?;
+		self.onevr_register_widgets()?;
 
 		// ################################
 		// BOTTOM BAR BUTTONS

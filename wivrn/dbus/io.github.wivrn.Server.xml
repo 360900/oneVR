@@ -80,7 +80,7 @@
 			<arg type="s" name="message"/>
 		</signal>
 
-		<!-- LVRR: used by the LVRR dashboard, JSON formats in docs/dbus.md -->
+		<!-- oneVR: used by the oneVR dashboard, JSON formats in docs/dbus.md -->
 		<property name="HeadsetSettings"       type="s" access="read"/>
 		<property name="HeadsetStats"          type="s" access="read"/>
 		<method name="SetHeadsetSettings">
