@@ -114,11 +114,11 @@ fn start_progress_state(
                     PttProgress::VuVolume(volume) => {
                         common.alterables.set_widget_visible(id_rect_vu_meter, true);
                         let color = if volume < 0.90 {
-                            Color::new(0.0, 1.0, 0.0, 1.0) // ok (green)
+                            Color::new(0.055, 0.549, 0.255, 1.0) // ok (green)
                         } else if volume < 0.98 {
-                            Color::new(1.0, 1.0, 0.0, 1.0) // almost clipping (yellow)
+                            Color::new(0.663, 0.384, 0.0, 1.0) // almost clipping (yellow)
                         } else {
-                            Color::new(1.0, 0.0, 0.0, 1.0) // clipping (red)
+                            Color::new(0.816, 0.169, 0.192, 1.0) // clipping (red)
                         };
 
                         rect_vu_meter.set_color(common, WguiColor::Raw(color));

@@ -25,7 +25,7 @@ pub struct WidgetLabelParams {
 	pub parent_color: ParentColor,
 }
 
-const DEFAULT_COLOR: WguiColor = WguiColorName::OnBackground.to_wgui_color();
+const DEFAULT_COLOR: WguiColor = WguiColorName::Text.to_wgui_color();
 
 pub struct WidgetLabel {
 	id: WidgetID,

@@ -9,19 +9,20 @@
       position="absolute"
       consume_mouse_events="1"
       flex_direction="column"
-      round="8"
-      border="2"
-      border_color="outline"
-      color="background"
+      round="18"
+      border="1"
+      border_color="stroke"
+      color="surface"
+      shadow="3"
       padding="2">
       <!-- window title -->
       <div width="100%" height="32" align_items="center" position="relative" justify_content="end">
         <div width="100%" justify_content="center">
-          <label id="text_window_title" weight="bold" color="on_background" />
+          <label id="text_window_title" weight="bold" size="15" color="text" />
         </div>
-        <Button id="but_close" border="0" round="4" color="on_background(transparent)" position="absolute"
-          hover_color="danger" hover_border_color="danger(rgb-mult-0.5)" >
-          <sprite src_internal="@/wgui/close.svg" width="32" height="32" />
+        <Button id="but_close" border="0" round="100%" color="fill" position="absolute" margin_right="6"
+          width="24" height="24" hover_color="fill_strong" >
+          <sprite src_internal="@/wgui/close.svg" width="16" height="16" color="text" />
         </Button>
       </div>
 

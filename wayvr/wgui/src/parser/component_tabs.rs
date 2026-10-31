@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use crate::{
 	assets::AssetPathRc,
-	color::WguiColor,
+	color::{WguiColor, WguiColorName},
 	components::{Component, tabs},
 	i18n::Translation,
 	layout::WidgetID,
@@ -25,14 +25,15 @@ pub fn parse_component_tabs<'a>(
 
 	let mut entries = Vec::<tabs::Entry>::new();
 
-	let mut border = 2.0;
-	let mut color: Option<WguiColor> = None;
+	// sidebar rows: no fill until hovered, the selected one in the container color
+	let mut border = 0.0;
+	let mut color: Option<WguiColor> = Some(WguiColorName::Hover.to_wgui_color().with_alpha(0.0));
 	let mut border_color: Option<WguiColor> = None;
-	let mut hover_color: Option<WguiColor> = None;
+	let mut hover_color: Option<WguiColor> = Some(WguiColorName::Hover.to_wgui_color());
 	let mut hover_border_color: Option<WguiColor> = None;
 	let mut sticky_color: Option<WguiColor> = None;
 	let mut sticky_border_color: Option<WguiColor> = None;
-	let mut round = WLength::Units(4.0);
+	let mut round = WLength::Units(10.0);
 
 	for child in node.children() {
 		match child.tag_name().name() {
@@ -53,14 +54,7 @@ pub fn parse_component_tabs<'a>(
 							sprite_src = Some(get_asset_path_from_kv(file, "sprite_", &attrib.attrib, &attrib.value));
 						}
 						"round" => {
-							parse_round(
-								ctx,
-								tag_name,
-								&attrib.attrib,
-								&attrib.value,
-								&mut round,
-								ctx.layout.state.theme.rounding_mult,
-							);
+							parse_round(ctx, tag_name, &attrib.attrib, &attrib.value, &mut round);
 						}
 						"color" => {
 							parse_color_opt(ctx, tag_name, &attrib.attrib, &attrib.value, &mut color);

@@ -17,7 +17,6 @@ use wgui::{
 	globals::WguiGlobals,
 	i18n::Translation,
 	layout::{Layout, LayoutParams, LayoutUpdateParams, Widget},
-	palette::WguiColorPalette,
 	parser::{Fetchable, ParseDocumentExtra, ParseDocumentParams, ParserState},
 	taffy::{self, prelude::length},
 	task::Tasks,
@@ -87,14 +86,12 @@ impl TestbedGeneric {
 
 	pub fn new(assets: Box<assets::Asset>) -> anyhow::Result<Self> {
 		let lang_provider = WayVRLangProvider::default();
-		let palette_name = std::env::var("PALETTE").unwrap_or_else(|_| "Default".to_string());
 
 		let globals = WguiGlobals::new(
 			assets,
 			&lang_provider,
 			&WguiFontConfig::default(),
 			PathBuf::new(), // cwd
-			WguiColorPalette::get_builtin(&palette_name),
 		)?;
 
 		let extra = ParseDocumentExtra {

@@ -240,7 +240,7 @@ fn conf_handle_style(
 	true
 }
 
-const PAD_PERCENT: f32 = 0.75;
+const TRACK_HEIGHT: f32 = 6.0;
 const HANDLE_WIDTH: f32 = 32.0;
 const HANDLE_HEIGHT: f32 = 24.0;
 
@@ -359,16 +359,16 @@ impl State {
 	}
 }
 
-const BODY_COLOR: WguiColor = WguiColorName::Background.to_wgui_color();
-const BODY_BORDER_COLOR: WguiColor = WguiColorName::Outline.to_wgui_color();
-const HANDLE_COLOR: WguiColorName = WguiColorName::BackgroundVariant;
-const HANDLE_COLOR_HOVERED: WguiColor = WguiColorName::Tertiary.to_wgui_color();
-const HANDLE_BORDER_COLOR: WguiColor = WguiColorName::Outline.to_wgui_color();
-const HANDLE_BORDER_COLOR_HOVERED: WguiColor = WguiColorName::Tertiary.to_wgui_color().mult_rgb(0.5);
-const HANDLE_TEXT_COLOR: WguiColorName = WguiColorName::OnBackgroundVariant;
-const HANDLE_TEXT_COLOR_HOVERED: WguiColorName = WguiColorName::OnSecondary;
+const BODY_COLOR: WguiColor = WguiColorName::FillStrong.to_wgui_color();
+const BODY_BORDER_COLOR: WguiColor = WguiColorName::FillStrong.to_wgui_color().with_alpha(0.0);
+const HANDLE_COLOR: WguiColorName = WguiColorName::Surface;
+const HANDLE_COLOR_HOVERED: WguiColor = WguiColorName::Surface.to_wgui_color();
+const HANDLE_BORDER_COLOR: WguiColor = WguiColorName::StrokeStrong.to_wgui_color();
+const HANDLE_BORDER_COLOR_HOVERED: WguiColor = WguiColorName::Accent.to_wgui_color();
+const HANDLE_TEXT_COLOR: WguiColorName = WguiColorName::Text;
+const HANDLE_TEXT_COLOR_HOVERED: WguiColorName = WguiColorName::AccentText;
 
-const SLIDER_HOVER_SCALE: f32 = 0.25;
+const SLIDER_HOVER_SCALE: f32 = 0.08;
 
 fn anim_rect(rect: &mut WidgetRectangle, palette: &WguiColorPalette, pos: f32) {
 	rect.params.color = WguiColor::lerp(&HANDLE_COLOR.into(), palette, &HANDLE_COLOR_HOVERED, pos);
@@ -394,7 +394,7 @@ fn get_callback_label(inverse: bool) -> AnimationCallback {
 		let pos = if inverse { 1.0 - data.pos } else { data.pos };
 		data.data.transform = util::centered_matrix(
 			data.widget_boundary.size,
-			&Mat4::from_scale(Vec3::splat(1.0 + pos * 0.25)),
+			&Mat4::from_scale(Vec3::splat(SLIDER_HOVER_SCALE.mul_add(pos, 1.0))),
 		);
 
 		let text_color = HANDLE_TEXT_COLOR.to_wgui_color().lerp(
@@ -410,22 +410,22 @@ fn get_callback_label(inverse: bool) -> AnimationCallback {
 }
 
 fn on_enter_anim(common: &mut event::CallbackDataCommon, id_handle: WidgetID, id_label: Option<WidgetID>) {
-	let duration = AnimationDuration::Seconds(0.333);
+	let duration = AnimationDuration::Seconds(0.12);
 
-	Animation::new(id_handle, duration, AnimationEasing::OutBack, get_callback_rect(false)).submit(common.alterables);
+	Animation::new(id_handle, duration, AnimationEasing::OutQuint, get_callback_rect(false)).submit(common.alterables);
 
 	if let Some(id_label) = id_label {
-		Animation::new(id_label, duration, AnimationEasing::OutBack, get_callback_label(false)).submit(common.alterables);
+		Animation::new(id_label, duration, AnimationEasing::OutQuint, get_callback_label(false)).submit(common.alterables);
 	}
 }
 
 fn on_leave_anim(common: &mut event::CallbackDataCommon, id_handle: WidgetID, id_label: Option<WidgetID>) {
-	let duration = AnimationDuration::Seconds(0.0833);
+	let duration = AnimationDuration::Seconds(0.12);
 
-	Animation::new(id_handle, duration, AnimationEasing::OutQuad, get_callback_rect(true)).submit(common.alterables);
+	Animation::new(id_handle, duration, AnimationEasing::OutQuint, get_callback_rect(true)).submit(common.alterables);
 
 	if let Some(id_label) = id_label {
-		Animation::new(id_label, duration, AnimationEasing::OutQuad, get_callback_label(true)).submit(common.alterables);
+		Animation::new(id_label, duration, AnimationEasing::OutQuint, get_callback_label(true)).submit(common.alterables);
 	}
 }
 
@@ -636,8 +636,9 @@ fn mount_slider_handle(
 		WidgetRectangle::create(WidgetRectangleParams {
 			color: HANDLE_COLOR.into(),
 			border_color: HANDLE_BORDER_COLOR,
-			border: 2.0,
+			border: 1.0,
 			round: WLength::Percent(1.0),
+			shadow: 1,
 			..Default::default()
 		}),
 		taffy::Style {
@@ -657,7 +658,7 @@ fn mount_slider_handle(
 				content: Translation::default(),
 				style: TextStyle {
 					color: Some(HANDLE_TEXT_COLOR.into()),
-					weight: Some(FontWeight::Bold),
+					weight: Some(FontWeight::SemiBold),
 					align: Some(HorizontalAlign::Center),
 					..Default::default()
 				},
@@ -691,13 +692,13 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 			color: BODY_COLOR,
 			round: WLength::Percent(1.0),
 			border_color: BODY_BORDER_COLOR,
-			border: 2.0,
+			border: 0.0,
 			..Default::default()
 		}),
 		taffy::Style {
 			size: taffy::Size {
 				width: percent(1.0_f32),
-				height: percent(PAD_PERCENT),
+				height: length(TRACK_HEIGHT),
 			},
 			position: taffy::Position::Absolute,
 			align_self: Some(taffy::AlignItems::CENTER),

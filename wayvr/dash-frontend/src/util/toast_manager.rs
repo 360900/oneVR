@@ -138,11 +138,7 @@ impl ToastManager {
 				rect.params.border_color = rect.params.border_color.with_alpha(opacity);
 
 				let mut label = common.state.widgets.get_as::<WidgetLabel>(label.id).unwrap();
-				label.set_color(
-					common,
-					WguiColor::from(WguiColorName::OnBackgroundVariant).with_alpha(opacity),
-					true,
-				);
+				label.set_color(common, WguiColor::from(WguiColorName::Text2).with_alpha(opacity), true);
 				common.alterables.mark_redraw();
 			}),
 		)

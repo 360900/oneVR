@@ -1,12 +1,12 @@
 <layout version="2">
   <macro name="keycap_rect"
     margin="2" width="100%" overflow="hidden" box_sizing="border_box"
-    border_color="outline" border="2" round="6" color="background_variant" color2="background" gradient="vertical"
+    border_color="stroke" border="1" round="8" color="surface"
     align_items="center" justify_content="center" />
 
   <macro name="tray_rect"
     margin="2" width="100%" overflow="hidden" box_sizing="border_box"
-    border_color="outline" border="2" round="6" color="background" color2="background_variant" gradient="vertical"
+    border_color="stroke(transparent)" border="1" round="8" color="fill"
     align_items="center" justify_content="center" />
 
   <macro name="keycap_div"
@@ -18,7 +18,7 @@
   </vars>
 
   <template name="VerticalSeparator">
-    <rectangle width="2" height="100%" color="primary" />
+    <rectangle width="1" height="100%" color="stroke" />
   </template>
 
   <!-- The keyboard is build from the xkb keymap. This file is for customizing the keycaps. -->
@@ -28,7 +28,7 @@
   <template name="KeySpecial">
     <div macro="keycap_div">
       <rectangle id="${id}" macro="keycap_rect">
-        <sprite color="on_background" width="24" height="24" src="@/keyboard/${text}.svg" />
+        <sprite color="text" width="24" height="24" src="@/keyboard/${text}.svg" />
       </rectangle>
     </div>
   </template>
@@ -49,7 +49,7 @@
     <div macro="keycap_div">
       <rectangle id="${id}" macro="keycap_rect" gap="3">
         <label text="${text}" size="~text_size" />
-        <label color="on_background_variant" text="${text_altgr}" size="~text_size" />
+        <label color="text2" text="${text_altgr}" size="~text_size" />
       </rectangle>
     </div>
   </template>
@@ -59,7 +59,7 @@
   <template name="KeySymbol">
     <div macro="keycap_div">
       <rectangle id="${id}" macro="keycap_rect" gap="3">
-        <label color="on_background_variant" text="${text_shift}" size="~text_size" />
+        <label color="text2" text="${text_shift}" size="~text_size" />
         <label text="${text}" size="~text_size" />
       </rectangle>
     </div>
@@ -71,14 +71,14 @@
     <div macro="keycap_div">
       <rectangle id="${id}" macro="keycap_rect" flex_direction="row" flex_wrap="wrap" padding="4">
         <div width="50%" height="50%" align_items="center" justify_content="center">
-          <label color="on_background_variant" text="${text_shift}" size="~text_size" />
+          <label color="text2" text="${text_shift}" size="~text_size" />
         </div>
         <div width="50%" height="50%" align_items="center" justify_content="center" />
         <div width="50%" height="50%" align_items="center" justify_content="center">
           <label text="${text}" size="~text_size" />
         </div>
         <div width="50%" height="50%" align_items="center" justify_content="center">
-          <label color="on_background_variant" text="${text_altgr}" size="~text_size" />
+          <label color="text2" text="${text_altgr}" size="~text_size" />
         </div>
       </rectangle>
     </div>
@@ -94,10 +94,10 @@
     </div>
   </template>
 
-  <macro name="button_style" border="2" round="6"
+  <macro name="button_style" round="10"
     align_items="center" justify_content="center" padding="6" width="60" height="60" overflow="visible" />
 
-  <macro name="bg_rect" width="100%" color="background_contrast" round="10" border="2" border_color="primary" />
+  <macro name="bg_rect" width="100%" color="float" round="18" border="1" border_color="stroke" />
 
   <blueprint name="menu_app">
     <context_menu >
@@ -129,7 +129,7 @@
     <Button macro="button_style" id="overlay_${idx}" tooltip_str="${name}" _context_name="${name}" _press_left="::ContextMenuOpen menu_screen" _press_right="::OverlayToggle ${name}">
       <sprite width="38" height="38" src_builtin="@/edit/screen.svg" />
       <div position="absolute" margin_top="-7" margin_left="-1">
-        <label text="${display}" size="~text_size" weight="bold" parent_color="background" />
+        <label text="${display}" size="~text_size" weight="bold" />
       </div>
     </Button>
   </template>
@@ -162,7 +162,7 @@
     <Button macro="button_style" id="overlay_${idx}" tooltip_str="${name}" _context_name="${name}" _press_left="::ContextMenuOpen menu_mirror" _press_right="::OverlayToggle ${name}">
       <sprite width="38" height="38" src_builtin="@/edit/mirror.svg" />
       <div position="absolute" margin_top="5" margin_left="13">
-        <label text="${display}" size="20" weight="bold" parent_color="background" />
+        <label text="${display}" size="20" weight="bold" />
       </div>
     </Button>
   </template>
@@ -172,7 +172,7 @@
     <Button macro="button_style" id="overlay_${idx}" tooltip_str="${name}" _context_name="${name}" _press_left="::ContextMenuOpen menu_mirror" _press_right="::OverlayToggle ${name}">
       <sprite width="38" height="38" src_builtin="@/icons/landscape.svg" />
       <div position="absolute" margin_top="5" margin_left="13">
-        <label text="${display}" size="20" weight="bold" parent_color="background" />
+        <label text="${display}" size="20" weight="bold" />
       </div>
     </Button>
   </template>
@@ -202,16 +202,16 @@
     <Button macro="button_style" id="set_${idx}" _press="::SetSwitch ${idx}" tooltip="WATCH.SWITCH_TO_SET" tooltip_side="bottom">
       <sprite width="38" height="38" src_builtin="@/watch/set2.svg" />
       <div position="absolute" margin_top="10" margin_left="-7">
-        <label text="${display}" size="20" weight="bold" parent_color="background" />
+        <label text="${display}" size="20" weight="bold" />
       </div>
     </Button>
   </template>
 
   <template name="Clock">
     <div flex_direction="column" gap="3" align_items="center">
-      <label text="23:59" _source="clock" _display="time" size="21" weight="bold" color="primary" />
-      <label text="Tuesday" _source="clock" _display="dow" size="15" color="on_background_variant" />
-      <label text="22/2/2022" _source="clock" _display="date" size="15" color="on_background_variant" />
+      <label text="23:59" _source="clock" _display="time" size="21" weight="semibold" color="text" />
+      <label text="Tuesday" _source="clock" _display="dow" size="15" color="text2" />
+      <label text="22/2/2022" _source="clock" _display="date" size="15" color="text2" />
     </div>
   </template>
 

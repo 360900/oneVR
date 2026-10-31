@@ -1,6 +1,6 @@
 <layout version="2">
   <!-- LVRR: headset settings, see src/tab/lvrr/headset.rs -->
-  <macro name="tab_style" color="background" />
+  <macro name="tab_style" round="10" />
   <elements>
     <div gap="4" width="100%">
       <!-- the same min_width as pc.xml, so the content starts at the same place on both pages -->

@@ -2,12 +2,13 @@ use std::rc::Rc;
 
 use wgui::{
 	assets::AssetPathRef,
+	color::{WguiColor, WguiColorName},
 	components::{
 		self,
 		button::ComponentButton,
 		tooltip::{TooltipInfo, TooltipSide},
 	},
-	drawing::{self, GradientMode},
+	drawing,
 	globals::WguiGlobals,
 	i18n::Translation,
 	layout::{Layout, WidgetID},
@@ -21,7 +22,6 @@ use wgui::{
 		div::WidgetDiv,
 		image::{WidgetImage, WidgetImageParams},
 		label::{WidgetLabel, WidgetLabelParams},
-		rectangle,
 		util::WLength,
 	},
 };
@@ -53,8 +53,9 @@ pub struct View {
 	app_id: AppID,
 }
 
-const BORDER_COLOR_DEFAULT: drawing::Color = drawing::Color::new(0.0, 0.0, 0.0, 0.35);
-const BORDER_COLOR_HOVERED: drawing::Color = drawing::Color::new(1.0, 1.0, 1.0, 1.0);
+// LVRR: oneDesign, no shine or shade over the art, an accent ring on hover
+const BORDER_COLOR_DEFAULT: WguiColor = WguiColorName::Accent.to_wgui_color().with_alpha(0.0);
+const BORDER_COLOR_HOVERED: WguiColor = WguiColorName::Accent.to_wgui_color();
 
 const GAME_COVER_SIZE_X: f32 = 140.0;
 const GAME_COVER_SIZE_Y: f32 = 210.0;
@@ -77,7 +78,7 @@ impl View {
 
 	fn mount_image(&self, layout: &mut Layout, glyph: &CustomGlyphData) -> anyhow::Result<()> {
 		let image = WidgetImage::create(WidgetImageParams {
-			round: WLength::Units(6.0),
+			round: WLength::Units(10.0),
 			glyph_data: Some(glyph.clone()),
 			..Default::default()
 		});
@@ -199,9 +200,10 @@ impl View {
 			ess,
 			components::button::Params {
 				color: Some(drawing::Color::new(1.0, 1.0, 1.0, 0.0).into()),
-				border_color: Some(BORDER_COLOR_DEFAULT.into()),
-				hover_border_color: Some(BORDER_COLOR_HOVERED.into()),
-				round: WLength::Units(8.0),
+				hover_color: Some(drawing::Color::new(1.0, 1.0, 1.0, 0.0).into()),
+				border_color: Some(BORDER_COLOR_DEFAULT),
+				hover_border_color: Some(BORDER_COLOR_HOVERED),
+				round: WLength::Units(12.0),
 				border: 2.0,
 				tooltip: Some(TooltipInfo {
 					side: TooltipSide::Bottom,
@@ -235,73 +237,6 @@ impl View {
 				justify_content: Some(JustifyContent::CENTER),
 				..Default::default()
 			},
-		)?;
-
-		let rect_gradient = |color: drawing::Color, color2: drawing::Color, round: f32| {
-			rectangle::WidgetRectangle::create(rectangle::WidgetRectangleParams {
-				color: color.into(),
-				color2: color2.into(),
-				round: WLength::Units(round),
-				gradient: GradientMode::Vertical,
-				..Default::default()
-			})
-		};
-
-		let rect_gradient_style = |align_self: taffy::AlignSelf, height: f32| taffy::Style {
-			position: taffy::Position::Absolute,
-			align_self: Some(align_self),
-			size: taffy::Size {
-				width: percent(1.0_f32),
-				height: percent(height),
-			},
-			..Default::default()
-		};
-
-		// top shine
-		let (top_shine, _) = ess.layout.add_child(
-			widget_button.id,
-			rect_gradient(
-				drawing::Color::new(1.0, 1.0, 1.0, 0.2),
-				drawing::Color::new(1.0, 1.0, 1.0, 0.01),
-				8.0,
-			),
-			rect_gradient_style(taffy::AlignSelf::BASELINE, 0.05),
-		)?;
-
-		// not optimal, this forces us to create a new pass for every created cover art just to overlay various rectangles at the top of the image cover art
-		top_shine.widget.state().flags.new_pass = true;
-
-		// top white gradient
-		ess.layout.add_child(
-			widget_button.id,
-			rect_gradient(
-				drawing::Color::new(1.0, 1.0, 1.0, 0.15),
-				drawing::Color::new(1.0, 1.0, 1.0, 0.0),
-				8.0,
-			),
-			rect_gradient_style(taffy::AlignSelf::BASELINE, 0.5),
-		)?;
-
-		// bottom black gradient
-		ess.layout.add_child(
-			widget_button.id,
-			rect_gradient(
-				drawing::Color::new(0.0, 0.0, 0.0, 0.0),
-				drawing::Color::new(0.0, 0.0, 0.0, 0.25),
-				8.0,
-			),
-			rect_gradient_style(taffy::AlignSelf::END, 0.5),
-		)?;
-
-		// bottom shadow
-		ess.layout.add_child(
-			widget_button.id,
-			rect_gradient(
-				drawing::Color::new(0.0, 0.0, 0.0, 0.1),
-				drawing::Color::new(0.0, 0.0, 0.0, 0.9),
-				8.0,
-			),
-			rect_gradient_style(taffy::AlignSelf::END, 0.05),
 		)?;
 
 		// LVRR: the loading spinner lives in image_parent and is cleared when the cover arrives

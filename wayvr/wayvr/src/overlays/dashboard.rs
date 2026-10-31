@@ -95,7 +95,6 @@ impl DashFrontend {
             show_welcome: tutorial,
             has_monado: app.feats.xr_backend.is_open_xr(),
             theme: app.wgui_theme.clone(),
-            color_palette: &app.session.config.color_palette,
             executor: app.executor.clone(),
         })?;
         // LVRR: no dim behind dropdowns, its square corners show past the rounded panel

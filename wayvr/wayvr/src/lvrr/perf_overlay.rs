@@ -144,7 +144,7 @@ mod tests {
         parser::ParseDocumentParams,
         theme::WguiTheme,
     };
-    use wlx_common::{locale::WayVRLangProvider, palette::load_palette};
+    use wlx_common::locale::WayVRLangProvider;
 
     use super::*;
     use crate::gui::asset::GuiAsset;
@@ -159,7 +159,6 @@ mod tests {
             &WayVRLangProvider::default(),
             &WguiFontConfig::default(),
             PathBuf::new(),
-            load_palette("Default"),
         )
         .unwrap();
         let (_layout, state) = wgui::parser::new_layout_from_assets(

@@ -54,14 +54,7 @@ pub fn parse_component_button<'a>(
 				}
 			}
 			"round" => {
-				parse_round(
-					ctx,
-					tag_name,
-					key,
-					value,
-					&mut round,
-					ctx.layout.state.theme.rounding_mult,
-				);
+				parse_round(ctx, tag_name, key, value, &mut round);
 			}
 			"color" => {
 				parse_color_opt(ctx, tag_name, key, value, &mut color);

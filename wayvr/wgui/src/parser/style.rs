@@ -11,14 +11,7 @@ use crate::{
 	widget::util::WLength,
 };
 
-pub fn parse_round(
-	ctx: &ParserContext<'_>,
-	tag_name: &str,
-	key: &str,
-	value: &str,
-	round: &mut WLength,
-	multiplier: f32,
-) {
+pub fn parse_round(ctx: &ParserContext<'_>, tag_name: &str, key: &str, value: &str, round: &mut WLength) {
 	if is_percent(value) {
 		if let Some(val) = ctx.parse_percent(tag_name, key, value) {
 			*round = WLength::Percent(val);
@@ -26,7 +19,7 @@ pub fn parse_round(
 			ctx.print_invalid_attrib(tag_name, key, value);
 		}
 	} else if let Some(val) = parse_f32(value) {
-		*round = WLength::Units((val * multiplier).max(0.));
+		*round = WLength::Units(val.max(0.));
 	} else {
 		ctx.print_invalid_attrib(tag_name, key, value);
 	}
@@ -62,7 +55,7 @@ pub fn parse_color_opt(
 
 pub fn parse_text_style(ctx: &ParserContext<'_>, attribs: &[AttribPair], tag_name: &str, prefix: &str) -> TextStyle {
 	let mut style = TextStyle {
-		color: Some(WguiColorName::OnBackground.into()),
+		color: Some(WguiColorName::Text.into()),
 		..Default::default()
 	};
 
@@ -86,7 +79,9 @@ pub fn parse_text_style(ctx: &ParserContext<'_>, attribs: &[AttribPair], tag_nam
 				"weight" => match value {
 					"light" => style.weight = Some(FontWeight::Light),
 					"normal" => style.weight = Some(FontWeight::Normal),
+					"semibold" => style.weight = Some(FontWeight::SemiBold),
 					"bold" => style.weight = Some(FontWeight::Bold),
+					"extrabold" => style.weight = Some(FontWeight::ExtraBold),
 					_ => {
 						ctx.print_invalid_attrib(tag_name, key, value);
 					}

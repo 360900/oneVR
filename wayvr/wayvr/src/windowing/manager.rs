@@ -355,12 +355,6 @@ where
                 self.sets_changed(app);
             }
             OverlayTask::GlobalChange(GlobalChange::ColorPalette) => {
-                {
-                    let mut globals = app.wgui_globals.get();
-                    globals.palette =
-                        wlx_common::palette::load_palette(&app.session.config.color_palette);
-                }
-
                 for o in self.overlays.values_mut() {
                     let _ = o
                         .config

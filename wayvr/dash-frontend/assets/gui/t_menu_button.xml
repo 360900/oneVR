@@ -1,5 +1,5 @@
 <layout version="2">
-  <macro name="home_button" round="8" hover_color="primary" hover_border_color="on_primary" />
+  <macro name="home_button" round="14" color="surface_alt" hover_color="fill_strong" />
 
   <template name="MenuButton">
     <Button
@@ -11,8 +11,8 @@
         align_items="center"
         justify_content="center"
         flex_direction="column">
-        <sprite src_builtin="${icon}" width="32" height="32" />
-        <label weight="bold" size="18" text="${text}" translation="${translation}" />
+        <sprite src_builtin="${icon}" width="28" height="28" />
+        <label weight="semibold" size="15" text="${text}" translation="${translation}" />
       </div>
     </Button>
   </template>

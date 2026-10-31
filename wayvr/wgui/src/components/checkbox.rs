@@ -8,7 +8,7 @@ use taffy::{
 };
 
 use crate::{
-	animation::{Animation, AnimationDuration, AnimationEasing},
+	assets::AssetPathRef,
 	color::{WguiColor, WguiColorName},
 	components::{
 		Component, ComponentBase, ComponentTrait, DestroyData, RefreshData,
@@ -19,12 +19,14 @@ use crate::{
 	event::{CallbackDataCommon, EventListenerCollection, EventListenerID, EventListenerKind},
 	i18n::Translation,
 	layout::{self, WidgetID, WidgetPair},
+	renderer_vk::text::custom_glyph::CustomGlyphData,
 	renderer_vk::text::{FontWeight, TextStyle},
 	sound::WguiSoundType,
 	widget::{
 		ConstructEssentials, EventResult,
 		label::{WidgetLabel, WidgetLabelParams},
 		rectangle::{WidgetRectangle, WidgetRectangleParams},
+		sprite::{WidgetSprite, WidgetSpriteParams},
 		util::WLength,
 	},
 };
@@ -46,7 +48,7 @@ impl Default for Params {
 			text: Translation::from_raw_text(""),
 			style: Default::default(),
 			color_checked: None,
-			box_size: 24.0,
+			box_size: 20.0,
 			checked: false,
 			radio_group: None,
 			value: None,
@@ -87,6 +89,7 @@ struct Data {
 	value: Option<Rc<str>>, // arbitrary value assigned to the element
 	radio_group: Option<Weak<ComponentRadioGroup>>,
 
+	id_check: WidgetID, // Sprite (check mark), null for radio boxes
 	color_checked: WguiColor,
 }
 
@@ -96,8 +99,7 @@ pub struct ComponentCheckbox {
 	state: Rc<RefCell<State>>,
 }
 
-const COLOR_UNCHECKED: WguiColor = WguiColor::Raw(drawing::Color::new(0., 0., 0., 0.));
-const COLOR_HOVERED: WguiColor = WguiColorName::Tertiary.to_wgui_color();
+const COLOR_CLEAR: WguiColor = WguiColor::Raw(drawing::Color::new(0., 0., 0., 0.));
 
 impl ComponentTrait for ComponentCheckbox {
 	fn base(&self) -> &ComponentBase {
@@ -120,13 +122,41 @@ impl ComponentTrait for ComponentCheckbox {
 	}
 }
 
+// oneDesign check / radio: hairline-strong outline when off, filled accent with a white mark when on
 fn set_box_checked(widgets: &layout::WidgetMap, data: &Data, checked: bool, hovered: bool) {
-	widgets.call(data.id_inner_box, |rect: &mut WidgetRectangle| {
-		rect.params.color = if checked {
-			if hovered { COLOR_HOVERED } else { data.color_checked }
+	let fill = if checked {
+		if hovered {
+			WguiColorName::AccentHover.into()
 		} else {
-			COLOR_UNCHECKED
+			data.color_checked
 		}
+	} else if hovered {
+		WguiColorName::Hover.into()
+	} else {
+		COLOR_CLEAR
+	};
+	let border = if checked {
+		fill
+	} else if hovered {
+		WguiColorName::Text3.into()
+	} else {
+		WguiColorName::StrokeStrong.into()
+	};
+	let mark = if checked {
+		WguiColorName::OnAccent.into()
+	} else {
+		COLOR_CLEAR
+	};
+
+	widgets.call(data.id_outer_box, |rect: &mut WidgetRectangle| {
+		rect.params.color = fill;
+		rect.params.border_color = border;
+	});
+	widgets.call(data.id_inner_box, |rect: &mut WidgetRectangle| {
+		rect.params.color = if data.radio_group.is_some() { mark } else { COLOR_CLEAR };
+	});
+	widgets.call(data.id_check, |sprite: &mut WidgetSprite| {
+		sprite.params.color = Some(mark);
 	});
 }
 
@@ -172,42 +202,6 @@ impl ComponentCheckbox {
 	}
 }
 
-fn anim_hover(anim_data: &mut crate::animation::CallbackData<'_>, pos: f32, _pressed: bool) {
-	let rect = anim_data.obj.as_any_mut().downcast_mut::<WidgetRectangle>().unwrap();
-	rect.params.border = 2.0;
-	rect.params.border_color = if pos > 0.0 {
-		COLOR_HOVERED
-	} else {
-		WguiColorName::OnBackground.into()
-	};
-}
-
-fn anim_hover_in(state: &Rc<RefCell<State>>, data: &Rc<Data>) -> Animation {
-	let down = state.borrow().down;
-	Animation::new(
-		data.id_outer_box,
-		AnimationDuration::Seconds(0.0833),
-		AnimationEasing::OutQuad,
-		Box::new(move |common, anim_data| {
-			anim_hover(anim_data, anim_data.pos, down);
-			common.alterables.mark_redraw();
-		}),
-	)
-}
-
-fn anim_hover_out(state: &Rc<RefCell<State>>, data: &Rc<Data>) -> Animation {
-	let down = state.borrow().down;
-	Animation::new(
-		data.id_outer_box,
-		AnimationDuration::Seconds(0.0833),
-		AnimationEasing::OutQuad,
-		Box::new(move |common, anim_data| {
-			anim_hover(anim_data, 1.0 - anim_data.pos, down);
-			common.alterables.mark_redraw();
-		}),
-	)
-}
-
 fn register_event_mouse_enter(
 	state: Rc<RefCell<State>>,
 	data: Rc<Data>,
@@ -218,7 +212,6 @@ fn register_event_mouse_enter(
 		EventListenerKind::MouseEnter,
 		Box::new(move |common, _event_data, (), ()| {
 			common.alterables.trigger_haptics();
-			anim_hover_in(&state, &data).submit(common.alterables);
 
 			ComponentTooltip::register_hover_in(common, &tooltip_info, data.id_container, state.clone());
 
@@ -228,14 +221,8 @@ fn register_event_mouse_enter(
 				state.checked
 			};
 
-			if checked {
-				common
-					.state
-					.widgets
-					.call(data.id_inner_box, |rect: &mut WidgetRectangle| {
-						rect.params.color = COLOR_HOVERED;
-					});
-			}
+			set_box_checked(&common.state.widgets, &data, checked, true);
+			common.alterables.mark_redraw();
 
 			Ok(EventResult::Pass)
 		}),
@@ -251,7 +238,6 @@ fn register_event_mouse_leave(
 		EventListenerKind::MouseLeave,
 		Box::new(move |common, _event_data, (), ()| {
 			common.alterables.trigger_haptics();
-			anim_hover_out(&state, &data).submit(common.alterables);
 
 			let checked = {
 				let mut state = state.borrow_mut();
@@ -260,14 +246,8 @@ fn register_event_mouse_leave(
 				state.checked
 			};
 
-			if checked {
-				common
-					.state
-					.widgets
-					.call(data.id_inner_box, |rect: &mut WidgetRectangle| {
-						rect.params.color = data.color_checked;
-					});
-			}
+			set_box_checked(&common.state.widgets, &data, checked, false);
+			common.alterables.mark_redraw();
 
 			Ok(EventResult::Pass)
 		}),
@@ -285,28 +265,11 @@ fn register_event_mouse_cancel(state: Rc<RefCell<State>>, listeners: &mut EventL
 	)
 }
 
-fn register_event_mouse_press(
-	state: Rc<RefCell<State>>,
-	data: Rc<Data>,
-	listeners: &mut EventListenerCollection,
-) -> EventListenerID {
+fn register_event_mouse_press(state: Rc<RefCell<State>>, listeners: &mut EventListenerCollection) -> EventListenerID {
 	listeners.register(
 		EventListenerKind::MousePress,
 		Box::new(move |common, _event_data, (), ()| {
 			let mut state = state.borrow_mut();
-			let pressed_hovered = state.hovered;
-
-			common
-				.state
-				.widgets
-				.call(data.id_outer_box, |rect: &mut WidgetRectangle| {
-					rect.params.border = 2.0;
-					rect.params.border_color = if pressed_hovered {
-						COLOR_HOVERED
-					} else {
-						WguiColorName::OnBackground.into()
-					};
-				});
 
 			common.alterables.trigger_haptics();
 			common.alterables.mark_redraw();
@@ -331,20 +294,7 @@ fn register_event_mouse_release(
 		EventListenerKind::MouseRelease,
 		Box::new(move |common, _event_data, (), ()| {
 			let mut state = state.borrow_mut();
-			let released_hovered = state.hovered;
 			let was_down = state.down;
-
-			common
-				.state
-				.widgets
-				.call(data.id_outer_box, |rect: &mut WidgetRectangle| {
-					rect.params.border = 2.0;
-					rect.params.border_color = if released_hovered {
-						COLOR_HOVERED
-					} else {
-						WguiColorName::OnBackground.into()
-					};
-				});
 
 			common.alterables.trigger_haptics();
 			common.alterables.mark_redraw();
@@ -409,21 +359,22 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 		bottom: length(-4.0_f32),
 	};
 	//style.align_self = Some(taffy::AlignSelf::Start); // do not stretch self to the parent
-	style.gap = length(4.0_f32);
+	style.gap = length(8.0_f32);
 
-	let (round_5, round_8) = if params.radio_group.is_some() {
-		(WLength::Percent(1.0), WLength::Percent(1.0))
+	let is_radio = params.radio_group.is_some();
+	let round_box = if is_radio {
+		WLength::Percent(1.0)
 	} else {
-		(WLength::Units(5.0), WLength::Units(8.0))
+		WLength::Units(6.0)
 	};
 
-	let color_checked = params.color_checked.unwrap_or_else(|| WguiColorName::Primary.into());
+	let color_checked = params.color_checked.unwrap_or_else(|| WguiColorName::Accent.into());
 
 	let (root, _) = ess.layout.add_child(
 		ess.parent,
 		WidgetRectangle::create(WidgetRectangleParams {
-			color: WguiColor::from(WguiColorName::OnPrimary).with_alpha(0.0),
-			round: round_5,
+			color: COLOR_CLEAR,
+			round: WLength::Units(6.0),
 			..Default::default()
 		}),
 		style,
@@ -440,14 +391,14 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 		id_container,
 		WidgetRectangle::create(WidgetRectangleParams {
 			border: 2.0,
-			border_color: WguiColorName::OnBackground.into(),
-			round: round_8,
-			color: WguiColor::from(WguiColorName::OnPrimary).with_alpha(0.0),
+			border_color: WguiColorName::StrokeStrong.into(),
+			round: round_box,
+			color: COLOR_CLEAR,
 			..Default::default()
 		}),
 		taffy::Style {
 			size: box_size,
-			padding: taffy::Rect::length(4.0_f32),
+			padding: taffy::Rect::length(if is_radio { params.box_size * 0.3 } else { 2.0 }),
 			min_size: box_size,
 			max_size: box_size,
 			..Default::default()
@@ -457,8 +408,8 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 	let (inner_box, _) = ess.layout.add_child(
 		outer_box.id,
 		WidgetRectangle::create(WidgetRectangleParams {
-			round: round_5,
-			color: if params.checked { color_checked } else { COLOR_UNCHECKED },
+			round: WLength::Percent(1.0),
+			color: COLOR_CLEAR,
 			..Default::default()
 		}),
 		taffy::Style {
@@ -470,13 +421,35 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 		},
 	)?;
 
+	let id_check = if is_radio {
+		WidgetID::default()
+	} else {
+		let (check, _) = ess.layout.add_child(
+			outer_box.id,
+			WidgetSprite::create(WidgetSpriteParams {
+				glyph_data: Some(CustomGlyphData::from_assets(
+					&ess.layout.state.globals,
+					AssetPathRef::WguiInternal("wgui/check.svg"),
+				)?),
+				color: Some(COLOR_CLEAR),
+				..Default::default()
+			}),
+			taffy::Style {
+				position: taffy::Position::Absolute,
+				inset: taffy::Rect::length(2.0_f32),
+				..Default::default()
+			},
+		)?;
+		check.id
+	};
+
 	let widget_label = WidgetLabel::create(
 		&mut ess.layout.state,
 		WidgetLabelParams {
 			content: params.text,
 			style: TextStyle {
-				weight: Some(FontWeight::Bold),
-				color: Some(WguiColorName::OnBackground.into()),
+				weight: Some(FontWeight::Normal),
+				color: Some(WguiColorName::Text.into()),
 				..Default::default()
 			},
 			..Default::default()
@@ -491,8 +464,11 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 		id_label: label.id,
 		value: params.value,
 		radio_group: params.radio_group.as_ref().map(Rc::downgrade),
+		id_check,
 		color_checked,
 	});
+
+	set_box_checked(&ess.layout.state.widgets, &data, params.checked, false);
 
 	let state = Rc::new(RefCell::new(State {
 		checked: params.checked,
@@ -511,7 +487,7 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 				register_event_mouse_enter(state.clone(), data.clone(), listeners, params.tooltip),
 				register_event_mouse_leave(state.clone(), data.clone(), listeners),
 				register_event_mouse_cancel(state.clone(), listeners),
-				register_event_mouse_press(state.clone(), data.clone(), listeners),
+				register_event_mouse_press(state.clone(), listeners),
 				register_event_mouse_release(data.clone(), state.clone(), listeners),
 			]
 		},

@@ -138,8 +138,6 @@ pub fn load_general_config() -> GeneralConfig {
 #[derive(Serialize)]
 pub struct AutoSettings {
     pub ui_animation_speed: f32,
-    pub ui_round_multiplier: f32,
-    pub ui_gradient_intensity: f32,
     pub click_freeze_time_ms: i32,
     pub invert_scroll_direction_x: bool,
     pub invert_scroll_direction_y: bool,
@@ -195,7 +193,6 @@ pub struct AutoSettings {
     pub whisper_model: Arc<str>,
     pub whisper_gpu: u32,
     pub default_overlay_scale: f32,
-    pub color_palette: Arc<str>,
     pub snap_angle_deg: f32,
     pub wvr_mouse_acceleration: bool,
     pub wvr_mouse_speed: f32,
@@ -215,8 +212,6 @@ fn get_settings_path() -> PathBuf {
 pub fn save_settings(config: &GeneralConfig) -> anyhow::Result<()> {
     let conf = AutoSettings {
         ui_animation_speed: config.ui_animation_speed,
-        ui_round_multiplier: config.ui_round_multiplier,
-        ui_gradient_intensity: config.ui_gradient_intensity,
         click_freeze_time_ms: config.click_freeze_time_ms,
         invert_scroll_direction_x: config.invert_scroll_direction_x,
         invert_scroll_direction_y: config.invert_scroll_direction_y,
@@ -272,7 +267,6 @@ pub fn save_settings(config: &GeneralConfig) -> anyhow::Result<()> {
         whisper_model: config.whisper_model.clone(),
         whisper_gpu: config.whisper_gpu,
         default_overlay_scale: config.default_overlay_scale,
-        color_palette: config.color_palette.clone(),
         snap_angle_deg: config.snap_angle_deg,
         wvr_mouse_acceleration: config.wvr_mouse_acceleration,
         wvr_mouse_speed: config.wvr_mouse_speed,

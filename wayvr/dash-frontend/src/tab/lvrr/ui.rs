@@ -152,11 +152,11 @@ impl<'a> Ui<'a> {
 	}
 
 	pub fn text(&mut self, parent: WidgetID, text: Text) -> anyhow::Result<()> {
-		self.label("Text", parent, text, 14, "on_background")
+		self.label("Text", parent, text, 14, "text")
 	}
 
 	pub fn muted(&mut self, parent: WidgetID, text: Text) -> anyhow::Result<()> {
-		self.label("Text", parent, text, 12, "secondary")
+		self.label("Text", parent, text, 12, "text2")
 	}
 
 	/// A section heading with an underline rule, to separate groups of rows
@@ -167,7 +167,7 @@ impl<'a> Ui<'a> {
 	}
 
 	pub fn bold(&mut self, parent: WidgetID, text: Text, size: u32) -> anyhow::Result<()> {
-		self.label("Bold", parent, text, size, "on_background")
+		self.label("Bold", parent, text, size, "text")
 	}
 
 	/// An icon from a file, such as an application's icon, untinted. The caller keeps the glyph, so
@@ -188,29 +188,29 @@ impl<'a> Ui<'a> {
 		Ok(())
 	}
 
-	/// A small colored tag, color is a theme color such as `primary` or `danger`
-	pub fn badge(&mut self, parent: WidgetID, translation: &str, color: &str) -> anyhow::Result<()> {
+	/// A small colored tag, `tone` is `accent`, `success`, `warning` or `danger`
+	pub fn badge(&mut self, parent: WidgetID, translation: &str, tone: &str) -> anyhow::Result<()> {
 		let mut params = TemplateParams::new();
 		params.insert("translation", translation);
-		params.insert("color", color);
+		insert_tone(&mut params, tone);
 		self.instantiate("Badge", parent, params)
 	}
 
 	/// A [Self::badge] with an icon before its text, so a short text is enough. The fill is
 	/// opaque, so it stays readable on a game cover.
-	pub fn icon_badge(&mut self, parent: WidgetID, translation: &str, icon: &str, color: &str) -> anyhow::Result<()> {
+	pub fn icon_badge(&mut self, parent: WidgetID, translation: &str, icon: &str, tone: &str) -> anyhow::Result<()> {
 		let mut params = TemplateParams::new();
 		params.insert("translation", translation);
 		params.insert("icon", icon);
-		params.insert("color", color);
+		insert_tone(&mut params, tone);
 		self.instantiate("IconBadge", parent, params)
 	}
 
-	/// A full width notice, returns the row to put buttons in
-	pub fn banner(&mut self, parent: WidgetID, translation: &str, color: &str) -> anyhow::Result<WidgetID> {
+	/// A full width notice, returns the row to put buttons in. `tone` as in [Self::badge].
+	pub fn banner(&mut self, parent: WidgetID, translation: &str, tone: &str) -> anyhow::Result<WidgetID> {
 		self.container("Banner", parent, |p| {
 			p.insert("translation", translation);
-			p.insert("color", color);
+			insert_tone(p, tone);
 		})
 	}
 
@@ -228,7 +228,7 @@ impl<'a> Ui<'a> {
 		if link == Link::Foreign {
 			self.banner(parent, "LVRR.FOREIGN", "danger")?;
 		} else if starting {
-			self.banner(parent, "LVRR.DESKTOP.STARTING", "primary")?;
+			self.banner(parent, "LVRR.DESKTOP.STARTING", "accent")?;
 		} else if desktop {
 			let banner = self.banner(parent, "LVRR.DESKTOP.NOT_RUNNING", "danger")?;
 			self.button(
@@ -246,7 +246,7 @@ impl<'a> Ui<'a> {
 	/// A notice that changes wait for a session restart, with a button that restarts it. Only while
 	/// a session runs: without one the server ignores RestartSession.
 	pub fn restart_banner(&mut self, parent: WidgetID, on_restart: impl Fn() + 'static) -> anyhow::Result<()> {
-		let banner = self.banner(parent, "LVRR.RESTART_REQUIRED", "tertiary")?;
+		let banner = self.banner(parent, "LVRR.RESTART_REQUIRED", "accent")?;
 		self.button(
 			banner,
 			Text::Key("LVRR.RESTART_SESSION"),
@@ -327,7 +327,7 @@ impl<'a> Ui<'a> {
 		icon: &str,
 		on_click: impl Fn() + 'static,
 	) -> anyhow::Result<Rc<ComponentButton>> {
-		self.button_colored(parent, text, icon, "background_contrast", on_click)
+		self.button_colored(parent, text, icon, "fill", on_click)
 	}
 
 	pub fn danger_button(
@@ -529,4 +529,17 @@ pub fn set_label_color(layout: &mut Layout, id: WidgetID, color: WguiColorName) 
 	if let Ok(mut label) = common.state.widgets.cast_as::<WidgetLabel>(id) {
 		label.set_color(&mut common, color.into(), true);
 	}
+}
+
+/// The `bg` and `fg` colors of a badge or banner in `tone`, a soft tint with a strong text
+fn insert_tone(params: &mut TemplateParams, tone: &str) {
+	let (bg, fg) = match tone {
+		"accent" => ("accent_soft", "accent_text"),
+		"success" => ("success_soft", "success"),
+		"warning" => ("warning_soft", "warning"),
+		"danger" => ("danger_soft", "danger"),
+		_ => ("fill", "text"),
+	};
+	params.insert("bg", bg);
+	params.insert("fg", fg);
 }

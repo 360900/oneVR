@@ -1,5 +1,5 @@
 use crate::{
-	drawing::GradientMode,
+	drawing::{self, GradientMode},
 	layout::WidgetID,
 	parser::{
 		AttribPair, ParseChildResult, ParserContext, ParserFile, parse_children, parse_widget_universal,
@@ -41,14 +41,7 @@ pub fn parse_widget_rectangle<'a>(
 				}
 			}
 			"round" => {
-				parse_round(
-					ctx,
-					tag_name,
-					key,
-					value,
-					&mut params.round,
-					ctx.layout.state.theme.rounding_mult,
-				);
+				parse_round(ctx, tag_name, key, value, &mut params.round);
 			}
 			"border" => {
 				params.border = value.parse().unwrap_or_else(|_| {
@@ -58,6 +51,15 @@ pub fn parse_widget_rectangle<'a>(
 			}
 			"border_color" => {
 				parse_color(ctx, tag_name, key, value, &mut params.border_color);
+			}
+			"shadow" => {
+				params.shadow = match value.parse::<u8>() {
+					Ok(level) if (level as usize) < drawing::ELEVATIONS.len() => level,
+					_ => {
+						ctx.print_invalid_attrib(tag_name, key, value);
+						0
+					}
+				};
 			}
 			_ => {}
 		}

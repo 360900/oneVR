@@ -529,7 +529,7 @@ impl SubtabDebugTimings {
 			return Ok(());
 		}
 
-		let col_green = Color::new(0.0, 1.0, 0.0, 1.0);
+		let col_green = Color::new(0.055, 0.549, 0.255, 1.0);
 
 		for frame in frames {
 			//log::info!("{:?}", frame);

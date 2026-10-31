@@ -323,6 +323,69 @@ pub enum GradientMode {
 	Horizontal,
 	Vertical,
 	Radial,
+	/// Soft box shadow: `border` holds the blur extent, `round_units` the radius of the casting box
+	Shadow,
+}
+
+/// CSS-like `box-shadow: 0 {y} {blur} {spread} rgba(shadow, {alpha})`
+#[derive(Debug, Clone, Copy)]
+pub struct BoxShadow {
+	pub y: f32,
+	pub blur: f32,
+	pub spread: f32,
+	pub alpha: f32,
+}
+
+const fn bs(y: f32, blur: f32, spread: f32, alpha: f32) -> BoxShadow {
+	BoxShadow { y, blur, spread, alpha }
+}
+
+/// oneDesign elevations: 1 = cards and controls, 2 = popovers and menus, 3 = dialogs and windows
+pub const ELEVATIONS: [&[BoxShadow]; 4] = [
+	&[],
+	&[bs(1.0, 2.0, 0.0, 0.05)],
+	&[bs(1.0, 2.0, 0.0, 0.06), bs(10.0, 28.0, -6.0, 0.18)],
+	&[bs(2.0, 6.0, 0.0, 0.07), bs(28.0, 70.0, -18.0, 0.36)],
+];
+
+pub fn push_elevation(
+	primitives: &mut Vec<RenderPrimitive>,
+	boundary: Boundary,
+	transform: Mat4,
+	round_units: f32,
+	elevation: u8,
+	color: Color,
+) {
+	let Some(shadows) = ELEVATIONS.get(elevation as usize) else {
+		return;
+	};
+
+	for shadow in *shadows {
+		let blur = shadow.blur.clamp(0.0, 255.0);
+		let grow = shadow.spread + blur;
+		let size = boundary.size + Vec2::splat(grow * 2.0);
+		if size.x <= 0.0 || size.y <= 0.0 {
+			continue;
+		}
+
+		primitives.push(RenderPrimitive::Rectangle(
+			PrimitiveExtent {
+				boundary: Boundary {
+					pos: boundary.pos + Vec2::new(-grow, shadow.y - grow),
+					size,
+				},
+				transform,
+			},
+			Rectangle {
+				color: color.with_alpha(color.a * shadow.alpha),
+				color2: Color::default(),
+				gradient: GradientMode::Shadow,
+				border: blur,
+				border_color: Color::default(),
+				round_units: (round_units + shadow.spread).clamp(0.0, 255.0) as u8,
+			},
+		));
+	}
 }
 
 #[derive(Default, Clone, Copy)]

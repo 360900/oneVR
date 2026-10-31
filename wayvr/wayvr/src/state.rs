@@ -174,8 +174,6 @@ impl AppState {
 
         let mut theme = WguiTheme {
             animation_mult: 1. / session.config.ui_animation_speed,
-            rounding_mult: session.config.ui_round_multiplier,
-            gradient_intensity: session.config.ui_gradient_intensity,
         };
 
         let dbus = DbusConnector::default();

@@ -4,13 +4,13 @@
   <!-- id, translation -->
   <template name="Stat">
     <div flex_direction="row" justify_content="space_between" gap="24" width="100%">
-      <label translation="${translation}" size="18" color="secondary" />
-      <label id="${id}" text="-" size="18" weight="bold" color="on_background" />
+      <label translation="${translation}" size="18" color="text2" />
+      <label id="${id}" text="-" size="18" weight="semibold" color="text" />
     </div>
   </template>
 
   <elements>
-    <rectangle padding="12" flex_direction="column" gap="4" min_width="300" color="background(opacity-0.75)" border_color="outline" border="2" round="8">
+    <rectangle padding="12" flex_direction="column" gap="4" min_width="300" color="glass" border_color="stroke" border="1" round="14">
       <Stat id="refresh_rate" translation="LVRR.PERF.REFRESH_RATE" />
       <Stat id="game_fps" translation="LVRR.PERF.GAME_FPS" />
       <Stat id="game_missed" translation="LVRR.PERF.GAME_MISSED" />

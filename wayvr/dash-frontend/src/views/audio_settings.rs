@@ -114,7 +114,7 @@ fn mount_multi_selector(params: MultiSelectorParams) -> anyhow::Result<()> {
 	for cell in params.cells {
 		let highlighted = cell.key == params.def_cell;
 		let color = if highlighted {
-			Some(WguiColor::from(WguiColorName::Primary))
+			Some(WguiColor::from(WguiColorName::Accent))
 		} else {
 			None
 		};
@@ -667,9 +667,9 @@ impl View {
 
 		let mut perform = |btn_num: u8, btn: &Rc<ComponentButton>| {
 			let color = if num == btn_num {
-				WguiColorName::Primary
+				WguiColorName::Accent
 			} else {
-				WguiColorName::BackgroundVariant
+				WguiColorName::Fill
 			};
 			btn.set_color(&mut com, color.into());
 		};
@@ -805,8 +805,8 @@ impl View {
 		if params.checked {
 			let rect = data.fetch_widget(&params.layout.state, "rect")?;
 			let mut rect = rect.widget.cast::<WidgetRectangle>()?;
-			rect.set_color(&mut params.layout.common(), WguiColorName::BackgroundVariant.into());
-			rect.set_border_color(&mut params.layout.common(), WguiColorName::Primary.into());
+			rect.set_color(&mut params.layout.common(), WguiColorName::Fill.into());
+			rect.set_border_color(&mut params.layout.common(), WguiColorName::Accent.into());
 		}
 
 		let mut common = params.layout.common();

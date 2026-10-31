@@ -110,14 +110,7 @@ impl<T> TabWelcome<T> {
 		for i in 0..PAGE_COUNT {
 			let mut params = TemplateParams::new();
 			let is_selected = i == self.current_page;
-			params.insert(
-				"COLOR",
-				if is_selected {
-					"primary"
-				} else {
-					"on_background(opacity-0.25)"
-				},
-			);
+			params.insert("COLOR", if is_selected { "accent" } else { "fill_strong" });
 
 			self
 				.state

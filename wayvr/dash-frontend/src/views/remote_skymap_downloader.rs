@@ -86,7 +86,7 @@ fn mount_resolution_button(
 	let button = data.fetch_component_as::<ComponentButton>("button")?;
 
 	if already_downloaded {
-		button.set_color(&mut layout.common(), WguiColorName::Tertiary.into()); // green
+		button.set_color(&mut layout.common(), WguiColorName::Success.into());
 	}
 	tasks.handle_button(&button, Task::ResolutionClicked(res));
 	Ok(())

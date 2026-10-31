@@ -369,7 +369,7 @@ fn new_toast(toast: BakedToast, app: &mut AppState) -> Option<OverlayWindowConfi
         .widgets
         .get_as::<WidgetRectangle>(id_rect)?
         .get_border_color();
-    let paused_border_color = WguiColorName::Tertiary.to_wgui_color();
+    let paused_border_color = WguiColorName::Accent.to_wgui_color();
     let mut last_progress = 1.0;
     let mut paused_border_mix = 0.0f32;
 

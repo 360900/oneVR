@@ -4,7 +4,7 @@ use chrono::Timelike;
 use glam::Vec2;
 use strum::EnumCount;
 use wgui::{
-	assets::{AssetPathRef, AssetProvider},
+	assets::AssetPathRef,
 	components::{ComponentTrait, button::ComponentButton},
 	event::{CallbackDataCommon, StyleSetRequest},
 	font_config::WguiFontConfig,
@@ -27,7 +27,6 @@ use wlx_common::{
 	audio,
 	dash_interface::{BoxDashInterface, ConfigChangeKind, DashBackendTask, DashPlayspaceTask},
 	locale::WayVRLangProvider,
-	palette::load_palette,
 	timestep::{self, Timestep},
 };
 
@@ -52,7 +51,7 @@ pub use lvrr_ext::lvrr_poll_start;
 
 pub struct FrontendWidgets {
 	id_label_time: WidgetID,
-	id_rect_content: WidgetID,
+	id_rect_window: WidgetID,
 	id_sprite_titlebar_icon: WidgetID,
 	id_label_titlebar_title: WidgetID,
 }
@@ -108,7 +107,6 @@ pub struct InitParams<'a, T> {
 	pub show_welcome: bool,
 	pub has_monado: bool,
 	pub theme: Rc<WguiTheme>,
-	pub color_palette: &'a str,
 	pub executor: AsyncExecutor,
 }
 
@@ -145,25 +143,13 @@ pub enum FrontendTask {
 
 impl<T: 'static> Frontend<T> {
 	pub fn new(params: InitParams<T>) -> anyhow::Result<Frontend<T>> {
-		let mut assets = Box::new(assets::Asset {});
-
-		let font_binary_bold = assets.load_from_path_gzip("Quicksand-Bold.ttf.gz")?;
-		let font_binary_regular = assets.load_from_path_gzip("Quicksand-Regular.ttf.gz")?;
-		let font_binary_light = assets.load_from_path_gzip("Quicksand-Light.ttf.gz")?;
-
-		let palette = load_palette(params.color_palette);
+		let assets = Box::new(assets::Asset {});
 
 		let globals = WguiGlobals::new(
 			assets,
 			params.lang_provider,
-			&WguiFontConfig {
-				binaries: vec![&font_binary_regular, &font_binary_bold, &font_binary_light],
-				family_name_sans_serif: "Quicksand",
-				family_name_serif: "Quicksand",
-				family_name_monospace: "",
-			},
+			&WguiFontConfig::default(),
 			PathBuf::new(), //FIXME: pass from somewhere else
-			palette,
 		)?;
 
 		let (layout, state) = wgui::parser::new_layout_from_assets(
@@ -195,7 +181,7 @@ impl<T: 'static> Frontend<T> {
 		tasks.push(FrontendTask::SetTab(init_tab));
 
 		let id_label_time = state.get_widget_id("label_time")?;
-		let id_rect_content = state.get_widget_id("rect_content")?;
+		let id_rect_window = state.get_widget_id("rect_window")?;
 		let id_sprite_titlebar_icon = state.get_widget_id("sprite_titlebar_icon")?;
 		let id_label_titlebar_title = state.get_widget_id("label_titlebar_title")?;
 
@@ -211,7 +197,7 @@ impl<T: 'static> Frontend<T> {
 			ticks: 0,
 			widgets: FrontendWidgets {
 				id_label_time,
-				id_rect_content,
+				id_rect_window,
 				id_sprite_titlebar_icon,
 				id_label_titlebar_title,
 			},
@@ -422,19 +408,19 @@ impl<T: 'static> Frontend<T> {
 			.layout
 			.state
 			.widgets
-			.get_as::<WidgetRectangle>(self.widgets.id_rect_content)
+			.get_as::<WidgetRectangle>(self.widgets.id_rect_window)
 		else {
 			anyhow::bail!("");
 		};
 
-		let (alpha1, alpha2) = if self.interface.general_config(data).opaque_background {
-			(1.0, 1.0)
+		// LVRR: only the window around the content card shows through
+		let alpha = if self.interface.general_config(data).opaque_background {
+			1.0
 		} else {
-			(0.8666, 0.9333)
+			0.9
 		};
 
-		rect.params.color = rect.params.color.with_alpha(alpha1);
-		rect.params.color2 = rect.params.color2.with_alpha(alpha2);
+		rect.params.color = rect.params.color.with_alpha(alpha);
 
 		Ok(())
 	}

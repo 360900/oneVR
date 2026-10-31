@@ -32,12 +32,11 @@
         width="fit_content"
         height="24"
         text=" "
-        border_color="tertiary(transparent)"
-        hover_border_color="tertiary"
-        color="background_variant(transparent)"
-        hover_color="tertiary(transparent)"/>
+        round="100%"
+        color="hover(transparent)"
+        hover_color="hover"/>
 
-      <label id="label_hello" margin_top="24" size="32" weight="bold" color="on_background" />
+      <label id="label_hello" margin_top="24" size="28" weight="extrabold" color="text" />
 
       <!-- main button list -->
       <div flex_direction="row" gap="8" margin_top="32">

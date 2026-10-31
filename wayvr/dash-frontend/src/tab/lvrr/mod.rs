@@ -133,7 +133,6 @@ mod tests {
 			has_monado: true,
 			lang_provider,
 			theme: Rc::new(WguiTheme::default()),
-			color_palette: "Default",
 			executor: wlx_common::async_executor::create_local(),
 		})
 		.unwrap()

@@ -70,7 +70,7 @@ fn get_supporter_anim(
 
 			btn.set_text_color(
 				common,
-				WguiColor::Named(WguiNamedColor::with_alpha(WguiColorName::OnBackgroundVariant, opacity)),
+				WguiColor::Named(WguiNamedColor::with_alpha(WguiColorName::Text2, opacity)),
 			);
 
 			// first iter

@@ -813,9 +813,9 @@ impl<T: 'static> TabLvrrLibrary<T> {
 			ui.row_end(parent)?
 		};
 		if starting {
-			ui.icon_badge(container, "LVRR.LIBRARY.STARTING", "@/dashboard/play.svg", "primary")?;
+			ui.icon_badge(container, "LVRR.LIBRARY.STARTING", "@/dashboard/play.svg", "accent")?;
 		} else if let Some(key) = controllers_badge_key(controllers) {
-			ui.icon_badge(container, key, "@/dashboard/controller.svg", "secondary")?;
+			ui.icon_badge(container, key, "@/dashboard/controller.svg", "warning")?;
 		}
 		if cells.is_empty() {
 			return Ok(());

@@ -14,12 +14,12 @@
 
   <template name="SliderSetting">
     <Slider id="${id}" width="200" height="24" min_value="${min}" max_value="${max}" step="${step}" value="${value}" tooltip="${tooltip}" />
-    <label text="${text}" weight="bold" translation="${translation}" />
+    <label text="${text}" translation="${translation}" />
   </template>
 
   <template name="RangeSetting">
     <Slider id="${id}" width="200" height="24" min_value="${min}" max_value="${max}" step="${step}" value="${value}" value2="${value2}" tooltip="${tooltip}" />
-    <label text="${text}" weight="bold" translation="${translation}" />
+    <label text="${text}" translation="${translation}" />
   </template>
 
   <template name="SelectSetting">
@@ -34,9 +34,9 @@
   <!-- title, sprite, color, tooltip_str -->
   <template name="DiagnosticsRow">
     <div align_items="center">
-      <label text="${title}" weight="bold" min_width="140"/>
-      <Button tooltip_str="${tooltip_str}" color="background(transparent)">
-        <sprite width="24" height="24" color="${color}" src_builtin="${sprite}" parent_color="ignore"/>
+      <label text="${title}" weight="semibold" min_width="140"/>
+      <Button tooltip_str="${tooltip_str}" color="hover(transparent)" hover_color="hover">
+        <sprite width="20" height="20" color="${color}" src_builtin="${sprite}" parent_color="ignore"/>
       </Button>
     </div>
   </template>
@@ -45,7 +45,7 @@
   <template name="DiagnosticsDrmCard">
     <GroupBox>
       <div gap="8">
-        <sprite width="24" height="24" src_builtin="@/dashboard/gpu.svg"/>
+        <sprite width="20" height="20" color="text2" src_builtin="@/dashboard/gpu.svg"/>
         <label text="${name}"/>
       </div>
       <label text="${info}"/>
@@ -54,38 +54,38 @@
 
   <template name="StatRow">
     <div flex_direction="row" justify_content="space_between" align_items="center" gap="12" width="100%">
-      <label weight="bold" translation="${translation}" />
-      <label id="${id}" weight="bold" />
+      <label color="text2" translation="${translation}" />
+      <label id="${id}" weight="semibold" />
     </div>
   </template>
 
   <template name="ButtonText">
-    <Button id="${id}" height="32" tooltip="${translation}_HELP" padding="4" gap="8">
-      <sprite src_builtin="${icon}" height="24" width="24" />
-      <label align="left" translation="${translation}" weight="bold" min_width="200" />
+    <Button id="${id}" height="36" tooltip="${translation}_HELP" padding_left="12" padding_right="14" gap="8">
+      <sprite src_builtin="${icon}" height="16" width="16" />
+      <label align="left" translation="${translation}" weight="semibold" min_width="200" />
     </Button>
   </template>
 
   <template name="DangerButton">
-    <Button id="${id}" color="danger" border_color="danger(rgb-mult-0.5)" height="32" tooltip="${translation}_HELP" padding="4" gap="8">
-      <sprite src_builtin="${icon}" height="24" width="24" />
-      <label align="left" translation="${translation}" weight="bold" min_width="200" />
+    <Button id="${id}" color="danger" height="36" tooltip="${translation}_HELP" padding_left="12" padding_right="14" gap="8">
+      <sprite src_builtin="${icon}" height="16" width="16" />
+      <label align="left" translation="${translation}" weight="semibold" min_width="200" />
     </Button>
   </template>
 
   <template name="AutostartApp">
     <div id="${id}_root" flex_direction="row">
-      <Button id="${id}" color="#AA3333" height="24" padding="4" margin_top="-2" margin_bottom="-2"
-        hover_color="danger" hover_border_color="danger(rgb-mult-0.5)" >
-        <sprite src_builtin="@/dashboard/close.svg" height="20" width="20" />
+      <Button id="${id}" color="danger_soft" height="28" width="28" round="100%" margin_top="-2" margin_bottom="-2"
+        hover_color="danger" align_items="center" justify_content="center">
+        <sprite src_builtin="@/dashboard/close.svg" height="16" width="16" />
       </Button>
       <div padding_left="8">
-        <label align="left" text="${text}" weight="bold" overflow="hidden" />
+        <label align="left" text="${text}" overflow="hidden" />
       </div>
     </div>
   </template>
 
-  <macro name="tab_style" color="background" />
+  <macro name="tab_style" round="10" />
 
   <elements>
     <div gap="4">

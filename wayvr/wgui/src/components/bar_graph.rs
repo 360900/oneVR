@@ -7,8 +7,9 @@ use taffy::{
 };
 
 use crate::{
+	color::WguiColorName,
 	components::{Component, ComponentBase, ComponentTrait, RefreshData},
-	drawing::{self, GradientMode, PrimitiveExtent, RenderPrimitive},
+	drawing::{self, PrimitiveExtent, RenderPrimitive},
 	event::CallbackDataCommon,
 	i18n::Translation,
 	layout::{WidgetID, WidgetPair},
@@ -133,11 +134,8 @@ pub fn construct(
 	let (rect, _) = ess.layout.add_child(
 		root.id,
 		WidgetRectangle::create(WidgetRectangleParams {
-			border: 2.0,
-			border_color: drawing::Color::new(1.0, 1.0, 1.0, 0.5).into(),
-			round: WLength::Units(3.0),
-			gradient: GradientMode::Vertical,
-			color: drawing::Color::new(0.0, 0.0, 0.0, 0.6).into(),
+			round: WLength::Units(6.0),
+			color: WguiColorName::Fill.into(),
 			..Default::default()
 		}),
 		taffy::Style {

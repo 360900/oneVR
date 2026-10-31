@@ -4,12 +4,12 @@
   <template name="TierCell">
     <div gap="8" align_items="center">
       <sprite width="28" height="28" src_builtin="@/dashboard/medal.svg" color="${color}"/>
-      <label text="${text}" weight="bold" size="18" color="${color}" shadow="shadow"/>
+      <label text="${text}" weight="bold" size="18" color="${color}"/>
     </div>
   </template>
 
   <template name="SupporterCell">
-    <rectangle padding="8" color="background(transparent)" round="8" border="2" border_color="outline" gap="8" align_items="center" flex_direction="row" >
+    <rectangle padding="8" color="surface" round="10" border="1" border_color="stroke" gap="8" align_items="center" flex_direction="row" >
       <sprite width="24" height="24" src_builtin="@/dashboard/person.svg"/>
       <label text="${username}" weight="bold"/>
     </rectangle>
@@ -19,7 +19,7 @@
   <template name="Avatar">
     <div flex_direction="column" gap="12" align_items="center">
       <image src_builtin="${icon}" width="64" height="64" round="100%" position="relative">
-        <rectangle position="absolute" margin_left="-2" margin_top="-2" width="68" height="68" color="highlight" round="100%"/>
+        <rectangle position="absolute" margin_left="-2" margin_top="-2" width="68" height="68" color="stroke" round="100%"/>
       </image>
       <label size="14" text="${nickname}"/>
     </div>
@@ -32,9 +32,9 @@
   <elements>
     <div flex_direction="row" width="100%" min_height="100%" gap="16">
       <div macro="half">
-          <sprite color="#FFAAAA" src_builtin="@/dashboard/donate.svg" min_width="48" min_height="48"/>
+          <sprite color="danger" src_builtin="@/dashboard/donate.svg" min_width="48" min_height="48"/>
         <div gap="16" align_items="center" width="100%">
-          <label align="justified" wrap="1" size="15" translation="DONATE.DESCRIPTION" color="on_background"/>
+          <label align="justified" wrap="1" size="15" translation="DONATE.DESCRIPTION" color="text"/>
         </div>
 
         <div flex_direction="column" gap="8" align_items="center">
@@ -44,7 +44,7 @@
           <label text="opencollective.com/wayvr-org"/>
         </div>
 
-        <label weight="bold" size="20" translation="DONATE.THANK_YOU_WAYVR" color="on_background"/>
+        <label weight="bold" size="20" translation="DONATE.THANK_YOU_WAYVR" color="text"/>
 
         <div gap="32">
           <Avatar icon="@/dashboard/avatars/galister.png" nickname="galister"/>
@@ -52,7 +52,7 @@
         </div>
       </div>
       <!-- vertical separator -->
-      <rectangle height="100%" min_width="2" color="outline"/>
+      <rectangle height="100%" min_width="1" color="stroke"/>
       <div macro="half">
         <div gap="8" align_items="center">
           <label translation="DONATE.CURRENT_SUPPORTERS" size="18" weight="bold" />

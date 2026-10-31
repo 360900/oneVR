@@ -18,7 +18,6 @@ impl TestbedDashboard {
 		let lang_provider = WayVRLangProvider::default();
 		let locale = Locale::from_env(&lang_provider);
 		let interface = DashInterfaceEmulated::new(gfx, &locale);
-		let palette_name = std::env::var("PALETTE").unwrap_or_else(|_| "Default".to_string());
 		let executor = wlx_common::async_executor::create_local();
 
 		let mut frontend = frontend::Frontend::new(frontend::InitParams {
@@ -27,7 +26,6 @@ impl TestbedDashboard {
 			has_monado: true,
 			lang_provider: &lang_provider,
 			theme: Rc::new(WguiTheme::default()),
-			color_palette: &palette_name,
 			executor: executor.clone(),
 		})?;
 		// LVRR: open a page directly, e.g. LVRR_PAGE=headset:streaming

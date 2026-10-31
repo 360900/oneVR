@@ -471,9 +471,10 @@ fn encoder_label(name: &str) -> Translation {
 /// Green below `warn`, red above
 fn cell(value: f32, warn: f32) -> ValueCell {
 	let color = if value > warn {
-		Color::new(1.0, 0.35, 0.35, 1.0)
+		// oneDesign danger and success
+		Color::new(0.816, 0.169, 0.192, 1.0)
 	} else {
-		Color::new(0.3, 0.9, 0.5, 1.0)
+		Color::new(0.055, 0.549, 0.255, 1.0)
 	};
 	ValueCell { value, color }
 }
@@ -680,7 +681,7 @@ impl<T: 'static> TabLvrrPc<T> {
 		// fail; Diagnostics can tell why it isn't running. Pair headset starts it.
 		let online = state.link == Link::Online;
 		if !online && self.pairing && self.section == Section::Headsets {
-			ui.banner(self.id_content, "LVRR.PC.PAIR_WAIT", "primary")?;
+			ui.banner(self.id_content, "LVRR.PC.PAIR_WAIT", "accent")?;
 		} else if !online && matches!(self.section, Section::Performance | Section::Headsets | Section::Server) {
 			let tasks = self.tasks.clone();
 			ui.not_running(self.id_content, state.link, desktop, self.starting, move || {
@@ -742,7 +743,7 @@ impl<T: 'static> TabLvrrPc<T> {
 		let pin = state.pairing_enabled && !state.pin.is_empty();
 		if desktop {
 			if pin {
-				let banner = ui.banner(self.id_content, "LVRR.PC.PAIR_PIN", "primary")?;
+				let banner = ui.banner(self.id_content, "LVRR.PC.PAIR_PIN", "accent")?;
 				ui.bold(banner, Text::Raw(&state.pin), 32)?;
 				let tasks = self.tasks.clone();
 				ui.button(
@@ -755,7 +756,7 @@ impl<T: 'static> TabLvrrPc<T> {
 				)?;
 			} else if self.pairing {
 				// where the PIN comes next
-				ui.banner(self.id_content, "LVRR.PC.PAIR_WAIT", "primary")?;
+				ui.banner(self.id_content, "LVRR.PC.PAIR_WAIT", "accent")?;
 			} else {
 				let row = ui.row(self.id_content)?;
 				let tasks = self.tasks.clone();
@@ -765,7 +766,7 @@ impl<T: 'static> TabLvrrPc<T> {
 				ui.muted(row, Text::Key("LVRR.PC.PAIR_HOWTO_DESKTOP"))?;
 			}
 		} else if pin {
-			let banner = ui.banner(self.id_content, "LVRR.HOME.PAIRING", "primary")?;
+			let banner = ui.banner(self.id_content, "LVRR.HOME.PAIRING", "accent")?;
 			ui.bold(banner, Text::Raw(&state.pin), 24)?;
 		}
 		let group = ui.group(
@@ -962,7 +963,7 @@ impl<T: 'static> TabLvrrPc<T> {
 					let (badge, color) = match check.status {
 						Status::Ok => ("LVRR.PC.CHECK_OK", "success"),
 						// amber in the default palette, where tertiary is a teal that reads as OK's green
-						Status::Warn => ("LVRR.PC.CHECK_WARN", "secondary"),
+						Status::Warn => ("LVRR.PC.CHECK_WARN", "warning"),
 						Status::Fail => ("LVRR.PC.CHECK_FAIL", "danger"),
 					};
 					ui.badge(row, badge, color)?;

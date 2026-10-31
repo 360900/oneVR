@@ -1,3 +1,4 @@
+use crate::color::WguiColorName;
 use crate::{
 	assets::AssetPathRef,
 	components::{
@@ -245,8 +246,8 @@ pub fn construct(
 		button::Params {
 			color: Some(params.color.into()),
 			round: WLength::Percent(1.0),
-			border: 2.0,
-			border_color: Some(drawing::Color::new(0.0, 0.0, 0.0, 1.0).into()),
+			border: 1.0,
+			border_color: Some(WguiColorName::StrokeStrong.into()),
 			style,
 			..Default::default()
 		},

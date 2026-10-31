@@ -295,10 +295,6 @@ fn def_timezones() -> Vec<String> {
 	}
 }
 
-fn def_default() -> Arc<str> {
-	"Default".into()
-}
-
 fn def_theme_path() -> Arc<str> {
 	"theme".into()
 }
@@ -317,13 +313,6 @@ pub struct GeneralConfig {
 	#[serde(default = "def_one")]
 	#[serde(alias = "ui_animation_speed", alias = "animation_speed" /* old name */)]
 	pub ui_animation_speed: f32,
-
-	#[serde(default = "def_one")]
-	#[serde(alias = "ui_round_multiplier", alias = "round_multiplier" /* old name */)]
-	pub ui_round_multiplier: f32,
-
-	#[serde(default = "def_point3")]
-	pub ui_gradient_intensity: f32,
 
 	pub default_keymap: Option<String>,
 
@@ -535,9 +524,6 @@ pub struct GeneralConfig {
 
 	#[serde(default)]
 	pub whisper_gpu: u32,
-
-	#[serde(default = "def_default")]
-	pub color_palette: Arc<str>,
 
 	#[serde(default)]
 	pub snap_angle_deg: f32,

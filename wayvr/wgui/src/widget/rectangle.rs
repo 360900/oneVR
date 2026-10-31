@@ -1,7 +1,7 @@
 use slotmap::Key;
 
 use crate::{
-	color::WguiColor,
+	color::{WguiColor, WguiColorName},
 	drawing::{self, GradientMode, PrimitiveExtent},
 	event::CallbackDataCommon,
 	globals::Globals,
@@ -21,6 +21,9 @@ pub struct WidgetRectangleParams {
 	pub border_color: WguiColor,
 
 	pub round: WLength,
+
+	/// oneDesign elevation level (0-3), drawn as a soft shadow behind the rectangle
+	pub shadow: u8,
 }
 
 pub struct WidgetRectangle {
@@ -67,15 +70,28 @@ impl WidgetObj for WidgetRectangle {
 			WLength::Percent(percent) => (f32::min(boundary.size.x, boundary.size.y) * percent / 2.0) as u8,
 		};
 
+		let transform = state.transform_stack.get().transform;
 		let color = self.params.color.resolve(&state.globals.palette);
+
+		if self.params.shadow > 0 {
+			let mut shadow_color = state.globals.palette[WguiColorName::Shadow];
+			// fade together with the fill (e.g. animated popups)
+			shadow_color.a *= color.a;
+			drawing::push_elevation(
+				state.primitives,
+				boundary,
+				transform,
+				f32::from(round_units),
+				self.params.shadow,
+				shadow_color,
+			);
+		}
+
 		let color2 = self.params.color2.resolve(&state.globals.palette);
 		let border_color = self.params.border_color.resolve(&state.globals.palette);
 
 		state.primitives.push(drawing::RenderPrimitive::Rectangle(
-			PrimitiveExtent {
-				boundary,
-				transform: state.transform_stack.get().transform,
-			},
+			PrimitiveExtent { boundary, transform },
 			drawing::Rectangle {
 				color,
 				color2,
@@ -101,10 +117,11 @@ impl WidgetObj for WidgetRectangle {
 
 	fn debug_print(&self, globals: &Globals) -> String {
 		format!(
-			"[color: {}][color2: {}][gradient: {:?}]",
+			"[color: {}][color2: {}][gradient: {:?}][shadow: {}]",
 			self.params.color.resolve(&globals.palette).debug_ansi_block(),
 			self.params.color2.resolve(&globals.palette).debug_ansi_block(),
 			self.params.gradient,
+			self.params.shadow,
 		)
 	}
 }

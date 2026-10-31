@@ -54,7 +54,7 @@ fn populate_res_pips(
 	let mut populate_res_pip = |res: SkymapResolution| -> anyhow::Result<()> {
 		let mut tpar = TemplateParams::new();
 		let downloaded = entry.is_downloaded(res).unwrap_or(false);
-		tpar.insert("color", if downloaded { "#11aa40" } else { "#444444" });
+		tpar.insert("color", if downloaded { "success" } else { "text2" });
 		tpar.insert("text", res.get_display_str_simple());
 		parser_state.realize_template(&doc_params(&globals), "ResolutionPip", layout, id_parent, tpar)?;
 

@@ -10,7 +10,6 @@ use wgui::{
 	font_config::WguiFontConfig,
 	globals::WguiGlobals,
 	layout::{Layout, LayoutParams, LayoutUpdateParams},
-	palette::WguiColorPalette,
 	parser::{ParseDocumentExtra, ParseDocumentParams, ParserState},
 };
 use wlx_common::locale::WayVRLangProvider;
@@ -31,14 +30,12 @@ impl TestbedAny {
 		};
 
 		let lang_provider = WayVRLangProvider::default();
-		let palette_name = std::env::var("PALETTE").unwrap_or_else(|_| "Default".to_string());
 
 		let globals = WguiGlobals::new(
 			assets,
 			&lang_provider,
 			&WguiFontConfig::default(),
 			PathBuf::new(), // cwd
-			WguiColorPalette::get_builtin(&palette_name),
 		)?;
 
 		let (layout, state) = wgui::parser::new_layout_from_assets(

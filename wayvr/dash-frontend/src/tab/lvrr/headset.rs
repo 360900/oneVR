@@ -785,13 +785,13 @@ impl<T: 'static> TabLvrrHeadset<T> {
 			} else {
 				"LVRR.HEADSET.NOT_CONNECTED"
 			};
-			ui.banner(parent, message, "secondary")?;
+			ui.banner(parent, message, "warning")?;
 			self.widgets = Some(widgets);
 			return Ok(());
 		};
 
 		if h.offline {
-			ui.banner(parent, "LVRR.HEADSET.OFFLINE", "primary")?;
+			ui.banner(parent, "LVRR.HEADSET.OFFLINE", "accent")?;
 		} else if h.restart_required {
 			let tasks = self.tasks.clone();
 			ui.restart_banner(parent, move || tasks.push(Task::RestartSession))?;
@@ -855,7 +855,7 @@ fn mount_presets(ui: &mut Ui, parent: WidgetID, h: &HeadsetSettings, tasks: &Tas
 		},
 	)?;
 	if !h.offline {
-		ui.badge(row, "LVRR.APPLIES_AFTER_RESTART", "tertiary")?;
+		ui.badge(row, "LVRR.APPLIES_AFTER_RESTART", "accent")?;
 	}
 	Ok(())
 }
@@ -912,13 +912,13 @@ fn mount(
 	let refused = !h.offline && h.permission_denied.iter().any(|k| k == key);
 	// offline, everything applies when the headset connects
 	let badge = if h.offline {
-		h.pending.get(key).map(|_| ("LVRR.HEADSET.PENDING", "primary"))
+		h.pending.get(key).map(|_| ("LVRR.HEADSET.PENDING", "accent"))
 	} else if waiting {
-		Some(("LVRR.HEADSET.PERMISSION_WAITING", "primary"))
+		Some(("LVRR.HEADSET.PERMISSION_WAITING", "accent"))
 	} else if refused {
 		Some(("LVRR.HEADSET.PERMISSION_REFUSED", "danger"))
 	} else if RESTART_KEYS.contains(&key) {
-		Some(("LVRR.APPLIES_AFTER_RESTART", "tertiary"))
+		Some(("LVRR.APPLIES_AFTER_RESTART", "accent"))
 	} else {
 		None
 	};

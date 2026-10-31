@@ -1,3 +1,4 @@
+use crate::color::WguiColorName;
 use std::{cell::RefCell, rc::Rc};
 
 use glam::Vec2;
@@ -285,7 +286,9 @@ impl WguiWindow {
 					AnimationEasing::OutQuad,
 					Box::new(|common, data| {
 						let rect = data.obj.get_as_mut::<WidgetRectangle>().unwrap() /* should always succeed */;
-						rect.params.color = drawing::Color::new(0.0, 0.0, 0.0, data.pos * 0.3).into();
+						let mut scrim = common.globals().palette[WguiColorName::Scrim];
+						scrim.a *= data.pos;
+						rect.params.color = scrim.into();
 						common.alterables.mark_redraw();
 					}),
 				)

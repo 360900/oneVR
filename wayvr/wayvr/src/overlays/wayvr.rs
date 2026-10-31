@@ -407,12 +407,12 @@ impl WvrWindowBackend {
     fn update_decor(&mut self, wvr_server: &mut WvrServerState) {
         const COLORS: [(WguiColor, WguiColor); 2] = [
             (
-                WguiColorName::Outline.to_wgui_color(),
-                WguiColorName::OnBackground.to_wgui_color(),
+                WguiColorName::Stroke.to_wgui_color(),
+                WguiColorName::Text3.to_wgui_color(),
             ),
             (
-                WguiColorName::Tertiary.to_wgui_color(),
-                WguiColorName::Tertiary.to_wgui_color(),
+                WguiColorName::Accent.to_wgui_color(),
+                WguiColorName::Text.to_wgui_color(),
             ),
         ];
 

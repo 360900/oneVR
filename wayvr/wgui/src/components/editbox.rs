@@ -13,7 +13,7 @@ use crate::{
 	event::{self, CallbackDataCommon, CallbackMetadata, EventListenerCollection, EventListenerKind, StyleSetRequest},
 	i18n::Translation,
 	layout::{WidgetID, WidgetPair},
-	renderer_vk::text::{TextStyle, WguiTextShadow},
+	renderer_vk::text::TextStyle,
 	widget::{
 		ConstructEssentials, EventResult,
 		div::WidgetDiv,
@@ -59,11 +59,7 @@ fn anim_bottom_rect(common: &mut CallbackDataCommon, accent_color: WguiColor, id
 			let rect = data.obj.get_as_mut::<WidgetRectangle>().unwrap();
 			let pos_bidir = if focused { data.pos } else { 1.0 - data.pos };
 
-			let color_lerped = accent_color.lerp(
-				&common.globals().palette,
-				&WguiColorName::OnBackgroundVariant.into(),
-				pos_bidir,
-			);
+			let color_lerped = accent_color.lerp(&common.globals().palette, &accent_color.with_alpha(0.0), pos_bidir);
 			rect.set_color(common, color_lerped);
 
 			common.alterables.set_style(
@@ -91,15 +87,14 @@ fn anim_bottom_rect(common: &mut CallbackDataCommon, accent_color: WguiColor, id
 }
 
 fn refresh_all(common: &mut CallbackDataCommon, data: &Data, state: &mut State) -> Option<()> {
-	let editbox_color = WguiColor::from(WguiColorName::BackgroundVariant);
-	let accent_color = WguiColor::from(WguiColorName::Primary);
+	let accent_color = WguiColor::from(WguiColorName::Accent);
 
 	let (rect_color, border_color) = if state.focused {
-		(editbox_color.add_rgb(0.15), editbox_color.add_rgb(0.15 + 0.25))
+		(WguiColorName::Surface.into(), accent_color)
 	} else if state.hovered {
-		(editbox_color.add_rgb(0.1), editbox_color.add_rgb(0.1 + 0.15))
+		(WguiColorName::FillStrong.into(), accent_color.with_alpha(0.0))
 	} else {
-		(editbox_color, editbox_color.add_rgb(0.15))
+		(WguiColorName::Fill.into(), accent_color.with_alpha(0.0))
 	};
 
 	// update background color
@@ -261,14 +256,14 @@ pub fn construct(
 	ess: &mut ConstructEssentials,
 	mut params: Params,
 ) -> anyhow::Result<(WidgetPair, Rc<ComponentEditBox>)> {
-	let text_color = WguiColor::from(WguiColorName::OnBackgroundVariant);
+	let text_color = WguiColor::from(WguiColorName::Text);
 
 	if params.style.size.width.is_auto() {
 		params.style.size.width = length(128.0_f32);
 	}
 
 	if params.style.size.height.is_auto() {
-		params.style.size.height = length(32.0_f32);
+		params.style.size.height = length(36.0_f32);
 	}
 
 	// override style
@@ -284,7 +279,7 @@ pub fn construct(
 		ess.parent,
 		WidgetRectangle::create(WidgetRectangleParams {
 			border: 2.0,
-			round: WLength::Units(3.0),
+			round: WLength::Units(10.0),
 			..Default::default()
 		}),
 		params.style,
@@ -319,7 +314,12 @@ pub fn construct(
 		root.id,
 		WidgetDiv::create(),
 		taffy::Style {
-			padding: taffy::Rect::length(8.0_f32),
+			padding: taffy::Rect {
+				left: length(12.0_f32),
+				right: length(12.0_f32),
+				top: length(8.0_f32),
+				bottom: length(8.0_f32),
+			},
 			..Default::default()
 		},
 	)?;
@@ -329,11 +329,7 @@ pub fn construct(
 		WidgetLabelParams {
 			content: Translation::from_raw_text(&params.initial_text),
 			style: TextStyle {
-				shadow: Some(WguiTextShadow {
-					x: 1.0,
-					y: 1.0,
-					..Default::default()
-				}),
+				color: Some(text_color),
 				..Default::default()
 			},
 			..Default::default()
@@ -351,7 +347,7 @@ pub fn construct(
 	let (rect_cursor, _) = ess.layout.add_child(
 		label_parent.id,
 		WidgetRectangle::create(WidgetRectangleParams {
-			color: text_color.with_alpha(0.75),
+			color: WguiColorName::Accent.into(),
 			..Default::default()
 		}),
 		taffy::Style {

@@ -26,10 +26,10 @@ impl SupporterTier {
 
 	pub const fn color_str(self) -> &'static str {
 		match self {
-			Self::Platinum => "#aaffff",
-			Self::Gold => "#ffffaa",
-			Self::Silver => "#cccccc",
-			Self::Bronze => "#ffaa66",
+			Self::Platinum => "#22818c",
+			Self::Gold => "#9a7400",
+			Self::Silver => "#6b7280",
+			Self::Bronze => "#a5582a",
 		}
 	}
 

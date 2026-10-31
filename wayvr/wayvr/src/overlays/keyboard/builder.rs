@@ -378,7 +378,7 @@ fn find_children<S>(
     (labels, sprites)
 }
 
-const BUTTON_HOVER_SCALE: f32 = 0.1;
+const BUTTON_HOVER_SCALE: f32 = 0.05;
 
 fn get_anim_transform(pos: f32, widget_size: Vec2, width_mult: f32) -> Mat4 {
     let scale = vec3(
@@ -390,10 +390,10 @@ fn get_anim_transform(pos: f32, widget_size: Vec2, width_mult: f32) -> Mat4 {
     util::centered_matrix(widget_size, &Mat4::from_scale(scale))
 }
 
-const HOVER_COLOR: WguiColor = WguiColorName::Tertiary.to_wgui_color();
-const HOVER_BORDER_COLOR: WguiColor = WguiColorName::Tertiary.to_wgui_color().mult_rgb(0.5);
-const HOVER_TEXT_COLOR: WguiColor = WguiColorName::OnTertiary.to_wgui_color();
-const PRESS_BORDER_COLOR: WguiColor = WguiColorName::Highlight.to_wgui_color();
+const HOVER_COLOR: WguiColor = WguiColorName::Container.to_wgui_color();
+const HOVER_BORDER_COLOR: WguiColor = WguiColorName::Accent.to_wgui_color();
+const HOVER_TEXT_COLOR: WguiColor = WguiColorName::OnContainer.to_wgui_color();
+const PRESS_BORDER_COLOR: WguiColor = WguiColorName::AccentPressed.to_wgui_color();
 
 fn set_anim_color(
     palette: &WguiColorPalette,
@@ -417,8 +417,8 @@ fn on_enter_anim(
 ) {
     Animation::new(
         data.widget_id,
-        AnimationDuration::Seconds(0.1666),
-        AnimationEasing::OutBack,
+        AnimationDuration::Seconds(0.12),
+        AnimationEasing::OutQuint,
         Box::new(move |common, data| {
             let rect = data.obj.get_as_mut::<WidgetRectangle>().unwrap();
             set_anim_color(&common.globals().palette, &key_state, rect, data.pos);

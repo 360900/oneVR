@@ -228,7 +228,7 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 	let (root, _) = ess.layout.add_child(
 		ess.parent,
 		WidgetRectangle::create(WidgetRectangleParams {
-			color: WguiColorName::Background.into(),
+			color: WguiColorName::Shadow.into(),
 			..Default::default()
 		}),
 		style,

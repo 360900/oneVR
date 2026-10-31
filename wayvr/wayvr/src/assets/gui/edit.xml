@@ -1,7 +1,7 @@
 <layout version="2">
   <macro name="button_style"
     margin="2" overflow="hidden" box_sizing="border_box" align_items="center" justify_content="center"
-    border="2" round="50%" padding="8" gradient="vertical" tooltip_side="bottom" />
+    round="100%" padding="8" tooltip_side="bottom" />
 
   <template name="TopButton">
     <Button id="${id}" macro="button_style" tooltip="${tooltip}" _press="${press}" _release="${release}" sticky="${sticky}">
@@ -10,13 +10,13 @@
   </template>
 
   <template name="TopButtonDanger">
-    <Button macro="button_style" tooltip="${tooltip}" _release="${release}" border_color="danger(rgb-mult-0.5)" color="danger" hover_color="danger(rgb-add-0.2)" hover_border_color="danger">
+    <Button macro="button_style" tooltip="${tooltip}" _release="${release}" color="danger">
       <sprite width="48" height="48" src="${src}" />
     </Button>
   </template>
 
   <template name="TopButtonTertiary">
-    <Button macro="button_style" tooltip="${tooltip}" _press="${press}" _release="${release}" color="tertiary" border_color="tertiary(rgb-mult-0.5)" hover_color="tertiary(rgb-add-0.2)" hover_border_color="tertiary">
+    <Button macro="button_style" tooltip="${tooltip}" _press="${press}" _release="${release}" color="accent">
       <sprite width="48" height="48" src="${src}" />
     </Button>
   </template>
@@ -29,10 +29,10 @@
 
   <elements>
     <div width="100%" height="100%">
-      <rectangle id="shadow" width="100%" height="100%" padding="4" gap="4" align_items="center" justify_content="space_between" color="#000000c0" flex_direction="column">
+      <rectangle id="shadow" width="100%" height="100%" padding="4" gap="4" align_items="center" justify_content="space_between" color="scrim" flex_direction="column">
         <div />
         <div flex_direction="column">
-          <rectangle padding="16" gap="8" round="32" color="background(opacity-0.9)" border="2" border_color="outline" justify_content="center">
+          <rectangle padding="16" gap="8" round="24" color="float" border="1" border_color="stroke" shadow="3" justify_content="center">
             <div flex_direction="column" gap="8">
               <div flex_direction="row" gap="4">
                 <TopButton sticky="0" id="top_lock" src="@/edit/lock_open.svg" tooltip="EDIT_MODE.LOCK_INTERACTION" press="::EditModeToggleLock" />

@@ -235,7 +235,7 @@ impl<T: 'static> TabLvrrHome<T> {
 		}
 
 		if state.pairing_enabled && !state.pin.is_empty() {
-			let banner = ui.banner(parent, "LVRR.HOME.PAIRING", "primary")?;
+			let banner = ui.banner(parent, "LVRR.HOME.PAIRING", "accent")?;
 			ui.bold(banner, Text::Raw(&state.pin), 24)?;
 		}
 		if state.headset.as_ref().is_some_and(|h| h.restart_required) {
@@ -426,11 +426,11 @@ impl<T: 'static> TabLvrrHome<T> {
 			}
 			ui::set_label(layout, label, Translation::from_raw_text_string(text));
 			let color = if battery.charging {
-				WguiColorName::Primary
+				WguiColorName::AccentText
 			} else if battery.level < BATTERY_LOW {
 				WguiColorName::Danger
 			} else {
-				WguiColorName::OnBackground
+				WguiColorName::Text2
 			};
 			ui::set_label_color(layout, label, color);
 		}

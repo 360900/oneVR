@@ -10,7 +10,7 @@ use wgui::{
 	layout::{Layout, WidgetID},
 	log::LogErr,
 	parser::{Fetchable, ParseDocumentParams, ParserState},
-	renderer_vk::text::{FontWeight, TextStyle, WguiTextShadow},
+	renderer_vk::text::{FontWeight, TextStyle},
 	taffy::{self, prelude::length},
 	task::Tasks,
 	widget::{
@@ -258,7 +258,7 @@ impl<T> Tab<T> for TabSettings<T> {
 						})?;
 					}
 					match setting {
-						SettingType::UiAnimationSpeed | SettingType::UiGradientIntensity | SettingType::UiRoundMultiplier => {
+						SettingType::UiAnimationSpeed => {
 							// todo: currently, wayvr restart is required to apply these changes (WguiTheme is Rc)
 						}
 						_ => { /* do nothing */ }
@@ -364,8 +364,6 @@ pub(crate) enum SettingType {
 	SpaceGravityFloorHeight,
 	SpaceRotateUnlocked,
 	UiAnimationSpeed,
-	UiGradientIntensity,
-	UiRoundMultiplier,
 	UprightScreenFix,
 	UsePassthrough,
 	UseSkybox,
@@ -436,8 +434,6 @@ impl SettingType {
 			Self::SpaceGravityGroundFriction => &mut config.space_gravity_ground_friction,
 			Self::SpaceGravityFloorHeight => &mut config.space_gravity_floor_height,
 			Self::UiAnimationSpeed => &mut config.ui_animation_speed,
-			Self::UiGradientIntensity => &mut config.ui_gradient_intensity,
-			Self::UiRoundMultiplier => &mut config.ui_round_multiplier,
 			Self::WatchViewAngleMax => &mut config.watch_view_angle_max,
 			Self::WatchViewAngleMin => &mut config.watch_view_angle_min,
 			_ => panic!("Requested f32 for non-f32 SettingType"),
@@ -573,8 +569,6 @@ impl SettingType {
 			Self::SpaceGravityFloorHeight => Ok("APP_SETTINGS.SPACE_GRAVITY_FLOOR_HEIGHT"),
 			Self::SpaceRotateUnlocked => Ok("APP_SETTINGS.SPACE_ROTATE_UNLOCKED"),
 			Self::UiAnimationSpeed => Ok("APP_SETTINGS.ANIMATION_SPEED"),
-			Self::UiGradientIntensity => Ok("APP_SETTINGS.UI_GRADIENT_INTENSITY"),
-			Self::UiRoundMultiplier => Ok("APP_SETTINGS.ROUND_MULTIPLIER"),
 			Self::UprightScreenFix => Ok("APP_SETTINGS.UPRIGHT_SCREEN_FIX"),
 			Self::UsePassthrough => Ok("APP_SETTINGS.USE_PASSTHROUGH"),
 			Self::UseSkybox => Ok("APP_SETTINGS.USE_SKYBOX"),
@@ -625,8 +619,6 @@ impl SettingType {
 		matches!(
 			self,
 			Self::UiAnimationSpeed
-				| Self::UiRoundMultiplier
-				| Self::UiGradientIntensity
 				| Self::UprightScreenFix
 				| Self::DoubleCursorFix
 				| Self::Language
@@ -668,14 +660,9 @@ fn mount_requires_restart(layout: &mut Layout, parent: WidgetID) -> anyhow::Resu
 			content,
 			style: TextStyle {
 				wrap: false,
-				color: Some(WguiColorName::Danger.into()),
-				weight: Some(FontWeight::Bold),
-				size: Some(10.0),
-				shadow: Some(WguiTextShadow {
-					x: 2.0,
-					y: 2.0,
-					..Default::default()
-				}),
+				color: Some(WguiColorName::Warning.into()),
+				weight: Some(FontWeight::SemiBold),
+				size: Some(12.0),
 				..Default::default()
 			},
 			..Default::default()

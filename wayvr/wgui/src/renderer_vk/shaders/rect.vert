@@ -17,6 +17,7 @@ layout(location = 3) out vec4 out_border_color;
 layout(location = 4) out float out_border_size;
 layout(location = 5) out float out_radius;
 layout(location = 6) out vec2 out_rect_size;
+layout(location = 7) flat out uint out_mode;
 
 #define UNIFORM_PARAMS_SET 0
 #define MODEL_BUFFER_SET 1
@@ -55,6 +56,7 @@ void main() {
   out_border_size = border_size;
 
   uint gradient_mode = (round_border_gradient & 0x00ff0000u) >> 16;
+  out_mode = gradient_mode;
 
   uint color;
   uint color2;

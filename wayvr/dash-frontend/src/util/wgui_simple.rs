@@ -96,7 +96,7 @@ pub fn create_icon(
 	path: AssetPathRef,
 ) -> anyhow::Result<WidgetID> {
 	let widget_sprite = WidgetSprite::create(WidgetSpriteParams {
-		color: Some(WguiColorName::OnBackground.into()),
+		color: Some(WguiColorName::Text.into()),
 		glyph_data: Some(CustomGlyphData::from_assets(&layout.state.globals, path)?),
 		..Default::default()
 	});

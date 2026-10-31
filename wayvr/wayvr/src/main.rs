@@ -53,7 +53,6 @@ use wlx_common::{
     config::GeneralConfig,
     config_io::{self, get_config_file_path},
     locale::WayVRLangProvider,
-    palette::load_palette,
 };
 
 pub static FRAME_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -133,7 +132,6 @@ fn init_run_params(no_audio: bool) -> backend::RunParams {
         &lang_provider,
         &WguiFontConfig::default(),
         get_config_file_path(&theme_path),
-        load_palette(&config.color_palette),
     )
     .expect("Failed to init Globals, can't proceed");
     // LVRR: no dim behind menus, its square corners show past the rounded panels

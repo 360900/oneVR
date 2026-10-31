@@ -173,7 +173,6 @@ impl App {
 			has_monado: false,
 			lang_provider: &lang_provider,
 			theme: Rc::new(WguiTheme::default()),
-			color_palette: "Default",
 			executor: executor.clone(),
 		})?;
 		// no dim behind menus, as in VR: it would darken the see-through margins into a square box

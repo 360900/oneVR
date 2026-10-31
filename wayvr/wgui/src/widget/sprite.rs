@@ -29,7 +29,7 @@ const DEFAULT_COLOR: WguiColor = WguiColor::Raw(drawing::Color::from_hex("#fffff
 
 #[derive(Debug, Default)]
 pub struct WidgetSprite {
-	params: WidgetSpriteParams,
+	pub(crate) params: WidgetSpriteParams,
 	id: WidgetID,
 }
 

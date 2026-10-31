@@ -6,7 +6,7 @@ use crate::{
 		self, Component, ComponentBase, ComponentTrait, RefreshData,
 		tooltip::{ComponentTooltip, TooltipTrait},
 	},
-	drawing::{self, Boundary},
+	drawing::Boundary,
 	event::{CallbackDataCommon, EventListenerCollection, EventListenerID, EventListenerKind},
 	i18n::Translation,
 	layout::{WidgetID, WidgetPair},
@@ -66,8 +66,8 @@ impl Default for Params<'_> {
 			hover_border_color: None,
 			sticky_color: None,
 			sticky_border_color: None,
-			border: 2.0,
-			round: WLength::Units(4.0),
+			border: 0.0,
+			round: WLength::Units(10.0),
 			style: Default::default(),
 			text_style: TextStyle::default(),
 			tooltip: None,
@@ -195,10 +195,6 @@ impl ComponentTrait for ComponentButton {
 	}
 }
 
-fn get_color2(color: &WguiColor, gradient_intensity: f32) -> WguiColor {
-	color.mult_rgb(1.0 - gradient_intensity)
-}
-
 impl ComponentButton {
 	pub fn get_rect(&self) -> WidgetID {
 		self.data.id_rect
@@ -222,13 +218,10 @@ impl ComponentButton {
 	}
 
 	pub fn set_color(&self, common: &mut CallbackDataCommon, color: WguiColor) {
-		let gradient_intensity = common.state.theme.gradient_intensity;
-
 		let Some(mut rect) = common.state.widgets.get_as::<WidgetRectangle>(self.data.id_rect) else {
 			return;
 		};
 		rect.params.color = color;
-		rect.params.color2 = get_color2(&color, gradient_intensity);
 
 		let mut state = self.state.borrow_mut();
 		state.colors.color = color;
@@ -268,16 +261,11 @@ impl ComponentButton {
 			return;
 		}
 
-		let gradient_intensity = {
-			let theme = &common.state.theme;
-			theme.gradient_intensity
-		};
-
 		let state = self.state.clone();
 		let anim = Animation::new(
 			self.data.id_rect,
-			AnimationDuration::Seconds(if sticky_down { 0.083 } else { 0.1666 }),
-			AnimationEasing::OutCubic,
+			AnimationDuration::Seconds(if sticky_down { 0.12 } else { 0.22 }),
+			AnimationEasing::OutQuint,
 			Box::new(move |common, anim_data| {
 				let rect = anim_data.obj.get_as_mut::<WidgetRectangle>().unwrap();
 				let mult = if sticky_down {
@@ -299,7 +287,6 @@ impl ComponentButton {
 					let bg_color = colors.color.lerp(&common.globals().palette, alt_color, mult);
 
 					rect.params.color = bg_color;
-					rect.params.color2 = get_color2(&bg_color, gradient_intensity);
 					rect.params.border_color = colors
 						.border_color
 						.lerp(&common.globals().palette, alt_border_color, mult);
@@ -370,15 +357,11 @@ fn anim_hover(
 
 	let globals = common.globals();
 
-	let gradient_intensity = common.state.theme.gradient_intensity;
-
-	//let t = Mat4::from_scale(Vec3::splat(1.0 + pos * 0.5)) * Mat4::from_rotation_z(pos * 1.0);
-
-	let t = Mat4::from_scale(Vec3::splat(1.0 + pos * 0.05));
+	// oneDesign: pressed controls settle slightly instead of growing on hover
+	let t = Mat4::from_scale(Vec3::splat(if pressed { 1.0 - pos * 0.02 } else { 1.0 }));
 	widget_data.transform = centered_matrix(widget_boundary.size, &t);
 
 	rect.params.color = bg_color;
-	rect.params.color2 = get_color2(&bg_color, gradient_intensity);
 
 	rect.params.border_color = init_border_color.lerp(&globals.palette, &colors.hover_border_color, mult);
 }
@@ -386,8 +369,8 @@ fn anim_hover(
 fn anim_hover_create(state: Rc<RefCell<State>>, widget_id: WidgetID, fade_in: bool) -> Animation {
 	Animation::new(
 		widget_id,
-		AnimationDuration::Seconds(if fade_in { 0.0833 } else { 0.1666 }),
-		AnimationEasing::OutCubic,
+		AnimationDuration::Seconds(if fade_in { 0.12 } else { 0.22 }),
+		AnimationEasing::OutQuint,
 		Box::new(move |common, anim_data| {
 			let rect = anim_data.obj.get_as_mut::<WidgetRectangle>().unwrap();
 			let state = state.borrow();
@@ -551,16 +534,29 @@ fn register_event_mouse_release(
 	)
 }
 
-const DEFAULT_COLOR: WguiColor = WguiColorName::BackgroundVariant.to_wgui_color();
-const DEFAULT_BORDER_COLOR: WguiColor = WguiColorName::Outline.to_wgui_color();
-const DEFAULT_HOVER_COLOR: WguiColor = WguiColorName::Tertiary.to_wgui_color();
-const DEFAULT_HOVER_BORDER_COLOR: WguiColor = WguiColorName::Tertiary.to_wgui_color().mult_rgb(0.5);
-const DEFAULT_STICKY_COLOR: WguiColor = WguiColorName::Primary.to_wgui_color();
-const DEFAULT_STICKY_BORDER_COLOR: WguiColor = WguiColorName::Primary.to_wgui_color().mult_rgb(0.5);
+// oneDesign flat-tinted button; sticky (toggled) state uses the selection container
+const DEFAULT_COLOR: WguiColor = WguiColorName::Fill.to_wgui_color();
+const DEFAULT_BORDER_COLOR: WguiColor = WguiColorName::Stroke.to_wgui_color().with_alpha(0.0);
+const DEFAULT_HOVER_COLOR: WguiColor = WguiColorName::FillStrong.to_wgui_color();
+const DEFAULT_HOVER_BORDER_COLOR: WguiColor = WguiColorName::Stroke.to_wgui_color().with_alpha(0.0);
+const DEFAULT_STICKY_COLOR: WguiColor = WguiColorName::Container.to_wgui_color();
+const DEFAULT_STICKY_BORDER_COLOR: WguiColor = WguiColorName::Stroke.to_wgui_color().with_alpha(0.0);
+
+/// Filled buttons darken on hover, everything else gets the neutral hover fill
+fn default_hover_color(color: WguiColor) -> WguiColor {
+	let WguiColor::Named(named) = color else {
+		return DEFAULT_HOVER_COLOR;
+	};
+	match named.name {
+		WguiColorName::Accent => WguiColorName::AccentHover.into(),
+		WguiColorName::Success | WguiColorName::Warning | WguiColorName::Danger => color.mult_rgb(0.9),
+		WguiColorName::AccentSoft => WguiColorName::Container.into(),
+		_ => DEFAULT_HOVER_COLOR,
+	}
+}
 
 pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Result<(WidgetPair, Rc<ComponentButton>)> {
 	let mut style = params.style;
-	let theme = &ess.layout.state.theme;
 
 	if style.align_items.is_none() {
 		style.align_items = Some(AlignItems::CENTER);
@@ -578,7 +574,7 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 
 	let border_color = params.border_color.unwrap_or(DEFAULT_BORDER_COLOR);
 
-	let hover_color = params.hover_color.unwrap_or(DEFAULT_HOVER_COLOR);
+	let hover_color = params.hover_color.unwrap_or_else(|| default_hover_color(color));
 
 	let hover_border_color = params.hover_border_color.unwrap_or(DEFAULT_HOVER_BORDER_COLOR);
 
@@ -586,19 +582,16 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 
 	let sticky_border_color = params.sticky_border_color.unwrap_or(DEFAULT_STICKY_BORDER_COLOR);
 
-	let gradient_intensity = theme.gradient_intensity;
-
 	drop(globals);
 
 	let (root, _) = ess.layout.add_child(
 		ess.parent,
 		WidgetRectangle::create(WidgetRectangleParams {
 			color,
-			color2: get_color2(&color, gradient_intensity),
-			gradient: drawing::GradientMode::Vertical,
 			round: params.round,
 			border_color,
 			border: params.border,
+			..Default::default()
 		}),
 		style,
 	)?;
@@ -615,11 +608,7 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 	let id_sprite = if let Some(sprite_path) = params.sprite_src {
 		let sprite = WidgetSprite::create(WidgetSpriteParams {
 			glyph_data: Some(CustomGlyphData::from_assets(&ess.layout.state.globals, sprite_path)?),
-			color: Some(
-				params
-					.sprite_color
-					.unwrap_or_else(|| WguiColorName::OnBackground.into()),
-			),
+			color: Some(params.sprite_color.unwrap_or_else(|| WguiColorName::Text.into())),
 			..Default::default()
 		});
 
@@ -647,8 +636,8 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 			WidgetLabelParams {
 				content,
 				style: TextStyle {
-					weight: Some(FontWeight::Bold),
-					color: Some(WguiColorName::OnBackground.into()),
+					weight: Some(FontWeight::SemiBold),
+					color: Some(WguiColorName::Text.into()),
 					..params.text_style
 				},
 				..Default::default()

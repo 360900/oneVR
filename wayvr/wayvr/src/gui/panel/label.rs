@@ -196,9 +196,10 @@ pub(super) fn setup_custom_label<S: 'static>(
     );
 }
 
-const BAT_LOW: drawing::Color = drawing::Color::new(0.69, 0.38, 0.38, 1.);
-const BAT_NORMAL: drawing::Color = drawing::Color::new(0.55, 0.84, 0.79, 1.);
-const BAT_CHARGING: drawing::Color = drawing::Color::new(0.38, 0.50, 0.62, 1.);
+// LVRR: oneDesign danger, text and accent_text
+const BAT_LOW: drawing::Color = drawing::Color::new(0.816, 0.169, 0.192, 1.);
+const BAT_NORMAL: drawing::Color = drawing::Color::new(0.071, 0.086, 0.106, 1.);
+const BAT_CHARGING: drawing::Color = drawing::Color::new(0.078, 0.404, 0.761, 1.);
 const BAT_LOW_THRESHOLD: u32 = 30;
 
 struct BatteryLabelState {

@@ -180,7 +180,7 @@ impl OverlayBackend for PassthruBackend {
     ) -> anyhow::Result<()> {
         let pipeline = self.pipeline.as_ref().unwrap();
 
-        let color = WguiColorName::Primary
+        let color = WguiColorName::Accent
             .to_wgui_color()
             .resolve(&app.wgui_globals.get().palette);
 

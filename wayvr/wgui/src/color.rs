@@ -1,36 +1,49 @@
 use crate::{drawing, palette::WguiColorPalette};
 use strum::{EnumCount, EnumString};
-// Primary: button color
-// OnPrimary: text color placed on the Primary-colored button
-
+// oneDesign "One" color roles
 #[derive(Debug, Copy, Clone, Eq, PartialEq, EnumCount, EnumString)]
 #[repr(usize)]
 #[strum(serialize_all = "snake_case")]
 pub enum WguiColorName {
-	Primary,
-	OnPrimary,
-	Secondary,
-	OnSecondary,
-	Tertiary,
-	OnTertiary,
+	Desktop,
+	Canvas,
+	Sidebar,
+	Surface,
+	SurfaceAlt,
+	Float,
+	Headerbar,
+	Glass,
+	Text,
+	Text2,
+	Text3,
+	Stroke,
+	StrokeStrong,
+	Hover,
+	Active,
+	Fill,
+	FillStrong,
+	Accent,
+	AccentHover,
+	AccentPressed,
+	OnAccent,
+	AccentText,
+	Container,
+	OnContainer,
+	AccentSoft,
 	Success,
-	OnSuccess,
+	SuccessSoft,
+	Warning,
+	WarningSoft,
 	Danger,
-	OnDanger,
-	Background,
-	OnBackground,
-	BackgroundVariant,
-	OnBackgroundVariant,
-	BackgroundContrast,
-	OnBackgroundContrast,
-	Outline,
+	DangerSoft,
+	Scrim,
 	Shadow,
-	Highlight,
+	White,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct WguiNamedColor {
-	name: WguiColorName,
+	pub(crate) name: WguiColorName,
 	rgb_multiplier: f32,
 	rgb_addition: f32,
 	alpha: f32,
@@ -152,26 +165,37 @@ impl WguiColor {
 impl WguiColorName {
 	pub const fn fg_color(&self) -> Option<Self> {
 		match self {
-			Self::Primary => Some(Self::OnPrimary),
-			Self::Secondary => Some(Self::OnSecondary),
-			Self::Tertiary => Some(Self::OnTertiary),
-			Self::Danger => Some(Self::OnDanger),
-			Self::Background => Some(Self::OnBackground),
-			Self::BackgroundVariant => Some(Self::OnBackgroundVariant),
-			Self::BackgroundContrast => Some(Self::OnBackgroundContrast),
+			Self::Accent | Self::AccentHover | Self::AccentPressed | Self::Success | Self::Warning | Self::Danger => {
+				Some(Self::OnAccent)
+			}
+			Self::Container => Some(Self::OnContainer),
+			Self::AccentSoft => Some(Self::AccentText),
+			Self::SuccessSoft => Some(Self::Success),
+			Self::WarningSoft => Some(Self::Warning),
+			Self::DangerSoft => Some(Self::Danger),
+			Self::Desktop
+			| Self::Canvas
+			| Self::Sidebar
+			| Self::Surface
+			| Self::SurfaceAlt
+			| Self::Float
+			| Self::Headerbar
+			| Self::Glass
+			| Self::Hover
+			| Self::Active
+			| Self::Fill
+			| Self::FillStrong
+			| Self::White => Some(Self::Text),
 			_ => None,
 		}
 	}
 
 	pub const fn bg_color(&self) -> Option<Self> {
 		match self {
-			Self::OnPrimary => Some(Self::Primary),
-			Self::OnSecondary => Some(Self::Secondary),
-			Self::OnTertiary => Some(Self::Tertiary),
-			Self::OnDanger => Some(Self::Danger),
-			Self::OnBackground => Some(Self::Background),
-			Self::OnBackgroundVariant => Some(Self::BackgroundVariant),
-			Self::OnBackgroundContrast => Some(Self::BackgroundContrast),
+			Self::OnAccent => Some(Self::Accent),
+			Self::OnContainer => Some(Self::Container),
+			Self::AccentText => Some(Self::AccentSoft),
+			Self::Text | Self::Text2 | Self::Text3 => Some(Self::Surface),
 			_ => None,
 		}
 	}

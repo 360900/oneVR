@@ -39,14 +39,7 @@ pub fn parse_widget_image<'a>(
 				}
 			}
 			"round" => {
-				parse_round(
-					ctx,
-					tag_name,
-					key,
-					value,
-					&mut params.round,
-					ctx.layout.state.theme.rounding_mult,
-				);
+				parse_round(ctx, tag_name, key, value, &mut params.round);
 			}
 			"border" => {
 				params.border = value.parse().unwrap_or_else(|_| {

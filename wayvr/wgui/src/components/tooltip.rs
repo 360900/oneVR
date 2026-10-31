@@ -153,8 +153,8 @@ impl Drop for ComponentTooltip {
 	}
 }
 
-pub const TOOLTIP_COLOR: WguiColorName = WguiColorName::BackgroundContrast;
-pub const TOOLTIP_BORDER_COLOR: WguiColorName = WguiColorName::Outline;
+pub const TOOLTIP_COLOR: WguiColorName = WguiColorName::Float;
+pub const TOOLTIP_BORDER_COLOR: WguiColorName = WguiColorName::Stroke;
 
 pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Result<(WidgetPair, Rc<ComponentTooltip>)> {
 	let absolute_boundary = {
@@ -235,8 +235,9 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 		WidgetRectangle::create(WidgetRectangleParams {
 			color: TOOLTIP_COLOR.into(),
 			border_color: TOOLTIP_BORDER_COLOR.into(),
-			border: 2.0,
-			round: WLength::Units(24.0),
+			border: 1.0,
+			round: WLength::Units(10.0),
+			shadow: 2,
 			..Default::default()
 		}),
 		taffy::Style {
@@ -309,11 +310,7 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 			));
 
 			if let Some(mut label) = common.state.widgets.get_as::<WidgetLabel>(label.id) {
-				label.set_color(
-					common,
-					WguiColor::from(WguiColorName::OnBackground).with_alpha(alpha),
-					true,
-				);
+				label.set_color(common, WguiColor::from(WguiColorName::Text).with_alpha(alpha), true);
 			}
 
 			common.alterables.mark_redraw();

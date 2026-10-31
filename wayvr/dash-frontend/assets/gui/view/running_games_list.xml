@@ -3,8 +3,8 @@
 
   <template name="RunningGameCell">
     <GroupBox>
-      <Button id="btn_stop" sprite_src_builtin="@/dashboard/remove_circle.svg" tooltip="PROCESS.STOP" />
-      <Button id="btn_kill" sprite_src_builtin="@/dashboard/knife.svg" tooltip="PROCESS.FORCE_KILL" />
+      <Button id="btn_stop" color="danger_soft" sprite_src_builtin="@/dashboard/remove_circle.svg" tooltip="PROCESS.STOP" />
+      <Button id="btn_kill" color="danger_soft" sprite_src_builtin="@/dashboard/knife.svg" tooltip="PROCESS.FORCE_KILL" />
       <label id="label_name" weight="bold" />
     </GroupBox>
   </template>

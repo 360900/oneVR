@@ -73,10 +73,10 @@ impl<T: 'static> Frontend<T> {
 		Ok(())
 	}
 
-	/// The panel the pages show in, in logical pixels: the desktop window resizes from its edges too.
+	/// The oneDesign window inside the transparent margin, in logical pixels: the desktop window resizes from its edges too.
 	/// Events pushed to the layout keep it up to date, None until the first one.
 	pub fn lvrr_content_rect(&self) -> Option<Boundary> {
-		let widget = self.layout.state.widgets.get(self.widgets.id_rect_content)?;
+		let widget = self.layout.state.widgets.get(self.widgets.id_rect_window)?;
 		let boundary = widget.state().data.cached_absolute_boundary;
 		(boundary.area() > 0.0).then_some(boundary)
 	}

@@ -135,7 +135,9 @@ pub enum FontWeight {
 	Light,
 	#[default]
 	Normal,
+	SemiBold,
 	Bold,
+	ExtraBold,
 }
 
 impl From<FontWeight> for Weight {
@@ -143,7 +145,9 @@ impl From<FontWeight> for Weight {
 		match value {
 			FontWeight::Light => Self::LIGHT,
 			FontWeight::Normal => Self::NORMAL,
+			FontWeight::SemiBold => Self::SEMIBOLD,
 			FontWeight::Bold => Self::BOLD,
+			FontWeight::ExtraBold => Self::EXTRA_BOLD,
 		}
 	}
 }
