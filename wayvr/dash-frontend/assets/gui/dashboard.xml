@@ -20,6 +20,13 @@
     </context_menu>
   </blueprint>
 
+  <!-- id, tooltip, src_builtin -->
+  <template name="BottomButton">
+    <Button color="background(transparent)" border_color="background(transparent)" tooltip_side="top" id="${id}" tooltip="${tooltip}">
+      <sprite src_builtin="${src_builtin}" width="24" height="24" margin="8" />
+    </Button>
+  </template>
+
   <template name="SideButton">
     <Button
       id="${id}"
@@ -158,6 +165,7 @@
               <BarButton id="btn_power" src_builtin="@/dashboard/power.svg" tooltip="POWER_OPTIONS.TITLE" />
               <BarButton id="btn_audio" src_builtin="@/dashboard/volume.svg" tooltip="AUDIO.VOLUME" />
               <BarButton id="btn_recenter" src_builtin="@/dashboard/recenter.svg" tooltip="ACTIONS.RECENTER_PLAYSPACE" />
+              <BarButton id="btn_reset_space_drag" src_builtin="@/dashboard/drag.svg" tooltip="RESET_SPACE_DRAG" />
             </div>
             <label id="label_time" weight="semibold" size="14" color="text" />
           </rectangle>

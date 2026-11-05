@@ -164,7 +164,7 @@ impl OverlayBackend for DashFrontend {
     }
 
     fn resume(&mut self, _app: &mut AppState) -> anyhow::Result<()> {
-        self.inner.layout.needs_redraw = true;
+        self.inner.layout.mark_redraw();
         self.timestep.reset();
         Ok(())
     }
