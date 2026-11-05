@@ -17,6 +17,10 @@
 		{
 			"name": "/actions/main/in/scroll_stick",
 			"type": "vector2"
+		},
+		{
+			"name": "/actions/main/in/scroll_smooth",
+			"type": "vector2"
 		}
 	],
 	"default_bindings": [

@@ -346,6 +346,7 @@ impl Vector2ActionData {
         }
 
         let mut next = AnalogStates::default();
+        let mut scrolling = [false; 4];
         for (index, (hand, profile, origin)) in devices.into_iter().enumerate() {
             // By a higher priority action set.
             if masked[index] {
@@ -378,6 +379,7 @@ impl Vector2ActionData {
                     .unwrap_or_else(inactive_state);
                 state.current_state = binding.transform.apply(state.current_state, session, hand);
                 consider(state, origins::origin_or(binding.origin, origin));
+                scrolling[index] |= matches!(binding.transform, Vector2Transform::Scroll(_));
             }
             if let Some(constant) =
                 scalar_constants_state(constants, session, hand, profile, origin, &update_time)
@@ -387,11 +389,18 @@ impl Vector2ActionData {
             }
         }
         next[3] = unrestricted_analog(&next[..3], prefer);
+        scrolling[3] = scrolling[..3].contains(&true);
 
         let mut previous = self.state.lock().unwrap();
-        for (next, previous) in next.iter_mut().zip(previous.iter()) {
-            next.deltaX = next.x - previous.x;
-            next.deltaY = next.y - previous.y;
+        for ((next, previous), scrolling) in next.iter_mut().zip(previous.iter()).zip(scrolling) {
+            // Scroll values are already amounts per sync, which some games read from the deltas.
+            let base = if scrolling {
+                vr::InputAnalogActionData_t::default()
+            } else {
+                *previous
+            };
+            next.deltaX = next.x - base.x;
+            next.deltaY = next.y - base.y;
         }
         *previous = next;
     }
@@ -3322,6 +3331,79 @@ mod tests {
         set_state(pad, LeftHand, 0.0, -0.9);
         f.sync(set);
         assert_eq!(analog(&f, scroll_pad, left), (0.0, 0.0));
+    }
+
+    #[test]
+    fn scroll_deltas_are_the_amounts() {
+        // Blade & Sorcery reads the scroll amount from the deltas, others from x and y.
+        let mut f = Fixture::new();
+        let set = vr::VRActiveActionSet_t {
+            ulActionSet: f.get_action_set_handle(c"/actions/main"),
+            ..Default::default()
+        };
+        let [movement, discrete, smooth] = [
+            c"/actions/main/in/move",
+            c"/actions/main/in/scroll_stick",
+            c"/actions/main/in/scroll_smooth",
+        ]
+        .map(|name| f.get_action_handle(name));
+        let [left, right] =
+            [c"/user/hand/left", c"/user/hand/right"].map(|hand| f.get_input_source_handle(hand));
+        f.load_actions(c"actions_scroll.json");
+        f.set_interaction_profile::<Knuckles>(LeftHand);
+        f.set_interaction_profile::<Knuckles>(RightHand);
+
+        let vector2 = |path: &CStr| f.get_action::<xr::Vector2f>(f.get_action_handle(path));
+        let left_stick = vector2(c"/user/hand/left/input/thumbstick-/actions/main");
+        let right_stick = vector2(c"/user/hand/right/input/thumbstick-/actions/main");
+        let analog = |f: &Fixture, handle, hand| {
+            let mut data = vr::InputAnalogActionData_t::default();
+            assert_eq!(
+                f.input.GetAnalogActionData(
+                    handle,
+                    &mut data,
+                    std::mem::size_of_val(&data) as u32,
+                    hand,
+                ),
+                vr::EVRInputError::None
+            );
+            assert!(data.bActive);
+            data
+        };
+        let set_stick = |action, hand, y| {
+            fakexr::set_action_state(action, ActionState::Vector2(0.0, y), hand);
+        };
+
+        // A discrete tick isn't taken back on the next sync.
+        set_stick(left_stick, LeftHand, 0.0);
+        set_stick(right_stick, RightHand, 0.8);
+        f.sync(set);
+        for hand in [right, 0] {
+            let tick = analog(&f, discrete, hand);
+            assert_eq!((tick.y, tick.deltaY), (1.0, 1.0));
+        }
+        f.sync(set);
+        for hand in [right, 0] {
+            let after = analog(&f, discrete, hand);
+            assert_eq!((after.y, after.deltaY), (0.0, 0.0));
+        }
+
+        // A held stick keeps scrolling.
+        set_stick(left_stick, LeftHand, 1.0);
+        f.sync(set);
+        for _ in 0..3 {
+            f.sync(set);
+            let held = analog(&f, smooth, left);
+            assert!(held.y > 0.0, "{}", held.y);
+            assert_eq!(held.deltaY, held.y);
+        }
+        // Not so a position.
+        assert_eq!(analog(&f, movement, left).deltaY, 0.0);
+
+        set_stick(left_stick, LeftHand, 0.0);
+        f.sync(set);
+        let released = analog(&f, smooth, left);
+        assert_eq!((released.y, released.deltaY), (0.0, 0.0));
     }
 
     #[test]

@@ -35,6 +35,18 @@
 					"parameters": {
 						"scroll_mode": "discrete"
 					}
+				},
+				{
+					"mode": "scroll",
+					"path": "/user/hand/left/input/thumbstick",
+					"inputs": {
+						"scroll": {
+							"output": "/actions/main/in/scroll_smooth"
+						}
+					},
+					"parameters": {
+						"scroll_mode": "smooth"
+					}
 				}
 			]
 		}
