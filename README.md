@@ -87,6 +87,8 @@ The app list (`IVRApplications`) holds the apps whose manifests were added by th
 
 `XRIZER_LINEAR_UNORM` - `1` shows 8-bit UNORM textures submitted with `ColorSpace_Auto` as linear instead of sRGB encoded, `0` forces sRGB. Try `1` if a game looks much too dark. Enabled automatically for games known to need it.
 
+`XRIZER_WINE_APP` - `1` removes Linux-only Vulkan extensions from the lists given to the game and names external handles by their Windows names. Try it if a Proton game hangs before its first frame with `VK_ERROR_EXTENSION_NOT_PRESENT` in its log.
+
 `XRIZER_PRESERVE_VIEW_CANTING` - `1` keeps per-eye view rotations from canted-display headsets (e.g. Pimax, Bigscreen Beyond) instead of flattening them to parallel views with a widened FOV. Saves rendering the wider FOV, may confuse games that assume parallel views.
 
 `XRIZER_MAX_TRACKERS` - Max number of generic trackers to expose. Requires a runtime with `XR_MNDX_xdev_space` (Monado, WiVRn). Trackers appear as Vive Trackers, which can confuse some games' controller detection. `0` hides them. Set automatically for games known to need it.

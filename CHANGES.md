@@ -2,7 +2,7 @@
 
 Upstream PRs integrated into xrizer-edge (personal fork of Supreeeme/xrizer) and the fork's own changes.
 
-Baseline: upstream `main` at `0519ded` (2026-10-20). Merge commits preserve original authors.
+Baseline: upstream `main` at `a6c27cc` (2026-11-05). Merge commits preserve original authors.
 
 Status: `pending` | `merged` | `superseded-by-<n>` | `blocked` | `dropped` | `revived`
 
@@ -75,6 +75,15 @@ Status: `pending` | `merged` | `superseded-by-<n>` | `blocked` | `dropped` | `re
 | 445 | compositor: replace todo!() with warnings | merged | fixes #283; GetLastFrameRenderer conflict resolved to std::process::id(); GetFrameTimings implemented by 446, SubmitWithArrayIndex fixed in sweep |
 | 446 | compositor: implement GetFrameTimings | merged | real timing from last presented frame |
 | 453 | openxr_data: enable XR_EXT_view_configuration_views_change | merged | eye size is queried per call, so apps that query again get the new size; change logged; not on WiVRn |
+
+## Upstream sync (2026-11-05)
+
+| PR | Title | Status | Notes |
+|----|-------|--------|-------|
+| 458 | Workaround for incorrect app quat conversions | merged | through upstream `main` |
+| 462 | compositor: name Vulkan extensions as a Wine app needs them | merged | opt-in, `XRIZER_WINE_APP=1` |
+| 461 | input: analog deltas, activeOrigin and scroll mode | dropped | deltas and origin already done; its `x`/`y` as position would undo `f93a845`, scroll deltas taken in `1646e25`, rate unchanged |
+| 457 | overlay: stop encoding sRGB twice on 2D panels | superseded-by-388 | fixes #456; `holds_gamma` decodes per texture |
 
 ## Fork fixes (not upstream PRs)
 
