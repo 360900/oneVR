@@ -1,6 +1,6 @@
 //! oneVR's desktop window: the dashboard's pages that work without a headset (status, pairing,
 //! headset and server settings, diagnostics) and a tray icon. Closing the window keeps the tray,
-//! and the server runs on either way.
+//! and the server runs on either way. When the server stops, the window and tray go with it.
 
 mod activate;
 mod app;

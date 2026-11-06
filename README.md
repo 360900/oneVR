@@ -35,7 +35,7 @@ The headset APK is the `onevr-apk-release` artifact of [CI](https://github.com/3
 
 # Usage
 
-Run `onevr` (or oneVR from the app menu) to start the server in the background and open oneVR's window, with pairing and the headset and server settings; closing it leaves the server and a tray icon. Open oneVR on the headset and pick this PC; the first time, enter the PIN the PC shows. Once connected, the settings are in the dashboard in VR too. OpenVR games use the bundled xrizer.
+Run `onevr` (or oneVR from the app menu) to start the server in the background and open oneVR's window, with pairing and the headset and server settings; closing it leaves the server and a tray icon, and stopping the server from anywhere closes both. Open oneVR on the headset and pick this PC; the first time, enter the PIN the PC shows. Once connected, the settings are in the dashboard in VR too. OpenVR games use the bundled xrizer.
 
 oneVR keeps its server settings in `~/.config/onevr/wivrn-server.json`. Pairing is shared with WiVRn.
 

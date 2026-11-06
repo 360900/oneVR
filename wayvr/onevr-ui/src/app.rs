@@ -135,6 +135,8 @@ pub struct App {
 	proxy: EventLoopProxy<UserEvent>,
 	/// `onevr stop` runs, see `App::stop`
 	stopping: bool,
+	/// The server's link at the last news, see `App::follow_server`
+	link: Link,
 	/// What the launch asked for and its activation token, handled once the event loop runs
 	first: Option<(Request, LaunchToken)>,
 	/// Why the window couldn't open when nothing could open it again, for `run` to return
@@ -209,6 +211,7 @@ impl App {
 			tray_phase: Phase::default(),
 			proxy,
 			stopping: false,
+			link: Link::default(),
 			first: Some((request, token)),
 			failed: None,
 			timestep: Timestep::new(60.0),
@@ -348,6 +351,22 @@ impl App {
 				log::error!("Could not run onevr stop: {e}");
 				event_loop.exit();
 			}
+		}
+	}
+
+	/// Quits when the running server goes away, however it stopped: the window and tray go with it, as
+	/// after `onevr stop`. A window opened while the server is stopped stays, with Start oneVR, and so
+	/// does one opened during the tray's Stop oneVR, see `UserEvent::Stopped`.
+	fn follow_server(&mut self, event_loop: &ActiveEventLoop) {
+		let mut data = ();
+		let Some(state) = self.frontend.interface.onevr_state(&mut data) else {
+			return;
+		};
+		let link = state.link;
+		let gone = self.link == Link::Online && link == Link::ServerAbsent;
+		self.link = link;
+		if gone && !self.stopping && !self.frontend.interface.onevr_starting() {
+			event_loop.exit();
 		}
 	}
 
@@ -638,7 +657,10 @@ impl ApplicationHandler<UserEvent> for App {
 				}
 			}
 			UserEvent::Quit => event_loop.exit(),
-			UserEvent::LinkChanged => self.update_tray(),
+			UserEvent::LinkChanged => {
+				self.update_tray();
+				self.follow_server(event_loop);
+			}
 		}
 	}
 
