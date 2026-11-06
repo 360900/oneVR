@@ -86,6 +86,7 @@ struct setting
 	std::function<void(int)> set_int;
 	int v_min = 0;
 	int v_max = 0;
+	std::optional<int> danger_below; // ui_kind::slider: red below this
 
 	std::function<bool(int)> get_multi;
 	std::function<void(int, bool)> set_multi;
@@ -137,7 +138,7 @@ void render_settings(const wivrn::gui::settings_context & ctx, const char * card
 			}
 			case ui_kind::slider: {
 				int v = s.get_int();
-				if (ui::slider_int(s.id, &v, s.v_min, s.v_max, s.fmt.c_str(), {control_w, 0}, dpi))
+				if (ui::slider_int(s.id, &v, s.v_min, s.v_max, s.fmt.c_str(), {control_w, 0}, dpi, s.danger_below))
 					s.set_int(v);
 				break;
 			}
@@ -320,12 +321,11 @@ void settings_streaming(const settings_context & ctx)
 	        .ui = ui_kind::slider,
 	        .get_int = [&config] { return int(std::lround((1 - config.get_stream_scale()) * 100)); },
 	        .set_int = [&config](int v) {
-		        if (not config.extended_config)
-			        v = std::clamp(v, 30, 80);
 		        config.set_stream_scale(1 - v * 0.01);
 		        config.save(); },
 	        .v_min = 0,
 	        .v_max = 80,
+	        .danger_below = 30,
 	        .fmt = "%d%%",
 	        .default_int = int(std::lround((1 - default_config.get_stream_scale()) * 100)),
 	        .enabled = [&ctx] { return not ctx.in_game; },

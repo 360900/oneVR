@@ -42,11 +42,11 @@ namespace
 {
 constexpr uint32_t mbit = 1'000'000;
 constexpr uint32_t min_bitrate = 5 * mbit;
-// Safe ranges; extended_config raises the resolution limit and lets foveation go down to 0
+// Safe ranges; extended_config raises the resolution limit
 constexpr float min_resolution_scale = 0.5f;
 constexpr float max_resolution_scale = 1.5f;
 constexpr float max_resolution_scale_extended = 3.5f;
-constexpr float min_foveation = 0.3f;
+constexpr float min_foveation = 0.f;
 constexpr float max_foveation = 0.8f;
 
 onevr::codec_choice to_choice(video_codec codec)
@@ -312,9 +312,6 @@ bool scenes::stream::onevr_apply(const onevr::headset_config & patch)
 		if (not config.extended_config)
 		{
 			config.resolution_scale = std::min(config.resolution_scale, max_resolution_scale);
-			// an unset stream scale defaults within the range and stays unset
-			if (1 - config.get_stream_scale() < min_foveation)
-				config.set_stream_scale(1 - min_foveation);
 			if (config.bitrate_bps > config.max_bitrate())
 			{
 				config.bitrate_bps = config.max_bitrate();
@@ -360,7 +357,7 @@ bool scenes::stream::onevr_apply(const onevr::headset_config & patch)
 	if (patch.fov_vertical)
 		onevr_fov_vertical = config.fov_vertical = std::clamp(*patch.fov_vertical, onevr::min_fov_tangent, 1.f);
 	if (patch.foveation)
-		config.set_stream_scale(1 - std::clamp(*patch.foveation, config.extended_config ? 0.f : min_foveation, max_foveation));
+		config.set_stream_scale(1 - std::clamp(*patch.foveation, min_foveation, max_foveation));
 	if (patch.codec)
 	{
 		if (*patch.codec == onevr::codec_choice::automatic)

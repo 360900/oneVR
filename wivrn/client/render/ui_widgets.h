@@ -21,6 +21,7 @@
 
 #include <functional>
 #include <imgui.h>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -83,7 +84,8 @@ bool toggle(const char * id, bool * v, const bool * default_value = nullptr);
 float reset_slot_width();
 
 // The value controls below draw a reset button when the value differs from default_value
-bool slider_int(const char * id, int * v, int v_min, int v_max, const char * format, const ImVec2 & size = {0, 0}, const int * default_value = nullptr);
+// the track is red below danger_below
+bool slider_int(const char * id, int * v, int v_min, int v_max, const char * format, const ImVec2 & size = {0, 0}, const int * default_value = nullptr, std::optional<int> danger_below = std::nullopt);
 
 // Pill group, *selected is the index of the active option
 bool segmented(const char * id, const std::vector<std::string> & options, int * selected, const ImVec2 & size = {0, 0}, const int * default_value = nullptr);

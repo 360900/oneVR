@@ -306,7 +306,7 @@ fn settings() -> Vec<Setting> {
 			section: Streaming,
 			show: always,
 			control: Control::Slider {
-				range: |h| (if h.config.extended_config { 0.0 } else { 30.0 }, 80.0, 5.0),
+				range: |_| (0.0, 80.0, 5.0),
 				get: |c| c.foveation * 100.0,
 				set: |v| json!(v / 100.0),
 			},
@@ -937,6 +937,9 @@ fn mount(
 			let slider = ui.slider(row, setting.label, badge, range(h), get(&h.config), move |v| {
 				tasks.push(Task::Edit { key, value: set(v) });
 			})?;
+			if let Some(below) = setting_danger_below(key) {
+				slider.set_danger_below(&mut ui.layout.common(), below);
+			}
 			sliders.push(slider);
 			badge_consumed = true;
 		}
@@ -995,6 +998,14 @@ fn mount(
 /// under an Advanced note
 fn setting_advanced(key: &str) -> bool {
 	matches!(key, "extended_config" | "high_power_mode")
+}
+
+/// Below this a slider turns red: it goes there, but past what the stream is made for
+fn setting_danger_below(key: &str) -> Option<f32> {
+	match key {
+		"foveation" => Some(30.0),
+		_ => None,
+	}
 }
 
 /// A one-line explanation shown under a setting whose name is not self-explanatory, or that

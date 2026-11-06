@@ -690,7 +690,7 @@ bool toggle(const char * id, bool * v, const bool * default_value)
 	return changed;
 }
 
-bool slider_int(const char * id, int * v, int v_min, int v_max, const char * format, const ImVec2 & size_arg, const int * default_value)
+bool slider_int(const char * id, int * v, int v_min, int v_max, const char * format, const ImVec2 & size_arg, const int * default_value, std::optional<int> danger_below)
 {
 	ImGuiWindow * window = ImGui::GetCurrentWindow();
 	if (window->SkipItems)
@@ -751,9 +751,10 @@ bool slider_int(const char * id, int * v, int v_min, int v_max, const char * for
 	const float th = metrics::slider_track * 0.5f;
 
 	ImDrawList * draw = window->DrawList;
-	draw->AddRectFilled({track_bb.Min.x, cy - th}, {track_bb.Max.x, cy + th}, t.col(t.control_hovered), th);
+	const bool danger = danger_below and *v < *danger_below;
+	draw->AddRectFilled({track_bb.Min.x, cy - th}, {track_bb.Max.x, cy + th}, t.col(danger ? t.danger_soft : t.control_hovered), th);
 	if (fraction > 0)
-		draw->AddRectFilled({track_bb.Min.x, cy - th}, {fill_x, cy + th}, t.col(t.accent), th);
+		draw->AddRectFilled({track_bb.Min.x, cy - th}, {fill_x, cy + th}, t.col(danger ? t.danger : t.accent), th);
 	// white thumb with a hairline
 	const ImVec2 c{fill_x, cy};
 	const float r = thumb * 0.5f;

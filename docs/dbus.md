@@ -12,7 +12,7 @@ oneVR's server (`wivrn-server`) keeps WiVRn's session bus interface: name `io.gi
   - `io.github.wivrn.Server.InvalidSettings`: not a JSON object, an unknown key, a wrong type or a name not listed below;
   - `io.github.wivrn.Server.Timeout`: no answer within 3 s. The headset may still apply the change, which `HeadsetSettings` then shows.
 
-  The headset clamps values to the ranges below and ignores settings and values it doesn't support (see `capabilities`). `extended_config` widens the ranges of `resolution_scale`, `foveation` and `bitrate_bps` and applies before the other keys of its patch; turning it off brings their values back into the safe ranges.
+  The headset clamps values to the ranges below and ignores settings and values it doesn't support (see `capabilities`). `extended_config` widens the ranges of `resolution_scale` and `bitrate_bps` and applies before the other keys of its patch; turning it off brings their values back into the safe ranges.
 
 `config` keys (all present in `HeadsetSettings`):
 
@@ -23,7 +23,7 @@ oneVR's server (`wivrn-server`) keeps WiVRn's session bus interface: name `io.gi
 | `fps_divider` | 1, or 2 for SpaceWarp, which needs `capabilities.spacewarp` and a `preferred_refresh_rate` other than 0 | now |
 | `resolution_scale` | number, 0.5 to 1.5, up to 3.5 with `extended_config` | restart |
 | `fov_horizontal`, `fov_vertical` | 0.7 to 1, scales the FOV tangents games render | now |
-| `foveation` | number, 0.3 to 0.8, 0 to 0.8 with `extended_config` | restart |
+| `foveation` | number, 0 to 0.8 | restart |
 | `codec` | `automatic`, or `h264`, `h265`, `av1` from `capabilities.codecs` | restart |
 | `bit_depth` | 8 or 10, used only with a `codec` from `capabilities.codecs_10bit` | restart |
 | `bitrate_bps` | integer, 5000000 to `capabilities.max_bitrate_bps`, up to `max_bitrate_extended_bps` with `extended_config` | now |
