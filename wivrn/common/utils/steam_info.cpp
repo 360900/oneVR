@@ -249,7 +249,8 @@ std::vector<wivrn::steam::application> read_appinfo(std::filesystem::path root, 
 		wivrn::steam::application current{};
 		std::string clienticon;
 		std::string linuxclienticon;
-		bool VR = false;
+		bool openvr = false;
+		bool openxr = false;
 
 		void clear()
 		{
@@ -259,7 +260,8 @@ std::vector<wivrn::steam::application> read_appinfo(std::filesystem::path root, 
 			current.url.clear();
 			clienticon.clear();
 			linuxclienticon.clear();
-			VR = false;
+			openvr = false;
+			openxr = false;
 			section.push_back(section::other);
 		}
 
@@ -285,6 +287,11 @@ std::vector<wivrn::steam::application> read_appinfo(std::filesystem::path root, 
 						linuxclienticon = std::move(val);
 					else if (strcasecmp(key.c_str(), "name") == 0)
 						current.name[""] = std::move(val);
+					// Steam stores these as a number for some games, as a string for others
+					else if (key == "openvrsupport")
+						openvr = not val.empty() and val != "0";
+					else if (key == "openxrsupport")
+						openxr = not val.empty() and val != "0";
 					break;
 				case other:
 					break;
@@ -296,7 +303,9 @@ std::vector<wivrn::steam::application> read_appinfo(std::filesystem::path root, 
 			{
 				case common:
 					if (key == "openvrsupport")
-						VR = val;
+						openvr = val;
+					else if (key == "openxrsupport")
+						openxr = val;
 					break;
 				case other:
 					break;
@@ -329,11 +338,12 @@ std::vector<wivrn::steam::application> read_appinfo(std::filesystem::path root, 
 			{
 				v.clear();
 				read_dict(in, v, string_table_ptr);
-				if (v.VR)
+				if (v.openvr or v.openxr)
 				{
 					auto & item = res.emplace_back(std::move(v.current));
 					item.appid = app_id;
-					item.url = std::format("steam://launch/{}/VR", app_id);
+					// a game with both keeps its OpenVR entry, the launch type Steam calls VR
+					item.url = std::format("steam://launch/{}/{}", app_id, v.openvr ? "VR" : "openxr");
 
 					if (auto icon_path = root / "steam/games" / (v.clienticon + ".ico"); std::filesystem::exists(icon_path))
 						item.icon = icon_path;
