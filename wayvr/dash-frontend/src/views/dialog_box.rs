@@ -129,10 +129,14 @@ impl View {
 }
 
 pub fn mount_popup(popup: PopupHolder<View>, frontend_tasks: FrontendTasks, params: Params) {
+	mount_titled_popup(popup, frontend_tasks, Translation::from_raw_text("Info"), params);
+}
+
+pub fn mount_titled_popup(popup: PopupHolder<View>, frontend_tasks: FrontendTasks, title: Translation, params: Params) {
 	frontend_tasks
 		.clone()
 		.push(FrontendTask::MountPopupOnce(MountPopupOnceParams::new(
-			Translation::from_raw_text("Info"),
+			title,
 			Box::new(move |data| {
 				let on_close_request = popup.get_close_callback(data.layout);
 				let view = View::new(data.layout, data.id_content, on_close_request, params)?;

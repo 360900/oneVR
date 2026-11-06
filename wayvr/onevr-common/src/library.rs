@@ -34,6 +34,8 @@ pub struct LibraryState {
 	pub sort: Sort,
 	/// App id to seconds since the epoch
 	pub started: HashMap<String, u64>,
+	/// App id to the key of the Steam launch entry picked for it
+	pub launch_choice: HashMap<String, String>,
 }
 
 fn state_file() -> Option<PathBuf> {

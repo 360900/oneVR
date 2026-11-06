@@ -97,6 +97,10 @@
       "STEAM": "Steam",
       "REMOVE": "Remove",
       "ADD_FAILED": "Couldn't add {NAME}: {ERROR}",
+      "START_FAILED": "Couldn't start {NAME}: {ERROR}",
+      "LAUNCH_OPTION_TITLE": "How to start",
+      "LAUNCH_OPTION_QUESTION": "How should {NAME} start? You can change this later in its menu.",
+      "LAUNCH_OPTION_CANCEL": "Cancel",
       "REMOVE_FAILED": "Couldn't remove {NAME}: {ERROR}",
       "CONTROLLERS_FAILED": "Couldn't save the controllers for {NAME}: {ERROR}"
     },

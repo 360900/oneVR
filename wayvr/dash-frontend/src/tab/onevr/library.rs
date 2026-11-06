@@ -42,9 +42,11 @@ use crate::{
 	},
 	util::{
 		cached_fetcher::{self, CoverArt},
-		steam_utils::{AppManifest, GameSortMethod, SteamUtils},
+		popup_manager::PopupHolder,
+		steam_launch::{self, LaunchOption, SteamLaunchInfo},
+		steam_utils::{self, AppManifest, GameSortMethod, SteamUtils},
 	},
-	views::game_cover,
+	views::{dialog_box, game_cover},
 };
 
 /// WayVR's entries, wayvr.desktop and wayvr-headless.desktop, listed as VR apps when WayVR is
@@ -64,6 +66,10 @@ const CONTROLLER_ACTION_PREFIX: &str = "onevr-controllers;";
 const SORT_ACTION_PREFIX: &str = "onevr-sort;";
 /// Followed by the app id
 const REMOVE_ACTION_PREFIX: &str = "onevr-remove;";
+/// Followed by the Steam app id and the launch entry's key
+const LAUNCH_ACTION_PREFIX: &str = "onevr-launch;";
+/// The pop-up's buttons, which take static names; one over this many options is cut off
+const LAUNCH_POPUP_ACTIONS: [&str; 8] = ["0", "1", "2", "3", "4", "5", "6", "7"];
 /// Apps that can be added, shown at most; the search finds the others
 const MAX_CANDIDATES: usize = 30;
 
@@ -85,6 +91,14 @@ enum Task {
 	},
 	OpenMenu(context_menu::Position, Vec<context_menu::Cell>),
 	SetControllers(u64, ControllerType),
+	/// Starts the app with this Steam launch entry, and remembers it
+	StartChosen {
+		id: String,
+		name: String,
+		key: String,
+	},
+	/// From the app's menu: a Steam launch entry for the next start
+	SetLaunchChoice(String, String),
 	SetSort(Sort),
 	/// Empties the search box and focuses it again, update() then reads that like typing
 	ClearSearch,
@@ -156,6 +170,8 @@ pub struct TabOneVrLibrary<T> {
 	cover_cache: HashMap<String, Cover>,
 	/// Desktop icons by file, read and decoded once like the covers; None when one can't be drawn
 	icons: HashMap<String, Option<CustomGlyphData>>,
+	steam_launch: SteamLaunchInfo,
+	launch_popup: PopupHolder<dialog_box::View>,
 	/// By Steam app id, read once so a render reads no xrizer files
 	controllers: HashMap<u64, ControllerType>,
 	/// A start was pending at the last render, which put its badge on the app
@@ -216,10 +232,28 @@ impl<T: 'static> Tab<T> for TabOneVrLibrary<T> {
 					// a double click; a start that failed can be tried again soon after
 					let repeated = started::starting().is_some_and(|(starting, age)| starting == id && age < REPEAT_GUARD);
 					if !repeated {
-						self.start(frontend, data, id, &name);
-						// shows the badge
+						match self.how_to_start(&id) {
+							Some(how) => {
+								self.start(frontend, data, id, &name, how);
+								// shows the badge
+								redraw = true;
+							}
+							None => self.ask_launch_option(frontend, id, name),
+						}
+					}
+				}
+				Task::StartChosen { id, name, key } => {
+					let arguments = self.launch_option(&id, &key).map(|o| o.arguments.clone());
+					if let Some(arguments) = arguments {
+						self.library.launch_choice.insert(id.clone(), key);
+						self.start(frontend, data, id, &name, StartWith::Steam(arguments));
 						redraw = true;
 					}
+				}
+				Task::SetLaunchChoice(id, key) => {
+					self.library.launch_choice.insert(id, key);
+					self.save_library();
+					redraw = true;
 				}
 				Task::OpenMenu(position, cells) => self.context_menu.open(context_menu::OpenParams {
 					on_custom_attribs: None,
@@ -286,6 +320,7 @@ impl<T: 'static> Tab<T> for TabOneVrLibrary<T> {
 			&& let Some(task) = parse_controllers_action(&name)
 				.or_else(|| parse_sort_action(&name))
 				.or_else(|| parse_remove_action(&name))
+				.or_else(|| parse_launch_action(&name))
 		{
 			self.tasks.push(task);
 		}
@@ -361,6 +396,8 @@ impl<T: 'static> TabOneVrLibrary<T> {
 			search_box: None,
 			search: String::new(),
 			library: LibraryState::load(),
+			steam_launch: SteamLaunchInfo::default(),
+			launch_popup: PopupHolder::default(),
 			sort_started: HashMap::new(),
 			steam_played: HashMap::new(),
 			candidates: Vec::new(),
@@ -394,6 +431,10 @@ impl<T: 'static> TabOneVrLibrary<T> {
 			.filter_map(|game| Some((game.app_id.clone(), game.last_played.filter(|t| *t > 0)?)))
 			.collect();
 		self.sort_started = self.library.started.clone();
+		let ids: Vec<u64> = steam_games.iter().filter_map(|game| game.app_id.parse().ok()).collect();
+		self.steam_launch = SteamUtils::new()
+			.map(|steam| steam_launch::read(steam.root(), &ids))
+			.unwrap_or_default();
 		self.candidates = candidates(steam_games, &entries);
 		self.added = added_apps::added();
 	}
@@ -420,9 +461,93 @@ impl<T: 'static> TabOneVrLibrary<T> {
 		steam.max(ours)
 	}
 
+	fn launch_options(&self, id: &str) -> &[LaunchOption] {
+		id.parse::<u64>()
+			.ok()
+			.and_then(|app_id| self.steam_launch.apps.get(&app_id))
+			.map_or(&[], |app| app.options.as_slice())
+	}
+
+	fn launch_option(&self, id: &str, key: &str) -> Option<&LaunchOption> {
+		self.launch_options(id).iter().find(|option| option.key == key)
+	}
+
+	/// The Steam launch entry an app starts with: the one picked here, else Steam's default
+	fn chosen_option(&self, id: &str) -> Option<&LaunchOption> {
+		let picked = self.library.launch_choice.get(id).map(String::as_str);
+		let default = id
+			.parse::<u64>()
+			.ok()
+			.and_then(|app_id| self.steam_launch.defaults.get(&app_id))
+			.map(String::as_str);
+		picked
+			.and_then(|key| self.launch_option(id, key))
+			.or_else(|| default.and_then(|key| self.launch_option(id, key)))
+	}
+
+	/// How to start an app, None to ask which launch entry first
+	fn how_to_start(&self, id: &str) -> Option<StartWith> {
+		if self.launch_options(id).len() > 1 {
+			return self
+				.chosen_option(id)
+				.map(|option| StartWith::Steam(option.arguments.clone()));
+		}
+		// an added game's entry opens Steam's dialog if it has several entries
+		if self.added.contains(id) && id.parse::<u64>().is_ok() {
+			return Some(StartWith::Steam(String::new()));
+		}
+		Some(StartWith::Server)
+	}
+
+	/// What Steam would ask on the desktop, here where the player can answer
+	fn ask_launch_option(&self, frontend: &Frontend<T>, id: String, name: String) {
+		let options = self.launch_options(&id);
+		let mut entries: Vec<_> = options
+			.iter()
+			.zip(LAUNCH_POPUP_ACTIONS)
+			.enumerate()
+			.map(|(index, (option, action))| dialog_box::ButtonEntry {
+				content: Translation::from_raw_text_string(option_label(option, index)),
+				icon: "@/dashboard/play.svg",
+				action,
+			})
+			.collect();
+		entries.push(dialog_box::ButtonEntry {
+			content: Translation::from_translation_key("ONEVR.LIBRARY.LAUNCH_OPTION_CANCEL"),
+			icon: "@/dashboard/cancel.svg",
+			action: "cancel",
+		});
+		let keys: Vec<String> = options.iter().map(|option| option.key.clone()).collect();
+		let tasks = self.tasks.clone();
+		let globals = frontend.layout.state.globals.clone();
+		let message = globals
+			.i18n()
+			.translate_and_replace("ONEVR.LIBRARY.LAUNCH_OPTION_QUESTION", ("{NAME}", &name));
+		dialog_box::mount_titled_popup(
+			self.launch_popup.clone(),
+			frontend.tasks.clone(),
+			Translation::from_translation_key("ONEVR.LIBRARY.LAUNCH_OPTION_TITLE"),
+			dialog_box::Params {
+				globals,
+				entries,
+				message: Translation::from_raw_text_string(message),
+				on_action_click: Box::new(move |action| {
+					let key = action.parse::<usize>().ok().and_then(|index| keys.get(index));
+					if let Some(key) = key {
+						tasks.push(Task::StartChosen {
+							id,
+							name,
+							key: key.clone(),
+						});
+					}
+				}),
+			},
+		);
+	}
+
 	/// Asks the server to start app `id` and says so, like the Games and Apps tabs. The app shows
 	/// a badge until its session comes or the server refuses it.
-	fn start(&mut self, frontend: &mut Frontend<T>, data: &mut T, id: String, name: &str) {
+	fn start(&mut self, frontend: &mut Frontend<T>, data: &mut T, id: String, name: &str, how: StartWith) {
 		let online = frontend.interface.onevr_state(data).filter(|s| s.link == Link::Online);
 		let Some(generation) = online.map(|s| s.generation) else {
 			// the link refuses it with a toast that says why, nothing starts
@@ -438,9 +563,18 @@ impl<T: 'static> TabOneVrLibrary<T> {
 		// the list is sorted with it on the next visit
 		self.library.mark_started(&id);
 		self.save_library();
-		frontend
-			.tasks
-			.push(FrontendTask::OneVr(OneVrRequest::StartApplication(id)));
+		match how {
+			StartWith::Server => frontend
+				.tasks
+				.push(FrontendTask::OneVr(OneVrRequest::StartApplication(id))),
+			StartWith::Steam(arguments) => {
+				if let Err(e) = steam_utils::launch_with_arguments(&id, &arguments) {
+					log::warn!("Could not start {name} with Steam: {e:?}");
+					toast_error(frontend, "ONEVR.LIBRARY.START_FAILED", name, &e);
+					return;
+				}
+			}
+		}
 		let text = frontend
 			.layout
 			.state
@@ -773,7 +907,30 @@ impl<T: 'static> TabOneVrLibrary<T> {
 	) -> anyhow::Result<()> {
 		let mut cells = Vec::new();
 		let mut controllers = ControllerType::Auto;
-		if let Some(app_id) = app.steam_app_id() {
+		let options = self.launch_options(&app.id);
+		if options.len() > 1 {
+			let chosen = self.chosen_option(&app.id).map(|option| option.key.clone());
+			cells.extend(options.iter().enumerate().map(|(index, option)| {
+				let mut cell = ui::menu_cell(
+					format!("{LAUNCH_ACTION_PREFIX}{};{}", app.id, option.key),
+					Translation::from_raw_text_string(option_label(option, index)),
+				);
+				if let context_menu::Cell::Button(button) = &mut cell
+					&& chosen.as_ref() == Some(&option.key)
+				{
+					button.sprite_src_builtin = Some("@/dashboard/check.svg".into());
+				}
+				cell
+			}));
+		}
+		// xrizer's setting: a game on OpenXR doesn't go through it
+		let openvr_app = app
+			.steam_app_id()
+			.filter(|app_id| !self.steam_launch.apps.get(app_id).is_some_and(|a| a.openxr_only));
+		if let Some(app_id) = openvr_app {
+			if !cells.is_empty() {
+				cells.push(context_menu::Cell::Separator);
+			}
 			controllers = *self
 				.controllers
 				.entry(app_id)
@@ -846,6 +1003,31 @@ const fn controllers_badge_key(ty: ControllerType) -> Option<&'static str> {
 		ControllerType::Touch => Some("ONEVR.LIBRARY.BADGE_TOUCH"),
 		ControllerType::Index => Some("ONEVR.LIBRARY.BADGE_INDEX"),
 	}
+}
+
+/// How an app is started
+enum StartWith {
+	/// With the server's command for it
+	Server,
+	/// With `steam -applaunch` and these arguments, which never open Steam's dialog
+	Steam(String),
+}
+
+/// A launch entry's name, or what its type says
+fn option_label(option: &LaunchOption, index: usize) -> String {
+	option
+		.description
+		.clone()
+		.unwrap_or_else(|| match option.kind.as_str() {
+			"vr" => "OpenVR".to_owned(),
+			"openxr" => "OpenXR".to_owned(),
+			_ => format!("{}", index + 1),
+		})
+}
+
+fn parse_launch_action(name: &str) -> Option<Task> {
+	let (id, key) = name.strip_prefix(LAUNCH_ACTION_PREFIX)?.split_once(';')?;
+	Some(Task::SetLaunchChoice(id.to_owned(), key.to_owned()))
 }
 
 fn parse_controllers_action(name: &str) -> Option<Task> {

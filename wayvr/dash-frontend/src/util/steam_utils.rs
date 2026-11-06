@@ -132,8 +132,29 @@ struct AppEntry {
 
 pub fn launch(app_id: &AppID) -> anyhow::Result<()> {
 	log::info!("Launching Steam game with AppID {}", app_id);
-	call_steam(&format!("steam://rungameid/{}", app_id))?;
+	launch_with_arguments(app_id, "")
+}
+
+/// oneVR: `-applaunch`, as `steam://rungameid` opens Steam's launch option dialog on the desktop,
+/// out of reach in the headset. See [`super::steam_launch`].
+pub fn launch_with_arguments(app_id: &AppID, arguments: &str) -> anyhow::Result<()> {
+	let flatpak = get_steam_root().is_ok_and(|root| root.starts_with(flatpak_root()));
+	let mut command = if flatpak {
+		let mut command = std::process::Command::new("flatpak");
+		command.args(["run", "com.valvesoftware.Steam"]);
+		command
+	} else {
+		std::process::Command::new("steam")
+	};
+	command
+		.args(["-applaunch", app_id])
+		.args(arguments.split_whitespace())
+		.spawn()?;
 	Ok(())
+}
+
+fn flatpak_root() -> PathBuf {
+	PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(".var/app/com.valvesoftware.Steam")
 }
 
 pub fn stop(app_id: AppID, force_kill: bool) -> anyhow::Result<()> {
@@ -228,17 +249,12 @@ pub fn list_running_games() -> anyhow::Result<Vec<RunningGame>> {
 	Ok(res)
 }
 
-fn call_steam(arg: &str) -> anyhow::Result<()> {
-	match std::process::Command::new("xdg-open").arg(arg).spawn() {
-		Ok(_) => Ok(()),
-		Err(_) => {
-			std::process::Command::new("steam").arg(arg).spawn()?;
-			Ok(())
-		}
-	}
-}
-
 impl SteamUtils {
+	/// oneVR
+	pub fn root(&self) -> &std::path::Path {
+		&self.steam_root
+	}
+
 	fn get_dir_steamapps(&self) -> PathBuf {
 		self.steam_root.join("steamapps")
 	}
