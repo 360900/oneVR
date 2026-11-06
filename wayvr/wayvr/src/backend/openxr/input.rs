@@ -25,7 +25,7 @@ use crate::{
 
 use super::{
     XrState,
-    hand_input::{GraspGate, PoseFilter, index_bend},
+    hand_input::{GraspGate, HandLog, PoseFilter, index_bend},
     helpers::posef_to_transform,
 };
 
@@ -43,7 +43,16 @@ pub(super) struct OpenXrInputSource {
     // oneVR: None where the runtime has none
     hand_trackers: [Option<xr::HandTracker>; 2],
     last_display_time: Option<xr::Time>,
+    // TEMP
+    hand_logs: [HandLog; 2],
+    ready_paths: [xr::Path; 2],
 }
+
+// TEMP: `ready_ext` isn't used yet, the log tells whether the runtime's value can be trusted
+const GRASP_READY_PATHS: [&str; 2] = [
+    "/user/hand/left/input/grasp_ext/ready_ext",
+    "/user/hand/right/input/grasp_ext/ready_ext",
+];
 
 pub(super) struct OpenXrPointer {
     source: OpenXrHandSource,
@@ -354,6 +363,11 @@ impl OpenXrInputSource {
             handsfree_pointer: OpenXrPointer::new(xr, fallback_source)?,
             hand_trackers: [hand_tracker(xr::Hand::LEFT), hand_tracker(xr::Hand::RIGHT)],
             last_display_time: None,
+            hand_logs: Default::default(),
+            ready_paths: [
+                xr.instance.string_to_path(GRASP_READY_PATHS[0])?,
+                xr.instance.string_to_path(GRASP_READY_PATHS[1])?,
+            ],
         })
     }
 
@@ -397,9 +411,37 @@ impl OpenXrInputSource {
                     .flatten()
             })
             .and_then(|joints| index_bend(&joints));
+        // TEMP: the values before the gate, for `HandLog`
+        let raw = self.grasp_value(side);
         for input in &mut self.physical_inputs {
             input.gate_grasp(side, bend, frame_secs);
         }
+        if active {
+            let gated = self.grasp_value(side);
+            let ready = self.physical_inputs.iter().any(|input| {
+                input.path == self.ready_paths[side]
+                    && matches!(
+                        input.action,
+                        PhysicalInputAction::Bool {
+                            current: Some(true),
+                            ..
+                        }
+                    )
+            });
+            self.hand_logs[side].update(side, raw, gated, ready, bend, frame_secs);
+        }
+    }
+
+    // TEMP
+    fn grasp_value(&self, side: usize) -> f32 {
+        self.physical_inputs
+            .iter()
+            .filter(|input| matches!(&input.grasp, Some(grasp) if grasp.side == side))
+            .find_map(|input| match input.action {
+                PhysicalInputAction::Float { current, .. } => current,
+                PhysicalInputAction::Bool { .. } => None,
+            })
+            .unwrap_or(0.0)
     }
 
     pub fn update(&mut self, xr: &XrState, app: &mut AppState) -> anyhow::Result<()> {
@@ -826,10 +868,9 @@ fn to_path(path_str: &str, instance: &xr::Instance) -> Option<xr::Path> {
 }
 
 fn is_bool(path_str: &str) -> bool {
-    path_str
-        .split('/')
-        .next_back()
-        .is_some_and(|last| matches!(last, "click" | "touch") || last.starts_with("dpad_"))
+    path_str.split('/').next_back().is_some_and(|last| {
+        matches!(last, "click" | "touch" | "ready_ext") || last.starts_with("dpad_")
+    })
 }
 
 /// oneVR: the side of a hand's `grasp_ext` value
@@ -947,6 +988,13 @@ fn create_physical_inputs(
             plans.push((profile_index, path, is_bool(path_str), grasp));
             map.insert(key, index);
         };
+
+        // TEMP
+        if profile.profile == "/interaction_profiles/ext/hand_interaction_ext" {
+            for path in GRASP_READY_PATHS {
+                add_path(path);
+            }
+        }
 
         for action in button_actions(profile).into_iter().flatten() {
             for side in 0..3 {

@@ -64,6 +64,70 @@ impl PoseFilter {
     }
 }
 
+/// TEMP: what a hand's grasp values look like, logged once a second for tuning the gate
+#[derive(Default)]
+pub(super) struct HandLog {
+    secs: f32,
+    frames: u32,
+    joint_frames: u32,
+    ready_frames: u32,
+    grasp_max: f32,
+    bend_min: Option<f32>,
+    bend_max: Option<f32>,
+    /// Times the raw value reached the press threshold
+    fists: u32,
+    /// Times the gate let it through
+    grabs: u32,
+    was_fist: bool,
+    was_grab: bool,
+}
+
+impl HandLog {
+    pub(super) fn update(
+        &mut self,
+        side: usize,
+        raw: f32,
+        gated: f32,
+        ready: bool,
+        bend: Option<f32>,
+        secs: f32,
+    ) {
+        self.secs += secs;
+        self.frames += 1;
+        self.ready_frames += u32::from(ready);
+        self.grasp_max = self.grasp_max.max(raw);
+        if let Some(bend) = bend {
+            self.joint_frames += 1;
+            self.bend_min = Some(self.bend_min.map_or(bend, |min| min.min(bend)));
+            self.bend_max = Some(self.bend_max.map_or(bend, |max| max.max(bend)));
+        }
+        let fist = raw >= 0.9;
+        let grab = gated > 0.0;
+        self.fists += u32::from(fist && !self.was_fist);
+        self.grabs += u32::from(grab && !self.was_grab);
+        self.was_fist = fist;
+        self.was_grab = grab;
+        if self.secs >= 1.0 {
+            log::info!(
+                "TEMP hand {}: grasp_max={:.2} bend={:.2?}..{:.2?} joints={}% ready={}% fists={} grabs={}",
+                ["left", "right"][side],
+                self.grasp_max,
+                self.bend_min,
+                self.bend_max,
+                self.joint_frames * 100 / self.frames,
+                self.ready_frames * 100 / self.frames,
+                self.fists,
+                self.grabs,
+            );
+            *self = Self {
+                was_fist: fist,
+                was_grab: grab,
+                ..Self::default()
+            };
+        }
+    }
+}
+
 /// How straight the index finger is: the cosine of the angle between its first and last segments,
 /// 1 when straight and below 0 in a fist. None without valid joints.
 pub(super) fn index_bend(joints: &xr::HandJointLocations) -> Option<f32> {
