@@ -31,7 +31,7 @@
 #color_faded: "#668299"
 #color_background: "#010206"
 
-## Path to custom skybox texture, relative to `~/.config/wayvr`
+## Path to custom skybox texture, relative to `~/.config/wayvr`. Empty is the built-in one
 #skybox_texture: ""
 
 ## User-defined list of custom overlays that should be created.

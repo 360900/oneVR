@@ -97,9 +97,6 @@ Server and dashboard:
   wired to the server's headset config, a cross-component change.
 - See-through slider live (#20): the passthrough-fade slider should apply while dragging,
   not only on release.
-- Default skybox Table Mountain 2 (#13): ship it as the default; needs the .dds asset
-  bundled and a default path (skymaps are downloaded at runtime today). Passthrough default
-  is already off.
 - Lobby layout (#23): drop the separator between the computer list and "Add server"; put
   the list under the heading "Pick a PC running the oneVR server to stream from."
 - Real remote stop (optional, from #25): a headset action that actually stops the PC

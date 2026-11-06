@@ -22,6 +22,9 @@ use super::{
     swapchain::{WlxSwapchain, create_swapchain},
 };
 
+/// oneVR: the sky without a custom texture, the same one as the lobby's, see res/lilienstein_8k.txt
+const DEFAULT_TEXTURE: &[u8] = include_bytes!("../../res/lilienstein_8k.dds");
+
 #[allow(clippy::struct_field_names)]
 pub(super) struct Skybox {
     view: Option<Arc<ImageView>>,
@@ -72,6 +75,14 @@ impl Skybox {
         } else {
             "".into()
         };
+
+        if maybe_image.is_none() {
+            match command_buffer.upload_image_dds(DEFAULT_TEXTURE) {
+                Ok(image) => maybe_image = Some(image),
+                // the drawn sky stays
+                Err(e) => log::warn!("Could not use the default skybox texture: {e:?}"),
+            }
+        }
 
         let view = if let Some(image) = maybe_image {
             command_buffer.build_and_execute_now()?;
@@ -330,4 +341,22 @@ pub(super) fn create_skybox(xr: &XrState, app: &AppState) -> Option<Skybox> {
         .exts()
         .khr_composition_layer_equirect2
         .and_then(|_| Skybox::new(xr, app).ok())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image_dds::{ImageFormat, Surface, ddsfile::Dds};
+
+    #[test]
+    fn default_texture_loads_as_the_custom_ones_do() {
+        let dds = Dds::read(DEFAULT_TEXTURE).unwrap();
+        let surface = Surface::from_dds(&dds).unwrap();
+        assert_eq!(
+            (surface.width, surface.height, surface.depth),
+            (8192, 4096, 1)
+        );
+        // like the downloaded skymaps, which frag_srgb expects
+        assert_eq!(surface.image_format, ImageFormat::BC7RgbaUnorm);
+    }
 }
