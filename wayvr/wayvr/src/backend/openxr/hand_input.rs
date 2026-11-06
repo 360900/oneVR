@@ -1,6 +1,8 @@
 //! oneVR: hand tracking input that the runtime's values alone get wrong.
 
-use glam::Vec3;
+use std::f32::consts::TAU;
+
+use glam::{Affine3A, Quat, Vec3};
 use openxr as xr;
 
 /// A fist has to last this long, which drops the runtime's spikes
@@ -9,6 +11,58 @@ const GRASP_HOLD_SECS: f32 = 0.12;
 const INDEX_CURLED: f32 = 0.2;
 /// [`index_bend`] above this ends a grab, about 50 degrees
 const INDEX_EXTENDED: f32 = 0.6;
+
+/// [`PoseFilter`]: the cutoff of a still hand, in Hz. Lower hides more jitter and lags more.
+const POSE_MIN_CUTOFF: f32 = 2.0;
+/// [`PoseFilter`]: how fast the cutoff rises, in Hz per m/s. Higher lags less in a fast move.
+const POSITION_BETA: f32 = 10.0;
+/// [`PoseFilter`]: as [`POSITION_BETA`], in Hz per rad/s
+const ROTATION_BETA: f32 = 2.0;
+/// [`PoseFilter`]: smooths the measured speed, in Hz
+const SPEED_CUTOFF: f32 = 1.0;
+
+/// The share of the way to a new sample that a low-pass filter with this cutoff takes
+fn low_pass(cutoff: f32, secs: f32) -> f32 {
+    let step = TAU * cutoff * secs;
+    step / (1.0 + step)
+}
+
+/// A One Euro filter for the pointer of a tracked hand: strong while the hand is nearly still, where
+/// jitter shows on a far panel, and weak while it moves, where lag would show.
+#[derive(Default)]
+pub(super) struct PoseFilter {
+    last: Option<(Vec3, Quat)>,
+    position_speed: f32,
+    rotation_speed: f32,
+}
+
+impl PoseFilter {
+    pub(super) fn update(&mut self, pose: Affine3A, secs: f32) -> Affine3A {
+        let (position, rotation) = (Vec3::from(pose.translation), Quat::from_affine3(&pose));
+        let Some((last_position, last_rotation)) = self.last else {
+            self.last = Some((position, rotation));
+            return pose;
+        };
+
+        let speed_step = low_pass(SPEED_CUTOFF, secs);
+        self.position_speed +=
+            speed_step * (position.distance(last_position) / secs - self.position_speed);
+        self.rotation_speed +=
+            speed_step * (rotation.angle_between(last_rotation) / secs - self.rotation_speed);
+
+        let position_step = low_pass(POSE_MIN_CUTOFF + POSITION_BETA * self.position_speed, secs);
+        let rotation_step = low_pass(POSE_MIN_CUTOFF + ROTATION_BETA * self.rotation_speed, secs);
+        let position = last_position.lerp(position, position_step);
+        let rotation = last_rotation.slerp(rotation, rotation_step);
+        self.last = Some((position, rotation));
+        Affine3A::from_rotation_translation(rotation, position)
+    }
+
+    /// The next pose is taken as it is, as after the hand was lost
+    pub(super) fn reset(&mut self) {
+        *self = Self::default();
+    }
+}
 
 /// How straight the index finger is: the cosine of the angle between its first and last segments,
 /// 1 when straight and below 0 in a fist. None without valid joints.
@@ -90,6 +144,62 @@ mod tests {
             open = gate.update(value, bend, DT);
         }
         open
+    }
+
+    fn pose(x: f32) -> Affine3A {
+        Affine3A::from_translation(Vec3::new(x, 0.0, 0.0))
+    }
+
+    #[test]
+    fn the_first_pose_passes() {
+        let mut filter = PoseFilter::default();
+        assert_eq!(filter.update(pose(1.0), DT).translation.x, 1.0);
+    }
+
+    #[test]
+    fn jitter_shrinks_while_still() {
+        let mut filter = PoseFilter::default();
+        filter.update(pose(0.0), DT);
+        let mut furthest = 0.0f32;
+        for i in 0..(2.0 / DT) as usize {
+            let jitter = if i % 2 == 0 { 0.002 } else { -0.002 };
+            furthest = furthest.max(filter.update(pose(jitter), DT).translation.x.abs());
+        }
+        assert!(furthest < 0.001, "{furthest}");
+    }
+
+    #[test]
+    fn a_fast_move_follows_closely() {
+        let mut filter = PoseFilter::default();
+        filter.update(pose(0.0), DT);
+        // 2 m/s for a quarter of a second
+        let frames = (0.25 / DT) as usize;
+        let mut last = 0.0;
+        for i in 1..=frames {
+            last = filter.update(pose(i as f32 * 2.0 * DT), DT).translation.x;
+        }
+        let target = frames as f32 * 2.0 * DT;
+        assert!(target - last < 0.1, "{last} of {target}");
+    }
+
+    #[test]
+    fn rotation_stays_normalized() {
+        let mut filter = PoseFilter::default();
+        let turned =
+            |angle| Affine3A::from_rotation_translation(Quat::from_rotation_y(angle), Vec3::ZERO);
+        filter.update(turned(0.0), DT);
+        for i in 1..200 {
+            let rotation = Quat::from_affine3(&filter.update(turned(i as f32 * 0.05), DT));
+            assert!(rotation.is_normalized());
+        }
+    }
+
+    #[test]
+    fn reset_takes_the_next_pose_as_it_is() {
+        let mut filter = PoseFilter::default();
+        filter.update(pose(0.0), DT);
+        filter.reset();
+        assert_eq!(filter.update(pose(5.0), DT).translation.x, 5.0);
     }
 
     #[test]

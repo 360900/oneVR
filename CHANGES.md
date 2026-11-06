@@ -104,3 +104,4 @@ oneVR's Monado patches are `wivrn/patches/monado/onevr-NNNN-*.patch`, which sort
 | wayvr | no space after the description of `RESET_SPACE_DRAG` in the CSV language file; upstream's space failed the language key test | `dash-frontend/assets/lang/en.csv` |
 | wayvr | the desktop window and tray quit when the running server stops, also when stopped from the headset | `onevr-ui/src/{app.rs,main.rs}` |
 | wayvr | a hand grabs only with a fist held for 120 ms and a curled index finger, read from `XR_EXT_hand_tracking` while the hand is the input; a pointing hand no longer grabs or counts as a double fist when the runtime reports a high `grasp_ext` value | `wayvr/src/backend/openxr/{helpers.rs,input.rs,mod.rs}`; new `wayvr/src/backend/openxr/hand_input.rs` |
+| wayvr | the pointer of a tracked hand goes through a One Euro filter instead of the lerp: steadier while nearly still, close behind in a fast move | `wayvr/src/backend/openxr/{hand_input.rs,input.rs}` |

@@ -25,7 +25,7 @@ use crate::{
 
 use super::{
     XrState,
-    hand_input::{GraspGate, index_bend},
+    hand_input::{GraspGate, PoseFilter, index_bend},
     helpers::posef_to_transform,
 };
 
@@ -48,6 +48,8 @@ pub(super) struct OpenXrInputSource {
 pub(super) struct OpenXrPointer {
     source: OpenXrHandSource,
     space: xr::Space,
+    // oneVR: replaces the lerp while a tracked hand points
+    hand_filter: PoseFilter,
 }
 
 pub(super) struct PhysicalInput {
@@ -447,11 +449,16 @@ impl OpenXrInputSource {
             let should_disable_lerp = app.input_state.should_disable_lerp();
             for i in 0..2 {
                 let pointer = &mut app.input_state.pointers[i];
+                let hand_secs = physical_inputs
+                    .iter()
+                    .any(|input| input.is_active_grasp(i))
+                    .then_some(frame_secs);
                 self.pointers[i].update(
                     pointer,
                     xr,
                     &app.session,
                     !should_disable_lerp,
+                    hand_secs,
                     physical_inputs,
                 )?;
                 any_tracked |= pointer.tracked;
@@ -576,7 +583,11 @@ impl OpenXrPointer {
             .pose
             .create_space(&xr.session, xr::Path::NULL, xr::Posef::IDENTITY)?;
 
-        Ok(Self { source, space })
+        Ok(Self {
+            source,
+            space,
+            hand_filter: PoseFilter::default(),
+        })
     }
 
     fn locate_tracked_pose(&self, xr: &XrState) -> anyhow::Result<Option<Affine3A>> {
@@ -660,6 +671,7 @@ impl OpenXrPointer {
         xr: &XrState,
         session: &AppSession,
         do_lerp: bool,
+        hand_secs: Option<f32>,
         physical_inputs: &[PhysicalInput],
     ) -> anyhow::Result<()> {
         pointer.handsfree = false;
@@ -672,6 +684,11 @@ impl OpenXrPointer {
                 None
             },
         )?;
+        // oneVR: a tracked hand gets its own filter, what a lerp lets through stutters on a far panel
+        match hand_secs.filter(|_| do_lerp && pointer.tracked) {
+            Some(secs) => pointer.pose = self.hand_filter.update(pointer.raw_pose, secs),
+            None => self.hand_filter.reset(),
+        }
         self.pointer_load_actions(pointer, xr, physical_inputs)?;
 
         Ok(())
