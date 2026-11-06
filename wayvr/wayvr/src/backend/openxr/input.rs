@@ -23,7 +23,11 @@ use crate::{
     state::{AppSession, AppState},
 };
 
-use super::{XrState, helpers::posef_to_transform};
+use super::{
+    XrState,
+    hand_input::{GraspGate, index_bend},
+    helpers::posef_to_transform,
+};
 
 static CLICK_TIMES: [Duration; 3] = [
     Duration::ZERO,
@@ -36,6 +40,9 @@ pub(super) struct OpenXrInputSource {
     physical_inputs: Vec<PhysicalInput>,
     pointers: [OpenXrPointer; 2],
     handsfree_pointer: OpenXrPointer,
+    // oneVR: None where the runtime has none
+    hand_trackers: [Option<xr::HandTracker>; 2],
+    last_display_time: Option<xr::Time>,
 }
 
 pub(super) struct OpenXrPointer {
@@ -47,6 +54,13 @@ pub(super) struct PhysicalInput {
     profile_index: usize,
     path: xr::Path,
     action: PhysicalInputAction,
+    // oneVR: a hand's `grasp_ext` value, which counts only when the gate lets it
+    grasp: Option<GraspInput>,
+}
+
+struct GraspInput {
+    side: usize,
+    gate: GraspGate,
 }
 
 enum PhysicalInputAction {
@@ -73,6 +87,37 @@ impl PhysicalInput {
             }
         }
         Ok(())
+    }
+
+    /// oneVR: active only while its binding's interaction profile is, so a hand's input is active
+    /// only while that hand is tracked instead of holding a controller
+    const fn is_active_grasp(&self, side: usize) -> bool {
+        matches!(&self.grasp, Some(grasp) if grasp.side == side)
+            && matches!(
+                self.action,
+                PhysicalInputAction::Float {
+                    current: Some(_),
+                    ..
+                }
+            )
+    }
+
+    /// oneVR: zeroes a hand's `grasp_ext` value unless the gate lets it through
+    fn gate_grasp(&mut self, side: usize, bend: Option<f32>, dt: f32) {
+        let Some(grasp) = self.grasp.as_mut().filter(|grasp| grasp.side == side) else {
+            return;
+        };
+        let PhysicalInputAction::Float { current, .. } = &mut self.action else {
+            return;
+        };
+        match current {
+            Some(value) => {
+                if !grasp.gate.update(*value, bend, dt) {
+                    *value = 0.0;
+                }
+            }
+            None => grasp.gate.reset(),
+        }
     }
 
     fn pressed(&self, before: bool, threshold: [f32; 2]) -> bool {
@@ -290,6 +335,13 @@ impl OpenXrInputSource {
 
         xr.session.attach_action_sets(&[&action_set])?;
 
+        let hand_tracker = |hand| {
+            xr.session
+                .create_hand_tracker(hand)
+                .inspect_err(|e| log::warn!("No hand tracker: {e}"))
+                .ok()
+        };
+
         Ok(Self {
             action_set,
             physical_inputs,
@@ -298,6 +350,8 @@ impl OpenXrInputSource {
                 OpenXrPointer::new(xr, right_source)?,
             ],
             handsfree_pointer: OpenXrPointer::new(xr, fallback_source)?,
+            hand_trackers: [hand_tracker(xr::Hand::LEFT), hand_tracker(xr::Hand::RIGHT)],
+            last_display_time: None,
         })
     }
 
@@ -316,11 +370,45 @@ impl OpenXrInputSource {
         );
     }
 
+    /// oneVR: the time since the last update, in seconds
+    fn frame_secs(&mut self, xr: &XrState) -> f32 {
+        let now = xr.predicted_display_time;
+        let last = self.last_display_time.replace(now).unwrap_or(now);
+        let secs = (now.as_nanos() - last.as_nanos()) as f32 * 1e-9;
+        secs.clamp(0.001, 0.1)
+    }
+
+    /// oneVR: locates the joints only while the hand is the input: asking makes the headset track
+    /// hands, which a game played with controllers shouldn't pay for
+    fn gate_grasps(&mut self, xr: &XrState, side: usize, frame_secs: f32) {
+        let active = self
+            .physical_inputs
+            .iter()
+            .any(|input| input.is_active_grasp(side));
+        let bend = self.hand_trackers[side]
+            .as_ref()
+            .filter(|_| active)
+            .and_then(|tracker| {
+                xr.stage
+                    .locate_hand_joints(tracker, xr.predicted_display_time)
+                    .ok()
+                    .flatten()
+            })
+            .and_then(|joints| index_bend(&joints));
+        for input in &mut self.physical_inputs {
+            input.gate_grasp(side, bend, frame_secs);
+        }
+    }
+
     pub fn update(&mut self, xr: &XrState, app: &mut AppState) -> anyhow::Result<()> {
         xr.session.sync_actions(&[(&self.action_set).into()])?;
 
         for input in &mut self.physical_inputs {
             input.update(&xr.session)?;
+        }
+        let frame_secs = self.frame_secs(xr);
+        for side in 0..2 {
+            self.gate_grasps(xr, side, frame_secs);
         }
         let physical_inputs = &self.physical_inputs;
 
@@ -727,6 +815,15 @@ fn is_bool(path_str: &str) -> bool {
         .is_some_and(|last| matches!(last, "click" | "touch") || last.starts_with("dpad_"))
 }
 
+/// oneVR: the side of a hand's `grasp_ext` value
+fn grasp_side(path_str: &str) -> Option<usize> {
+    match path_str {
+        "/user/hand/left/input/grasp_ext/value" => Some(0),
+        "/user/hand/right/input/grasp_ext/value" => Some(1),
+        _ => None,
+    }
+}
+
 fn for_each_path(spec: Option<&OneOrMany<String>>, mut f: impl FnMut(&str)) {
     let Some(spec) = spec else {
         return;
@@ -799,7 +896,7 @@ fn create_physical_inputs(
     instance: &xr::Instance,
     profiles: &[OpenXrInputProfile],
 ) -> anyhow::Result<(Vec<PhysicalInput>, PhysicalInputMap)> {
-    let mut plans = Vec::<(usize, xr::Path, bool)>::new();
+    let mut plans = Vec::<(usize, xr::Path, bool, Option<GraspInput>)>::new();
     let mut map = PhysicalInputMap::new();
 
     for (profile_index, profile) in profiles.iter().enumerate() {
@@ -819,7 +916,18 @@ fn create_physical_inputs(
             };
 
             let index = plans.len();
-            plans.push((profile_index, path, is_bool(path_str)));
+            let grasp = grasp_side(path_str).map(|side| GraspInput {
+                side,
+                gate: GraspGate::new(
+                    profile
+                        .grab
+                        .as_ref()
+                        .map_or(DEFAULT_BUTTON_THRESHOLDS, |grab| {
+                            action_threshold(grab, side)
+                        }),
+                ),
+            });
+            plans.push((profile_index, path, is_bool(path_str), grasp));
             map.insert(key, index);
         };
 
@@ -842,7 +950,7 @@ fn create_physical_inputs(
     }
 
     let mut physical_inputs = Vec::with_capacity(plans.len());
-    for (index, (profile_index, path, bool_input)) in plans.into_iter().enumerate() {
+    for (index, (profile_index, path, bool_input, grasp)) in plans.into_iter().enumerate() {
         let name = format!("physical_input_{index}");
         let display_name = format!("Physical input {index}");
         let action = if bool_input {
@@ -861,6 +969,7 @@ fn create_physical_inputs(
             profile_index,
             path,
             action,
+            grasp,
         });
     }
 

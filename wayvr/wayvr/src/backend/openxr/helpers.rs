@@ -68,6 +68,12 @@ pub(super) fn init_xr() -> Result<(xr::Instance, xr::SystemId, ExtraExts), anyho
     } else {
         log::warn!("Missing EXT_hand_interaction extension.");
     }
+    // oneVR: the fingers tell a fist from a pointing hand, see `hand_input::GraspGate`
+    if available_extensions.ext_hand_tracking {
+        enabled_extensions.ext_hand_tracking = true;
+    } else {
+        log::warn!("Missing EXT_hand_tracking extension.");
+    }
     if available_extensions.ext_eye_gaze_interaction {
         enabled_extensions.ext_eye_gaze_interaction = true;
         extra_exts.ext_eye_gaze_interaction = true;

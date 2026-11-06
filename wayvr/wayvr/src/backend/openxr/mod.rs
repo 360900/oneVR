@@ -39,6 +39,7 @@ use crate::{
 };
 
 mod blocker;
+mod hand_input;
 mod helpers;
 mod input;
 mod lines;
