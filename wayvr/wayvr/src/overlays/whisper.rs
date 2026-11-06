@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc, time::Duration};
 
-use glam::Affine3A;
+use glam::{Affine3A, Quat, Vec3, vec3};
 use wgui::{
     animation::{Animation, AnimationDuration, AnimationEasing},
     color::WguiColor,
@@ -433,13 +433,12 @@ pub fn create_whisper(app: &mut AppState) -> anyhow::Result<OverlayWindowConfig>
 
     panel.update_layout(app)?;
 
-    #[allow(clippy::unreadable_literal)]
-    let transform = Affine3A::from_cols_array_2d(&[
-        [0.49993715, -0.00020921684, -0.008030709],
-        [-0.0021463279, 0.47818363, -0.14607349],
-        [0.007741399, 0.1460891, 0.478121],
-        [-0.021562248, -0.40786624, -0.3346647],
-    ]);
+    // oneVR: between the dashboard and the keyboard
+    let transform = Affine3A::from_scale_rotation_translation(
+        Vec3::ONE * 0.25,
+        Quat::from_rotation_x(-17f32.to_radians()),
+        vec3(0.0, -0.21, 0.04),
+    );
 
     Ok(OverlayWindowConfig {
         name: WHISPER_NAME.into(),

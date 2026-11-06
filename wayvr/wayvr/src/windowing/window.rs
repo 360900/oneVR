@@ -1,7 +1,7 @@
 use glam::{Affine3A, EulerRot, Mat3A, Quat, Vec3, Vec3A};
 use idmap_derive::IntegerId;
 use std::{f32::consts::PI, sync::Arc, time::Instant};
-use wlx_common::windowing::{OverlayWindowState, Positioning};
+use wlx_common::windowing::{OverlayWindowState, PendingPlacement, Positioning};
 
 use crate::{
     overlays::toast::TOAST_NAME,
@@ -11,7 +11,7 @@ use crate::{
         backend::{
             FrameMeta, OverlayBackend, OverlayLifetimeUpdate, RenderResources, ShouldRender,
         },
-        raycast_overlay, snap_upright,
+        layout, raycast_overlay,
     },
 };
 
@@ -352,15 +352,49 @@ impl OverlayWindowConfig {
         state.alpha = state.alpha.clamp(0., 1.);
     }
 
-    /// Returns true if changes were saved.
+    /// Places the overlay for showing it. A hard reset forgets where it was.
+    ///
+    /// oneVR: what opens anew goes in front of the head, not where the anchor was left. In the
+    /// parent's frame, as `auto_movement` holds it there from the next frame.
     pub fn reset(&mut self, app: &mut AppState, hard_reset: bool) {
         let Some(state) = self.active_state.as_mut() else {
             return;
         };
 
-        let cur_transform = state
-            .saved_transform
-            .unwrap_or(self.default_state.transform);
+        let pending = std::mem::take(&mut state.pending);
+        if matches!(pending, PendingPlacement::Default) {
+            state.positioning = self.default_state.positioning;
+            state.saved_transform = None;
+        }
+        if hard_reset {
+            state.saved_transform = None;
+        }
+
+        let cur_transform = match pending {
+            PendingPlacement::Seat(seated) => seated,
+            _ => state
+                .saved_transform
+                .unwrap_or(self.default_state.transform),
+        };
+
+        // the anchor's own marker and the like stay where the anchor is
+        let to_head = self.category != OverlayCategory::Internal
+            && (hard_reset
+                || !matches!(pending, PendingPlacement::None)
+                || (matches!(state.positioning, Positioning::Static)
+                    && state.saved_transform.is_none()));
+
+        if to_head
+            && matches!(
+                state.positioning,
+                Positioning::Anchored | Positioning::Floating | Positioning::Static
+            )
+        {
+            state.transform = layout::seat(&app.input_state.hmd) * cur_transform;
+            save_transform(state, app);
+            self.dirty = true;
+            return;
+        }
 
         let parent_transform = match state.positioning {
             Positioning::FollowHead { .. } => app.input_state.hmd,
@@ -374,10 +408,6 @@ impl OverlayWindowConfig {
                 }
             }
         };
-
-        if hard_reset {
-            state.saved_transform = None;
-        }
 
         state.transform = parent_transform * cur_transform;
 
@@ -453,10 +483,10 @@ pub fn scalar_scale(a: &Affine3A) -> f32 {
 
 pub fn save_transform(state: &mut OverlayWindowState, app: &mut AppState) {
     let parent_transform = match state.positioning {
-        Positioning::Floating => app.anchor,
+        // the frame `auto_movement` and `reset` put it back in, or it jumps
+        Positioning::Anchored | Positioning::Floating => app.anchor,
         Positioning::FollowHead { .. } => app.input_state.hmd,
         Positioning::FollowHand { hand, .. } => app.input_state.pointers[hand as usize].pose,
-        Positioning::Anchored => snap_upright(app.anchor, Vec3A::Y),
         Positioning::Static => Affine3A::IDENTITY,
     };
 
@@ -470,7 +500,8 @@ pub fn spawn_transform_from_parent(
 ) -> Affine3A {
     const LEFT: f32 = 0.08;
     const DOWN: f32 = 0.08;
-    const CLOSER_TO_HMD: f32 = 0.06;
+    // oneVR: a few stay behind the dashboard, which is 0.1 m in front of a panel
+    const CLOSER_TO_HMD: f32 = 0.02;
 
     let x_axis = parent.x_axis.normalize();
     let y_axis = parent.y_axis.normalize();

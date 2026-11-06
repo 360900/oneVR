@@ -60,6 +60,8 @@ pub struct AppState {
     pub screens: SmallVec<[ScreenMeta; 8]>,
     pub anchor: Affine3A,
     pub anchor_grabbed: bool,
+    /// oneVR: the head when the layout was last placed, relative to the anchor
+    pub anchor_head: Affine3A,
 
     pub wgui_globals: WguiGlobals,
     pub wgui_theme: Rc<WguiTheme>,
@@ -210,6 +212,7 @@ impl AppState {
             screens: smallvec![],
             anchor: Affine3A::IDENTITY,
             anchor_grabbed: false,
+            anchor_head: Affine3A::IDENTITY,
             wgui_theme: Rc::new(theme),
             wgui_globals: params.wgui_globals,
             executor,

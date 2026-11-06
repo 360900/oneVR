@@ -84,6 +84,17 @@ impl Positioning {
 	}
 }
 
+/// oneVR: a placement to apply the next time an overlay is shown, as the head isn't known at launch
+#[derive(Clone, Copy, Debug, Default)]
+pub enum PendingPlacement {
+	#[default]
+	None,
+	/// Forget where it was: the overlay's default transform and positioning, in front of the head
+	Default,
+	/// This transform, relative to where the anchor would be for the head
+	Seat(Affine3A),
+}
+
 // Contains the window state for a given set
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -101,6 +112,8 @@ pub struct OverlayWindowState {
 	pub angle_fade: bool,
 	#[serde(default)]
 	pub align_to_hmd: bool,
+	#[serde(skip_serializing, skip_deserializing)]
+	pub pending: PendingPlacement,
 }
 
 impl Default for OverlayWindowState {
@@ -117,6 +130,7 @@ impl Default for OverlayWindowState {
 			block_input: true,
 			angle_fade: false,
 			align_to_hmd: false,
+			pending: PendingPlacement::None,
 		}
 	}
 }

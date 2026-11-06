@@ -35,6 +35,9 @@ pub fn shift_world<OverlayData>(
         state.transform = correction * state.transform;
         overlay.config.dirty = true;
     });
+
+    // oneVR: those stored in stage space, or they come back where the world was
+    overlays.shift_static_states(&correction);
 }
 
 pub struct SpaceGravityUpdateResult {

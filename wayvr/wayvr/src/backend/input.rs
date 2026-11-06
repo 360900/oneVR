@@ -1066,6 +1066,8 @@ where
         pointer.interaction.grabbed = None;
         if grab_anchor {
             app.anchor_grabbed = false;
+            // oneVR: placed by hand, for this head
+            app.anchor_head = app.anchor.inverse() * app.input_state.hmd;
         } else {
             // single grab released
             if &*overlay.config.name == WATCH_NAME {

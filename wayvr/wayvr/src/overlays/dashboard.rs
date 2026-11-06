@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::Context;
 use dash_frontend::frontend::{self, FrontendTask, FrontendUpdateParams};
-use glam::{Affine2, Affine3A, Quat, Vec2, vec2, vec3};
+use glam::{Affine2, Affine3A, Quat, Vec2, Vec3, vec2};
 use wayvr_ipc::{
     packet_client::WvrProcessLaunchParams,
     packet_server::{WvrProcess, WvrProcessHandle, WvrWindow, WvrWindowHandle},
@@ -54,6 +54,7 @@ use crate::{
             FrameMeta, OverlayBackend, OverlayEventData, RenderResources, ShouldRender,
             ui_transform,
         },
+        layout,
         window::{OverlayCategory, OverlayWindowConfig, realign},
     },
 };
@@ -358,11 +359,23 @@ fn tutorial_spawn_effect(app: &mut AppState) {
             Box::new(|app, owc| {
                 let hmd = &app.input_state.hmd;
                 let pos = hmd.translation + hmd.z_axis * -2.0;
-                let mut transform = Affine3A::from_rotation_translation(Quat::IDENTITY, pos.into());
-                realign(&mut transform, hmd, 1.0, app.session.config.snap_angle_deg);
+                let mut transform = Affine3A::from_scale_rotation_translation(
+                    Vec3::ONE * layout::DASHBOARD_WIDTH,
+                    Quat::IDENTITY,
+                    pos.into(),
+                );
+                realign(
+                    &mut transform,
+                    hmd,
+                    layout::DASHBOARD_WIDTH,
+                    app.session.config.snap_angle_deg,
+                );
 
                 owc.active_state = Some(OverlayWindowState {
-                    saved_transform: Some(Affine3A::from_translation(vec3(0., -0.1, -0.1))),
+                    saved_transform: Some(
+                        layout::seat_local()
+                            * Affine3A::from_scale(Vec3::ONE * layout::DASHBOARD_WIDTH),
+                    ),
                     transform,
                     grabbable: true,
                     interactable: true,
@@ -400,7 +413,8 @@ pub fn create_dash_frontend(app: &mut AppState) -> anyhow::Result<OverlayWindowC
     Ok(OverlayWindowConfig {
         name: DASH_NAME.into(),
         default_state: OverlayWindowState {
-            transform: Affine3A::from_translation(vec3(0., 0., -0.1)),
+            // oneVR: at the anchor, which is where the WiVRn lobby's main window goes
+            transform: Affine3A::from_scale(Vec3::ONE * layout::DASHBOARD_WIDTH),
             grabbable: true,
             interactable: true,
             positioning: Positioning::Floating,

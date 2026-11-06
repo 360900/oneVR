@@ -53,7 +53,7 @@ pub fn new_passthru(name: Arc<str>, app: &AppState) -> OverlayWindowConfig {
             transform: Affine3A::from_scale_rotation_translation(
                 Vec3::ONE * 0.5,
                 Quat::IDENTITY,
-                Vec3::new(0., 0., -0.5),
+                Vec3::new(0., 0., -0.1),
             ),
             grabbable: true,
             interactable: true,

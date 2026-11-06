@@ -26,11 +26,12 @@ use crate::{
     },
     windowing::{
         backend::{FrameMeta, OverlayBackend, OverlayEventData, RenderResources, ShouldRender},
+        layout as window_layout,
         window::{OverlayCategory, OverlayWindowConfig},
     },
 };
 use anyhow::Context;
-use glam::{Affine3A, Quat, Vec3, vec3};
+use glam::{Affine3A, Quat, Vec3};
 use regex::Regex;
 use slotmap::{SlotMap, new_key_type};
 use smallvec::SmallVec;
@@ -61,7 +62,8 @@ pub fn create_keyboard(app: &mut AppState) -> anyhow::Result<OverlayWindowConfig
 
     let auto_labels = layout.auto_labels.unwrap_or(true);
 
-    let width = layout.row_size * 0.05 * app.session.config.keyboard_scale;
+    let width =
+        layout.row_size * window_layout::KEYBOARD_KEY_WIDTH * app.session.config.keyboard_scale;
 
     let mut maybe_keymap = KeyboardBackend::get_initial_keymap(app).ok();
 
@@ -111,8 +113,8 @@ pub fn create_keyboard(app: &mut AppState) -> anyhow::Result<OverlayWindowConfig
             alpha: app.session.config.default_opacity,
             transform: Affine3A::from_scale_rotation_translation(
                 Vec3::ONE * width,
-                Quat::from_rotation_x(-10f32.to_radians()),
-                vec3(0.0, -0.65, -0.5),
+                Quat::from_rotation_x(window_layout::KEYBOARD_PITCH_RAD),
+                window_layout::KEYBOARD_POSITION,
             ),
             ..OverlayWindowState::default()
         },

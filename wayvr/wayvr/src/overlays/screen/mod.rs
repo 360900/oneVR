@@ -1,6 +1,6 @@
 use std::{f32::consts::PI, sync::Arc};
 
-use glam::{Affine3A, Quat, Vec3, vec3};
+use glam::Quat;
 use wlx_capture::frame::Transform;
 use wlx_common::windowing::OverlayWindowState;
 
@@ -10,6 +10,7 @@ use crate::{
     subsystem::input::InputFocus,
     windowing::{
         backend::OverlayBackend,
+        layout,
         window::{OverlayCategory, OverlayWindowConfig},
     },
 };
@@ -54,10 +55,9 @@ fn create_screen_from_backend(
             curvature: none_if_0(session.config.default_curvature),
             alpha: session.config.default_opacity,
             interactable: true,
-            transform: Affine3A::from_scale_rotation_translation(
-                Vec3::ONE * 1.5 * session.config.default_overlay_scale,
+            transform: layout::panel_transform(
+                session.config.default_overlay_scale,
                 Quat::from_rotation_z(angle),
-                vec3(0.0, 0.0, -0.5),
             ),
             ..OverlayWindowState::default()
         },

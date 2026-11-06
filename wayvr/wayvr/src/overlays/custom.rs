@@ -1,4 +1,4 @@
-use glam::{Affine3A, Quat, Vec3, vec3};
+use glam::Quat;
 use std::{sync::Arc, time::Duration};
 use wgui::globals::expand_env_vars;
 use wlx_common::{
@@ -14,6 +14,7 @@ use crate::{
     state::AppState,
     windowing::{
         backend::OverlayEventData,
+        layout,
         window::{OverlayCategory, OverlayWindowConfig},
     },
 };
@@ -70,10 +71,9 @@ pub fn create_custom(app: &mut AppState, name: Arc<str>) -> Option<OverlayWindow
         default_state: OverlayWindowState {
             interactable: true,
             grabbable: true,
-            transform: Affine3A::from_scale_rotation_translation(
-                Vec3::ONE * scale,
+            transform: layout::panel_transform(
+                scale * layout::OLD_DISTANCE_TO_PANEL / layout::PANEL_WIDTH,
                 Quat::IDENTITY,
-                vec3(0.0, 0.0, -0.5),
             ),
             ..OverlayWindowState::default()
         },

@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::Context;
-use glam::{Affine3A, Vec3, Vec3A};
+use glam::{Affine3A, Vec3};
 use slotmap::{Key, SecondaryMap, SlotMap};
 use wgui::{i18n::Translation, log::LogErr};
 use wlx_common::{
@@ -14,7 +14,7 @@ use wlx_common::{
     astr_containers::{AStrMap, AStrMapExt},
     config::SerializedWindowSet,
     overlays::{BackendAttrib, BackendAttribValue, ToastTopic},
-    windowing::{OverlayWindowState, Positioning},
+    windowing::{OverlayWindowState, PendingPlacement, Positioning},
 };
 
 use crate::{
@@ -36,8 +36,8 @@ use crate::{
     windowing::{
         OverlayID, OverlaySelector,
         backend::{OverlayEventData, OverlayMeta},
+        layout,
         set::OverlayWindowSet,
-        snap_upright,
         window::{
             OverlayCategory, OverlayWindowData, save_transform, scalar_scale,
             spawn_transform_from_parent,
@@ -47,6 +47,30 @@ use crate::{
 
 pub const MAX_OVERLAY_SETS: usize = 6;
 pub const GLOBAL_SET: &str = "global";
+
+/// oneVR: for an overlay shown after the head left a layout that stays visible: it comes along, at
+/// its place in the layout, and the rest stays
+const fn bring_along(state: &mut OverlayWindowState) {
+    if matches!(
+        state.positioning,
+        Positioning::Anchored | Positioning::Floating
+    ) && let Some(saved) = state.saved_transform
+    {
+        state.pending = PendingPlacement::Seat(saved);
+    }
+}
+
+/// oneVR: a window gets its name after it opened: without a placement to restore, it stays at the
+/// spot it opened at instead of going back to the default on top of another
+const fn keep_spawn_spot(state: &mut OverlayWindowState, current: Option<&OverlayWindowState>) {
+    if matches!(state.pending, PendingPlacement::Default)
+        && let Some(current) = current
+    {
+        state.pending = PendingPlacement::None;
+        state.positioning = current.positioning;
+        state.saved_transform = current.saved_transform;
+    }
+}
 
 pub struct OverlayWindowManager<T> {
     wrappers: EditWrapperManager,
@@ -58,7 +82,6 @@ pub struct OverlayWindowManager<T> {
     /// The set that will be restored by show_hide.
     /// Usually the same as current_set, except it keeps its value when current_set is hidden.
     restore_set: usize,
-    anchor_local: Affine3A,
     watch_id: OverlayID,
     keyboard_id: OverlayID,
     edit_mode: bool,
@@ -78,7 +101,6 @@ where
             restore_set: 0,
             sets: vec![OverlayWindowSet::default()],
             global_set: OverlayWindowSet::default(),
-            anchor_local: Affine3A::from_translation(Vec3::NEG_Z),
             watch_id: OverlayID::null(),    // set down below
             keyboard_id: OverlayID::null(), // set down below
             edit_mode: false,
@@ -198,6 +220,7 @@ where
             }
         }
 
+        me.forget_placements();
         me.initialized = true;
 
         Ok(me)
@@ -240,6 +263,13 @@ where
                     return Ok(());
                 };
 
+                let turning_on =
+                    !self.overlays[id].config.is_active() && !matches!(mode, ToggleMode::EnsureOff);
+                let left = turning_on && Self::head_left_layout(app);
+                if left && self.current_set.is_none() {
+                    self.seat_anchor(app);
+                }
+
                 let o = &mut self.overlays[id];
 
                 match mode {
@@ -261,15 +291,24 @@ where
                     parent_set
                         .hidden_overlays
                         .arc_set(key.clone(), active_state);
-                } else if let Some(state) = parent_set.hidden_overlays.arc_rm(&key) {
+                } else if let Some(mut state) = parent_set.hidden_overlays.arc_rm(&key) {
                     let o = &mut self.overlays[id];
                     log::debug!("{}: toggle on", o.config.name);
+                    if left {
+                        bring_along(&mut state);
+                    }
+                    let fresh = !matches!(state.pending, PendingPlacement::Seat(_))
+                        && state.saved_transform.is_none();
                     o.config.dirty = true;
                     o.config.active_state = Some(state);
                     o.config.reset(app, false);
+                    if fresh {
+                        self.spread_panel(app, id);
+                    }
                 } else {
                     // no saved state
                     o.config.activate(app, true);
+                    self.spread_panel(app, id);
                 }
                 self.visible_overlays_changed(app)?;
             }
@@ -277,6 +316,13 @@ where
                 self.set_edit_mode(!self.edit_mode, app)?;
             }
             OverlayTask::ToggleDashboard => {
+                let opening = self
+                    .lookup(DASH_NAME)
+                    .is_some_and(|id| !self.overlays[id].config.is_active());
+                if opening && self.current_set.is_none() {
+                    // nothing to keep in place: what opens next lines up with the dashboard
+                    self.seat_anchor(app);
+                }
                 if let Some(overlay) =
                     self.mut_by_selector(&OverlaySelector::Name(DASH_NAME.into()))
                 {
@@ -662,19 +708,21 @@ impl<T> OverlayWindowManager<T> {
 
         // apply to all saved states
         if global {
-            if let Some(state) = self.global_set.inactive_overlays.arc_rm(&name) {
+            if let Some(mut state) = self.global_set.inactive_overlays.arc_rm(&name) {
                 let o = &mut self.overlays[id];
+                keep_spawn_spot(&mut state, o.config.active_state.as_ref());
                 o.config.active_state = Some(state);
                 o.config.reset(app, false);
                 o.config.dirty = true;
             }
         } else {
             for (i, set) in self.sets.iter_mut().enumerate() {
-                let Some(state) = set.inactive_overlays.arc_rm(&name) else {
+                let Some(mut state) = set.inactive_overlays.arc_rm(&name) else {
                     continue;
                 };
                 if self.current_set == Some(i) {
                     let o = &mut self.overlays[id];
+                    keep_spawn_spot(&mut state, o.config.active_state.as_ref());
                     o.config.active_state = Some(state);
                     o.config.reset(app, false);
                     o.config.dirty = true;
@@ -1015,6 +1063,37 @@ impl<T> OverlayWindowManager<T> {
         self.restore_set = (app.session.config.last_set as usize).min(self.sets.len() - 1);
     }
 
+    /// oneVR: moves what is stored in stage space with the world, for shown and hidden overlays
+    pub fn shift_static_states(&mut self, correction: &Affine3A) {
+        let shift = |state: &mut OverlayWindowState| {
+            if matches!(state.positioning, Positioning::Static)
+                && let Some(saved) = state.saved_transform.as_mut()
+            {
+                *saved = *correction * *saved;
+            }
+        };
+
+        self.overlays
+            .values_mut()
+            .filter_map(|o| o.config.active_state.as_mut())
+            .for_each(shift);
+        for set in self
+            .sets
+            .iter_mut()
+            .chain(std::iter::once(&mut self.global_set))
+        {
+            set.overlays.values_mut().for_each(shift);
+            set.inactive_overlays
+                .iter_mut()
+                .map(|(_, state)| state)
+                .for_each(shift);
+            set.hidden_overlays
+                .iter_mut()
+                .map(|(_, state)| state)
+                .for_each(shift);
+        }
+    }
+
     pub const fn get_edit_mode(&self) -> bool {
         self.edit_mode
     }
@@ -1237,6 +1316,9 @@ impl<T> OverlayWindowManager<T> {
 
         let oid = self.overlays.insert(overlay);
         let mut shown = false;
+        // oneVR: restored but with its placement forgotten, it needs a spot like a new one
+        let mut placed_anew = false;
+        let left = Self::head_left_layout(app);
 
         if !global {
             for (i, set) in self.sets.iter_mut().enumerate() {
@@ -1252,6 +1334,11 @@ impl<T> OverlayWindowManager<T> {
                     continue;
                 };
                 if self.current_set == Some(i) {
+                    let mut state = state;
+                    placed_anew |= !matches!(state.pending, PendingPlacement::None);
+                    if left {
+                        bring_along(&mut state);
+                    }
                     let o = &mut self.overlays[oid];
                     o.config.active_state = Some(state);
                     o.config.reset(app, false);
@@ -1263,6 +1350,11 @@ impl<T> OverlayWindowManager<T> {
                 }
             }
         } else if restore && let Some(state) = self.global_set.inactive_overlays.arc_rm(&name) {
+            let mut state = state;
+            placed_anew |= !matches!(state.pending, PendingPlacement::None);
+            if left {
+                bring_along(&mut state);
+            }
             let o = &mut self.overlays[oid];
             o.config.active_state = Some(state);
             o.config.reset(app, false);
@@ -1293,6 +1385,8 @@ impl<T> OverlayWindowManager<T> {
                 .config
                 .activate(app, !spawn_pos.is_fixed_no_realign());
             self.apply_spawn_pos(app, oid, spawn_pos);
+        } else if placed_anew {
+            self.apply_spawn_pos(app, oid, spawn_pos);
         }
         if !internal && let Err(e) = self.overlays_changed(app) {
             log::error!("Error while adding overlay: {e:?}");
@@ -1307,7 +1401,7 @@ impl<T> OverlayWindowManager<T> {
         match spawn_pos {
             SpawnPos::Fixed | SpawnPos::FixedNoRealign => {}
             SpawnPos::Spread => {
-                let Some(parent_id) = self.spread_parent_for(oid) else {
+                let Some(parent_id) = self.spread_parent_for(oid, &app.input_state.hmd) else {
                     return;
                 };
                 let parent = OverlaySelector::Id(parent_id);
@@ -1343,7 +1437,7 @@ impl<T> OverlayWindowManager<T> {
                 {
                     return;
                 }
-                if let Some(parent_id) = self.spread_parent_for(oid) {
+                if let Some(parent_id) = self.spread_parent_for(oid, &app.input_state.hmd) {
                     let _ =
                         self.offset_spawn_from_parent(app, oid, &OverlaySelector::Id(parent_id));
                 }
@@ -1352,12 +1446,16 @@ impl<T> OverlayWindowManager<T> {
     }
 
     // TODO: this just uses the last spawned overlay as parent, can probably do better?
-    fn spread_parent_for(&self, oid: OverlayID) -> Option<OverlayID> {
+    fn spread_parent_for(&self, oid: OverlayID, hmd: &Affine3A) -> Option<OverlayID> {
         self.overlays
             .iter()
             .filter(|(id, overlay)| {
                 *id != oid
-                    && overlay.config.active_state.is_some()
+                    && overlay.config.active_state.as_ref().is_some_and(|state| {
+                        // oneVR: not next to one that was left behind
+                        let to = state.transform.translation - hmd.translation;
+                        to.normalize_or_zero().dot(-hmd.z_axis.normalize()) > 0.5
+                    })
                     && matches!(
                         overlay.config.category,
                         OverlayCategory::Panel | OverlayCategory::WayVR | OverlayCategory::Screen
@@ -1401,6 +1499,127 @@ impl<T> OverlayWindowManager<T> {
         Some(())
     }
 
+    /// oneVR: puts the anchor at the head, and with it all that is placed relative to it, exactly
+    /// where it was in the layout. A size given to the whole layout stays.
+    fn seat_anchor(&mut self, app: &mut AppState) {
+        let scale = scalar_scale(&app.anchor);
+        app.anchor = layout::seat(&app.input_state.hmd) * Affine3A::from_scale(Vec3::splat(scale));
+        app.anchor_head = app.anchor.inverse() * app.input_state.hmd;
+
+        for overlay in self.overlays.values_mut() {
+            let Some(state) = overlay.config.active_state.as_ref() else {
+                continue;
+            };
+            let pending = !matches!(state.pending, PendingPlacement::None);
+            // the dashboard is a summon: it comes back to its own spot, not to where it was opened
+            let summoned = overlay.config.category == OverlayCategory::Dashboard
+                && matches!(state.positioning, Positioning::Floating);
+            if pending || summoned {
+                overlay.config.reset(app, summoned);
+            }
+        }
+    }
+
+    /// oneVR: every launch starts from the default layout. What stays is which set an overlay is
+    /// in, whether it's hidden, and its look. The head isn't known yet: overlays take their place
+    /// once they are shown.
+    fn forget_placements(&mut self) {
+        let forget = |state: &mut OverlayWindowState| {
+            state.saved_transform = None;
+            state.pending = PendingPlacement::Default;
+        };
+
+        for set in self
+            .sets
+            .iter_mut()
+            .chain(std::iter::once(&mut self.global_set))
+        {
+            set.overlays.values_mut().for_each(forget);
+            set.hidden_overlays
+                .iter_mut()
+                .map(|(_, state)| state)
+                .for_each(forget);
+            set.inactive_overlays
+                .iter_mut()
+                .map(|(_, state)| state)
+                .for_each(forget);
+        }
+
+        // shown already, like the watch: until the head is known they stay with the anchor
+        for overlay in self.overlays.values_mut() {
+            let config = &mut overlay.config;
+            let internal = config.category == OverlayCategory::Internal;
+            if let Some(state) = config.active_state.as_mut() {
+                state.saved_transform = None;
+                state.positioning = config.default_state.positioning;
+                state.pending = if internal {
+                    PendingPlacement::None
+                } else {
+                    PendingPlacement::Default
+                };
+            }
+        }
+    }
+
+    /// oneVR: keeps a panel that opens without a placement off the one already there
+    fn spread_panel(&mut self, app: &mut AppState, id: OverlayID) {
+        if matches!(
+            self.overlays[id].config.category,
+            OverlayCategory::Screen
+                | OverlayCategory::Mirror
+                | OverlayCategory::Panel
+                | OverlayCategory::WayVR
+        ) {
+            self.apply_spawn_pos(app, id, SpawnPos::Spread);
+        }
+    }
+
+    /// oneVR: gives the panels of a set that have no placement yet a spot of their own, or they'd
+    /// all open in the same place
+    fn arrange_pending(&mut self, set: usize) {
+        let ws = &mut self.sets[set];
+        let mut arrange: Vec<_> = ws
+            .overlays
+            .iter()
+            .filter(|(_, state)| matches!(state.pending, PendingPlacement::Default))
+            .filter_map(|(id, _)| Some((id, self.overlays.get(id)?)))
+            .filter(|(_, o)| {
+                matches!(
+                    o.config.category,
+                    OverlayCategory::Screen
+                        | OverlayCategory::Mirror
+                        | OverlayCategory::Panel
+                        | OverlayCategory::BuiltInPanel
+                        | OverlayCategory::WayVR
+                )
+            })
+            .map(|(id, o)| (id, o.config.default_state.clone()))
+            .collect();
+        if arrange.len() < 2 {
+            return;
+        }
+        // the same order every launch, left to right
+        arrange.sort_by_key(|(id, _)| self.overlays[*id].config.name.clone());
+
+        let width = arrange
+            .iter()
+            .map(|(_, default)| scalar_scale(&default.transform))
+            .fold(0.0, f32::max);
+        let slots = layout::arc_slots(arrange.len(), width);
+        for ((id, default), slot) in arrange.into_iter().zip(slots) {
+            if let Some(state) = ws.overlays.get_mut(id) {
+                state.positioning = default.positioning;
+                state.saved_transform = None;
+                state.pending = PendingPlacement::Seat(slot * default.transform);
+            }
+        }
+    }
+
+    /// oneVR: whether the head moved away from where the layout was placed
+    fn head_left_layout(app: &AppState) -> bool {
+        layout::head_left(&app.input_state.hmd, &(app.anchor * app.anchor_head))
+    }
+
     pub fn switch_or_toggle_set(&mut self, app: &mut AppState, set: usize) {
         let new_set = if self.current_set.iter().any(|cur| *cur == set) {
             None
@@ -1421,6 +1640,16 @@ impl<T> OverlayWindowManager<T> {
             return;
         }
 
+        // oneVR: coming back or walking off, the set opens at the head. A set still in front of it
+        // stays where it is, also when dragged away.
+        if new_set.is_some()
+            && !keep_transforms
+            && self.initialized
+            && (self.current_set.is_none() || Self::head_left_layout(app))
+        {
+            self.seat_anchor(app);
+        }
+
         if let Some(current_set) = self.current_set.as_ref() {
             let ws = &mut self.sets[*current_set];
             for (id, data) in self.overlays.iter_mut().filter(|(_, d)| !d.config.global) {
@@ -1433,6 +1662,7 @@ impl<T> OverlayWindowManager<T> {
 
         if let Some(new_set) = new_set {
             let mut num_overlays = 0;
+            self.arrange_pending(new_set);
             let ws = &mut self.sets[new_set];
             for (id, data) in self.overlays.iter_mut().filter(|(_, d)| !d.config.global) {
                 if let Some(state) = ws.overlays.remove(id) {
@@ -1481,9 +1711,6 @@ impl<T> OverlayWindowManager<T> {
 
     pub fn show_hide(&mut self, app: &mut AppState) {
         if self.current_set.is_none() {
-            let hmd = snap_upright(app.input_state.hmd, Vec3A::Y);
-            app.anchor = hmd * self.anchor_local;
-
             self.switch_to_set(app, Some(self.restore_set), false);
         } else {
             self.switch_to_set(app, None, false);

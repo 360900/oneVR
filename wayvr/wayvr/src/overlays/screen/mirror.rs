@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use glam::{Affine2, Affine3A, Quat, Vec2, Vec3, vec3};
+use glam::{Affine2, Quat, Vec2};
 use wlx_capture::{WlxCapture, pipewire::ScreenCastParams};
 use wlx_common::{
     overlays::{BackendAttrib, BackendAttribValue},
@@ -20,6 +20,7 @@ use crate::{
     },
     state::AppState,
     subsystem::hid::WheelDelta,
+    windowing::layout,
     windowing::{
         backend::{FrameMeta, OverlayBackend, OverlayEventData, RenderResources, ShouldRender},
         window::{OverlayCategory, OverlayWindowConfig},
@@ -122,10 +123,9 @@ pub fn new_mirror(name: Arc<str>, app: &mut AppState) -> anyhow::Result<OverlayW
             alpha: app.session.config.default_opacity,
             interactable: true,
             grabbable: true,
-            transform: Affine3A::from_scale_rotation_translation(
-                Vec3::ONE * app.session.config.default_overlay_scale,
+            transform: layout::panel_transform(
+                app.session.config.default_overlay_scale,
                 Quat::IDENTITY,
-                vec3(0.0, 0.2, -0.35),
             ),
             ..OverlayWindowState::default()
         },

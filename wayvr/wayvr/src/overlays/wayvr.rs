@@ -1,6 +1,6 @@
 use std::{mem, ops::RangeInclusive, rc::Rc, sync::Arc};
 
-use glam::{Affine2, Affine3A, Quat, Vec3, vec2, vec3};
+use glam::{Affine2, Quat, vec2};
 use slotmap::Key;
 use smithay::{
     desktop::{PopupKind, PopupManager},
@@ -60,6 +60,7 @@ use crate::{
     overlays::screen::capture::{CursorSurface, ScreenPipeline},
     state::{self, AppState},
     subsystem::{hid::WheelDelta, input::InputFocus},
+    windowing::layout,
     windowing::{
         BAR_SIZE, BORDER_SIZE, OverlayID, OverlaySelector,
         backend::{
@@ -170,12 +171,6 @@ pub fn create_wl_window_overlay(
 ) -> anyhow::Result<OverlayWindowConfig> {
     let (scale, curve_scale) = overlay_scale_from_extent(size);
 
-    let z_dist = if matches!(pos_mode, PositionMode::Anchor) {
-        0.0
-    } else {
-        -0.95
-    };
-
     let resizable = app
         .wvr_server
         .as_mut()
@@ -197,10 +192,9 @@ pub fn create_wl_window_overlay(
             },
             alpha: app.session.config.default_opacity,
             curvature: none_if_0(app.session.config.default_curvature).map(|x| x * curve_scale),
-            transform: Affine3A::from_scale_rotation_translation(
-                Vec3::ONE * app.session.config.default_overlay_scale * scale,
+            transform: layout::panel_transform(
+                app.session.config.default_overlay_scale * scale,
                 Quat::IDENTITY,
-                vec3(0.0, 0.0, z_dist),
             ),
             ..OverlayWindowState::default()
         },

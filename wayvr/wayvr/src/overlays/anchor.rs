@@ -25,7 +25,8 @@ pub fn create_anchor(app: &mut AppState) -> anyhow::Result<OverlayWindowConfig> 
             grabbable: false,
             positioning: Positioning::Anchored,
             transform: Affine3A::from_scale_rotation_translation(
-                Vec3::ONE * 0.1,
+                // oneVR: half as far as it was, the same size to the eye
+                Vec3::ONE * 0.05,
                 Quat::IDENTITY,
                 Vec3::ZERO, // Vec3::NEG_Z * 0.5,
             ),
