@@ -104,6 +104,8 @@ struct State {
 	value1: Value,
 	value2: Option<Value>,
 	limits: Limits,
+	/// The track turns to the danger color below this value
+	danger_below: Option<f32>,
 	on_value_changed: Option<SliderValueChangedCallback>,
 	active_tooltip: Option<Rc<ComponentTooltip>>,
 }
@@ -123,6 +125,7 @@ struct SliderHandleData {
 
 struct Data {
 	body_node: taffy::NodeId,
+	id_track: WidgetID,
 	handle1: SliderHandleData,
 	handle2: Option<SliderHandleData>,
 }
@@ -185,6 +188,13 @@ impl ComponentSlider {
 	pub fn set_value(&self, common: &mut CallbackDataCommon, index: ValueIndex, new_value: f32) {
 		let mut state = self.state.borrow_mut();
 		state.set_value(common, &self.data, index, new_value);
+	}
+
+	/// Warns about a value below `value`, by turning the track to the danger color
+	pub fn set_danger_below(&self, common: &mut CallbackDataCommon, value: f32) {
+		let mut state = self.state.borrow_mut();
+		state.danger_below = Some(value);
+		State::update_track_color(common, &self.data, state.danger_below, state.value1.get());
 	}
 
 	/// Whether a pointer holds a handle
@@ -289,6 +299,19 @@ impl State {
 		text.set_text(common, Translation::from_raw_text(&pretty));
 	}
 
+	fn update_track_color(common: &mut CallbackDataCommon, data: &Data, danger_below: Option<f32>, value: f32) {
+		let danger = danger_below.is_some_and(|below| value < below);
+		let color = if danger {
+			WguiColorName::Danger.to_wgui_color()
+		} else {
+			BODY_COLOR
+		};
+		if let Some(mut track) = common.state.widgets.get_as::<WidgetRectangle>(data.id_track) {
+			track.params.color = color;
+		}
+		common.alterables.mark_redraw();
+	}
+
 	fn set_value(&mut self, common: &mut CallbackDataCommon, data: &Data, index: ValueIndex, new_value: f32) {
 		let val1 = self.value1.get();
 		let val2 = self.value2.as_ref().map_or(f32::MAX, Value::get);
@@ -339,7 +362,9 @@ impl State {
 		}
 
 		common.alterables.mark_dirty(handle_data.id_handle);
-		common.alterables.mark_redraw();
+		if index == ValueIndex::Primary {
+			Self::update_track_color(common, data, self.danger_below, value.get());
+		}
 
 		if let Some(id_label) = handle_data.id_label
 			&& let Some(mut label) = common.state.widgets.get_as::<WidgetLabel>(id_label)
@@ -686,7 +711,7 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 	let (root, slider_body_node) = ess.layout.add_child(ess.parent, WidgetDiv::create(), style)?;
 	let body_id = root.id;
 
-	let (_background_id, _) = ess.layout.add_child(
+	let (track, _) = ess.layout.add_child(
 		body_id,
 		WidgetRectangle::create(WidgetRectangleParams {
 			color: BODY_COLOR,
@@ -722,12 +747,14 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 		value1: params.value1,
 		value2: params.value2,
 		limits: params.limits,
+		danger_below: None,
 		on_value_changed: None,
 		active_tooltip: None,
 	};
 
 	let data = Rc::new(Data {
 		body_node: slider_body_node,
+		id_track: track.id,
 		handle1: slider_handle1,
 		handle2: slider_handle2,
 	});
