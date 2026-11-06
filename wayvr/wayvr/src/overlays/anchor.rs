@@ -8,6 +8,7 @@ use crate::gui::panel::GuiPanel;
 use crate::overlays::watch::WATCH_NAME;
 use crate::state::AppState;
 use crate::windowing::backend::OverlayEventData;
+use crate::windowing::layout;
 use crate::windowing::window::OverlayWindowConfig;
 use crate::windowing::{PIXELS_TO_METERS, Z_ORDER_ANCHOR, Z_ORDER_HELP};
 
@@ -25,8 +26,8 @@ pub fn create_anchor(app: &mut AppState) -> anyhow::Result<OverlayWindowConfig> 
             grabbable: false,
             positioning: Positioning::Anchored,
             transform: Affine3A::from_scale_rotation_translation(
-                // oneVR: half as far as it was, the same size to the eye
-                Vec3::ONE * 0.05,
+                // oneVR: 0.1 m at the 1 m it used to be, the same size to the eye
+                Vec3::ONE * 0.1 * layout::OLD_ANCHOR_DISTANCE_RATIO,
                 Quat::IDENTITY,
                 Vec3::ZERO, // Vec3::NEG_Z * 0.5,
             ),

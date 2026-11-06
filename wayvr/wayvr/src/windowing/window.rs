@@ -498,10 +498,10 @@ pub fn spawn_transform_from_parent(
     hmd: &Affine3A,
     child_scale: f32,
 ) -> Affine3A {
-    const LEFT: f32 = 0.08;
-    const DOWN: f32 = 0.08;
-    // oneVR: a few stay behind the dashboard, which is 0.1 m in front of a panel
-    const CLOSER_TO_HMD: f32 = 0.02;
+    const LEFT: f32 = 0.08 * layout::LAYOUT_SCALE;
+    const DOWN: f32 = 0.08 * layout::LAYOUT_SCALE;
+    // oneVR: a few stay behind the dashboard
+    const CLOSER_TO_HMD: f32 = 0.02 * layout::LAYOUT_SCALE;
 
     let x_axis = parent.x_axis.normalize();
     let y_axis = parent.y_axis.normalize();

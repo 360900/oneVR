@@ -38,7 +38,7 @@ use crate::{
         whisper_stt::{PttProgress, WhisperStt},
     },
     windowing::{
-        OverlaySelector,
+        OverlaySelector, layout,
         window::{OverlayCategory, OverlayWindowConfig},
     },
 };
@@ -435,9 +435,9 @@ pub fn create_whisper(app: &mut AppState) -> anyhow::Result<OverlayWindowConfig>
 
     // oneVR: between the dashboard and the keyboard
     let transform = Affine3A::from_scale_rotation_translation(
-        Vec3::ONE * 0.25,
+        Vec3::ONE * 0.25 * layout::LAYOUT_SCALE,
         Quat::from_rotation_x(-17f32.to_radians()),
-        vec3(0.0, -0.21, 0.04),
+        vec3(0.0, -0.21, 0.04) * layout::LAYOUT_SCALE,
     );
 
     Ok(OverlayWindowConfig {

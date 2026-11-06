@@ -1,28 +1,36 @@
-//! oneVR: where things go by default. The numbers are the WiVRn lobby's, from
-//! `wivrn/client/constants.h` and `wivrn/client/scenes/lobby.cpp`, so that the dashboard sits where
-//! the lobby does.
+//! oneVR: where things go by default. The proportions are the WiVRn lobby's, from
+//! `wivrn/client/constants.h` and `wivrn/client/scenes/lobby.cpp`, scaled about the head to where
+//! the eyes focus: everything looks the same size, at the same angles, as in the lobby.
 
 use glam::{Affine3A, Quat, Vec3, Vec3A, vec3};
 
-/// From the head to the seat, along the view on the horizontal plane
-const SEAT_DISTANCE: f32 = 0.5;
+/// The lobby's main window is this far from the head
+const LOBBY_DISTANCE: f32 = 0.5;
+/// From the head to the seat, along the view on the horizontal plane. Headset lenses focus at a
+/// fixed distance, about 1.3 m on the Quest 2. Near it the eyes aim where they focus, which rests
+/// them over long sessions.
+const SEAT_DISTANCE: f32 = 1.3;
+/// What the lobby's sizes and offsets are multiplied by
+pub const LAYOUT_SCALE: f32 = SEAT_DISTANCE / LOBBY_DISTANCE;
 /// How far the seat is below the eyes
-const SEAT_DROP: f32 = 0.1;
+const SEAT_DROP: f32 = 0.1 * LAYOUT_SCALE;
 /// Tilted back, to face eyes that look slightly down
 const SEAT_PITCH_DEG: f32 = -12.0;
 
-/// The dashboard fills the seat, as wide as the lobby's main window
-pub const DASHBOARD_WIDTH: f32 = 0.6;
+/// The dashboard fills the seat, in the lobby's main window's view
+pub const DASHBOARD_WIDTH: f32 = 0.6 * LAYOUT_SCALE;
 
 /// Screens and windows are behind the dashboard, so it opens in front of them
-const PANEL_BEHIND_SEAT: f32 = 0.1;
+const PANEL_BEHIND_SEAT: f32 = 0.1 * LAYOUT_SCALE;
 /// Fills the same view as the dashboard does, from further away
 pub const PANEL_WIDTH: f32 = DASHBOARD_WIDTH * (SEAT_DISTANCE + PANEL_BEHIND_SEAT) / SEAT_DISTANCE;
-/// The lobby's virtual keyboard is 0.6 m wide; WayVR's default layout has 23 keys per row
-pub const KEYBOARD_KEY_WIDTH: f32 = 0.6 / 23.0;
+/// As wide as the dashboard with WayVR's default layout of 23 keys per row, as the lobby's is
+pub const KEYBOARD_KEY_WIDTH: f32 = DASHBOARD_WIDTH / 23.0;
 /// Relative to the seat, as the lobby keeps its keyboard to its main window
-pub const KEYBOARD_POSITION: Vec3 = vec3(0.0, -0.3, 0.1);
+pub const KEYBOARD_POSITION: Vec3 = vec3(0.0, -0.3 * LAYOUT_SCALE, 0.1 * LAYOUT_SCALE);
 pub const KEYBOARD_PITCH_RAD: f32 = -0.6;
+/// How far the anchor is, compared to the 1 m it used to be
+pub const OLD_ANCHOR_DISTANCE_RATIO: f32 = SEAT_DISTANCE;
 /// What a panel sized for the old default of 1.5 m from the head needs to fill the same view
 pub const OLD_DISTANCE_TO_PANEL: f32 = (SEAT_DISTANCE + PANEL_BEHIND_SEAT) / 1.5;
 
@@ -133,10 +141,10 @@ mod tests {
 
     #[test]
     fn lobby_numbers() {
-        // 0.5 m ahead of a level head, 0.1 m down, tilted 12 degrees towards it
+        // the lobby's 0.5 m ahead and 0.1 m down, scaled to 1.3 m ahead, tilted 12 degrees
         let s = seat(&head(0.0, 0.0, 0.0));
         let offset = s.translation - Vec3A::new(1.0, 1.7, -2.0);
-        assert!(offset.abs_diff_eq(Vec3A::new(0.0, -0.1, -0.5), 1e-5));
+        assert!(offset.abs_diff_eq(Vec3A::new(0.0, -0.26, -1.3), 1e-5));
         assert!((s.z_axis.y - 12f32.to_radians().sin()).abs() < 1e-5);
     }
 
@@ -162,6 +170,14 @@ mod tests {
         let keyboard_height = DASHBOARD_WIDTH * 6.0 / 23.0;
         let keyboard_top = KEYBOARD_POSITION.y + keyboard_height / 2.0 * KEYBOARD_PITCH_RAD.cos();
         assert!(keyboard_top < dashboard_bottom);
+    }
+
+    #[test]
+    fn looks_the_same_size_as_the_lobby() {
+        let lobby = (0.3f32 / 0.5).atan();
+        let dashboard = (DASHBOARD_WIDTH / 2.0 / SEAT_DISTANCE).atan();
+        assert!((lobby - dashboard).abs() < 1e-5);
+        assert!((DASHBOARD_WIDTH - 1.56).abs() < 1e-4);
     }
 
     #[test]

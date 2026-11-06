@@ -23,7 +23,7 @@ use crate::{
     windowing::{
         OverlayID, OverlaySelector,
         backend::{FrameMeta, OverlayBackend, OverlayEventData, ShouldRender, ui_transform},
-        overlay_scale_from_extent,
+        layout, overlay_scale_from_extent,
         window::{OverlayCategory, OverlayWindowConfig},
     },
 };
@@ -51,9 +51,9 @@ pub fn new_passthru(name: Arc<str>, app: &AppState) -> OverlayWindowConfig {
         name,
         default_state: OverlayWindowState {
             transform: Affine3A::from_scale_rotation_translation(
-                Vec3::ONE * 0.5,
+                Vec3::ONE * 0.5 * layout::LAYOUT_SCALE,
                 Quat::IDENTITY,
-                Vec3::new(0., 0., -0.1),
+                Vec3::new(0., 0., -0.1 * layout::LAYOUT_SCALE),
             ),
             grabbable: true,
             interactable: true,
