@@ -136,6 +136,8 @@ pub struct OverlayWindowConfig {
     pub resizing: bool,
     /// Used by grab to pause following of HMD or other devices
     pub pause_movement: bool,
+    /// oneVR: where a screen is on the desktop, to lay screens out in the same order
+    pub desktop_pos: Option<(i32, i32)>,
     /// Optional runtime lifetime. When it expires, the manager drops this overlay.
     pub lifetime: Option<OverlayLifetime>,
 }
@@ -166,6 +168,7 @@ impl OverlayWindowConfig {
             editing: false,
             resizing: false,
             pause_movement: false,
+            desktop_pos: None,
             lifetime: None,
         }
     }

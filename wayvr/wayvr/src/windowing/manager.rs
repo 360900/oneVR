@@ -113,21 +113,15 @@ where
             app.feats.desktop_backend = DesktopBackend::Headless;
             log::info!("Running in headless mode; keyboard will be en-US");
         } else {
-            // create one window set for each screen.
+            // oneVR: all screens in one set, side by side (see `arrange_pending`).
             // this is the default and would be overwritten by
             // OverlayWindowManager::restore_layout down below
             match create_screens(app) {
                 Ok((data, backend)) => {
                     app.feats.desktop_backend = backend;
-                    let screen_count = data.screens.len();
-                    for (idx, (meta, mut config)) in data.screens.into_iter().enumerate() {
+                    for (meta, mut config) in data.screens {
                         config.show_on_spawn = true;
                         me.add(OverlayWindowData::from_config(config), app);
-
-                        if idx + 1 < screen_count {
-                            me.sets.push(OverlayWindowSet::default());
-                            me.switch_to_set(app, Some(me.current_set.unwrap() + 1), false);
-                        }
                         app.screens.push(meta);
                     }
                 }
@@ -1598,8 +1592,15 @@ impl<T> OverlayWindowManager<T> {
         if arrange.len() < 2 {
             return;
         }
-        // the same order every launch, left to right
-        arrange.sort_by_key(|(id, _)| self.overlays[*id].config.name.clone());
+        // left to right: screens as on the desktop, then the rest, the same every launch
+        arrange.sort_by_key(|(id, _)| {
+            let config = &self.overlays[*id].config;
+            (
+                config.desktop_pos.is_none(),
+                config.desktop_pos,
+                config.name.clone(),
+            )
+        });
 
         let width = arrange
             .iter()

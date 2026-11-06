@@ -97,8 +97,9 @@ pub fn create_screens_x11pw(app: &mut AppState) -> anyhow::Result<ScreenCreateDa
         extent.y = extent.y.max((m.monitor.y() + m.monitor.height()) as _);
 
         let backend = create_screen_renderer_x11pw(m, app)?;
-        let window_config =
+        let mut window_config =
             create_screen_from_backend(m.name.clone(), Transform::Normal, &app.session, backend);
+        window_config.desktop_pos = Some((m.monitor.x(), m.monitor.y()));
 
         let meta = ScreenMeta {
             name: m.name.clone(),
@@ -149,12 +150,13 @@ pub fn create_screens_xshm(app: &mut AppState) -> anyhow::Result<ScreenCreateDat
             backend.logical_size = vec2(size.0 as f32, size.1 as f32);
             backend.apply_mouse_transform_with_override(Transform::Undefined);
 
-            let window_data = create_screen_from_backend(
+            let mut window_data = create_screen_from_backend(
                 s.name.clone(),
                 Transform::Normal,
                 &app.session,
                 Box::new(backend),
             );
+            window_data.desktop_pos = Some(pos);
 
             let meta = ScreenMeta {
                 name: s.name.clone(),

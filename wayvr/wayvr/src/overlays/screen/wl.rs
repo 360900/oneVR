@@ -211,12 +211,13 @@ pub fn create_screens_wayland(
         );
 
         let backend = create_screen_renderer_wl(output, &protocols, app)?;
-        let window_config = create_screen_from_backend(
+        let mut window_config = create_screen_from_backend(
             output.name.clone(),
             output.transform,
             &app.session,
             backend,
         );
+        window_config.desktop_pos = Some(output.logical_pos);
 
         let meta = ScreenMeta {
             name: wl.outputs[id].name.clone(),
