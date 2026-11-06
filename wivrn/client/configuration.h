@@ -127,7 +127,7 @@ public:
 
 	std::string virtual_keyboard_layout = "QWERTY";
 
-	std::string environment_model = "assets://meadow.glb"; // oneVR: a sky dome, see assets-source/meadow.glb
+	std::string environment_model = "assets://sky.glb"; // oneVR: a sky dome, see assets-source/sky.glb
 
 	bool override_foveation_enable = false;
 	float override_foveation_pitch = -10 * M_PI / 180;

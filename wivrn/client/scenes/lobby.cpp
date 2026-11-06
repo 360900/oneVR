@@ -1213,7 +1213,7 @@ void scenes::lobby::on_focused()
 
 	auto & config = application::get_config();
 
-	// oneVR: picks the meadow, so it runs before the environment loads: client.json from an
+	// oneVR: picks the sky dome, so it runs before the environment loads: client.json from an
 	// older build may name another environment
 	onevr_focused();
 

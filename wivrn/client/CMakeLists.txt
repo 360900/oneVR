@@ -313,9 +313,9 @@ else()
 endif()
 # oneVR: the lobby's sky dome
 if(WIVRN_COMPRESS_GLB)
-    wivrn_gltf_transform_uastc(SOURCE ${ASSETS_SRC_DIR}/meadow.glb                      DESTINATION ${ASSETS_DIR}/meadow.glb                          TARGET wivrn ZSTD 20)
+    wivrn_gltf_transform_uastc(SOURCE ${ASSETS_SRC_DIR}/sky.glb                         DESTINATION ${ASSETS_DIR}/sky.glb                             TARGET wivrn ZSTD 20)
 else()
-    wivrn_copy_file(       SOURCE ${ASSETS_SRC_DIR}/meadow.glb                          DESTINATION ${ASSETS_DIR}/meadow.glb                          TARGET wivrn)
+    wivrn_copy_file(       SOURCE ${ASSETS_SRC_DIR}/sky.glb                             DESTINATION ${ASSETS_DIR}/sky.glb                             TARGET wivrn)
 endif()
 
 wivrn_webxr_download()

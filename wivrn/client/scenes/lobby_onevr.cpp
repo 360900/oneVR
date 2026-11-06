@@ -79,7 +79,7 @@ void scenes::lobby::onevr_focused()
 		return;
 
 	auto & config = application::get_config();
-	// there is no environment page: the lobby shows the meadow, a sky dome that costs one
+	// there is no environment page: the lobby shows a sky dome that costs one
 	// textured draw, where passthrough keeps the cameras and their pipeline running
 	config.passthrough_enabled = false;
 	config.environment_model = application::get_default_config().environment_model;
