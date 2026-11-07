@@ -11,6 +11,7 @@ use wayvr_ipc::packet_client::{HandsfreeAction, HandsfreeParams};
 use wlx_common::common::LeftRight;
 use wlx_common::windowing::{OverlayWindowState, Positioning};
 
+use crate::backend::hand_grab::{self, HandDepth, HandStretch};
 use crate::backend::task::{InputTask, OverlayTask};
 use crate::overlays::anchor::{ANCHOR_NAME, GRAB_HELP_NAME};
 use crate::overlays::watch::WATCH_NAME;
@@ -430,6 +431,10 @@ pub struct GrabData {
     pub offset: Affine3A,
     pub grabbed_id: OverlayID,
     pub grab_anchor: bool,
+    /// oneVR: a tracked hand pushes and pulls by its reach
+    pub hand_depth: Option<HandDepth>,
+    /// oneVR: a tracked hand that only resizes the panel the other hand holds
+    pub hand_stretch: Option<HandStretch>,
 }
 
 #[repr(u8)]
@@ -633,6 +638,24 @@ where
 
     let grab_float = pointer.now.grab_float;
     let grab_start = pointer.now.grab && !pointer.before.grab;
+
+    // oneVR: a hand that grabs the panel the other hand holds resizes it
+    if grab_start && let Some(stretch) = hand_stretch(idx, hit.overlay, &app.input_state.pointers) {
+        app.input_state.pointers[idx].interaction.grabbed = Some(GrabData {
+            grabbed_id: hit.overlay,
+            hand_stretch: Some(stretch),
+            ..GrabData::default()
+        });
+        log::debug!("Hand {}: stretches {}", hit.pointer, hovered.config.name);
+        return (
+            Some((hit, raw_hit)),
+            Some(Haptics {
+                intensity: 0.25,
+                duration: 0.1,
+                frequency: 0.1,
+            }),
+        );
+    }
 
     // grab
     if grab_start && hovered_state.grabbable {
@@ -898,10 +921,15 @@ fn start_grab(par: StartGrabParams) {
 
     app.anchor_grabbed = grab_anchor;
 
+    let hand_depth = pointer
+        .hand_tracked
+        .then(|| HandDepth::new(&app.input_state.hmd, &pointer.pose, offset.translation));
     pointer.interaction.grabbed = Some(GrabData {
         offset,
         grabbed_id: id,
         grab_anchor,
+        hand_depth,
+        hand_stretch: None,
     });
 
     app.tasks.enqueue(TaskType::Overlay(OverlayTask::Modify(
@@ -987,7 +1015,20 @@ where
     };
     let grab_anchor = grab_data.grab_anchor;
 
+    if let Some(stretch) = grab_data.hand_stretch {
+        handle_stretched(idx, stretch, overlay, app);
+        return;
+    }
+
     if pointer.now.grab {
+        // oneVR: a hand pushes and pulls by its reach, where a controller has its thumbstick
+        if let Some(depth) = grab_data.hand_depth
+            && app.session.config.allow_sliding
+        {
+            grab_data.offset.translation = depth.offset(&app.input_state.hmd, &pointer.pose);
+            grab_data.offset.translation.z = grab_data.offset.translation.z.min(-0.05);
+        }
+
         let Some(overlay_state) = overlay.config.active_state.as_mut() else {
             // overlay got toggled off while being grabbed. those dastardly users!
             // just wait for them to release the grab
@@ -1122,6 +1163,62 @@ where
         )));
         log::debug!("Hand {}: dropped {}", idx, overlay.config.name);
     }
+}
+
+/// oneVR: when the hand `idx` starts a grab on `overlay`, whether it stretches the panel that the
+/// other hand holds. Both have to be tracked hands, a controller resizes with its thumbstick.
+fn hand_stretch(idx: usize, overlay: OverlayID, pointers: &[Pointer; 2]) -> Option<HandStretch> {
+    let (pointer, holder) = (&pointers[idx], &pointers[1 - idx]);
+    let held = holder.interaction.grabbed.as_ref()?;
+    (pointer.hand_tracked
+        && holder.hand_tracked
+        && held.grabbed_id == overlay
+        && held.hand_stretch.is_none())
+    .then(|| HandStretch::new(holder.idx, &pointer.pose, &holder.pose))
+}
+
+/// oneVR: resizes the panel the other hand holds by the hands' spread, until either lets go
+fn handle_stretched<O>(
+    idx: usize,
+    mut stretch: HandStretch,
+    overlay: &mut OverlayWindowData<O>,
+    app: &mut AppState,
+) where
+    O: Default,
+{
+    let [left, right] = &mut app.input_state.pointers;
+    let (pointer, holder) = if idx == 0 {
+        (left, right)
+    } else {
+        (right, left)
+    };
+    let holds = holder.idx == stretch.holder;
+    let holder_grab = holder
+        .interaction
+        .grabbed
+        .as_mut()
+        .filter(|held| holds && held.hand_stretch.is_none());
+    let (Some(holder_grab), true) = (holder_grab, pointer.now.grab) else {
+        pointer.interaction.grabbed = None;
+        log::debug!("Hand {}: stops stretching {}", idx, overlay.config.name);
+        return;
+    };
+    let factor = stretch.update(&pointer.pose, &holder.pose);
+    if let Some(grab_data) = pointer.interaction.grabbed.as_mut() {
+        grab_data.hand_stretch = Some(stretch);
+    }
+
+    let factor = if holder_grab.grab_anchor {
+        hand_grab::scale_by(&mut app.anchor, factor)
+    } else if let Some(overlay_state) = overlay.config.active_state.as_mut() {
+        let factor = hand_grab::scale_by(&mut overlay_state.transform, factor);
+        overlay.config.dirty = true;
+        factor
+    } else {
+        // toggled off while held, as in `handle_grabbed`
+        return;
+    };
+    holder_grab.offset.matrix3 = holder_grab.offset.matrix3.mul_scalar(factor);
 }
 
 fn ray_test(
