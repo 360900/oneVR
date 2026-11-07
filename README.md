@@ -1,5 +1,7 @@
 # oneVR
 
+![oneVR window with a connected headset](docs/img/onevr-home.png)
+
 Stream VR from a Linux PC to a standalone headset, run SteamVR games without SteamVR and use your desktop in VR, with one app and one headset APK.
 
 oneVR combines:
