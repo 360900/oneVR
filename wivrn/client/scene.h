@@ -139,6 +139,9 @@ protected:
 
 		beman::inplace_vector::inplace_vector<XrCompositionLayerProjectionView, max_views> color_views; // Used by XrCompositionLayerProjection
 		beman::inplace_vector::inplace_vector<XrCompositionLayerDepthInfoKHR, max_views> depth_views;   // Used by XrCompositionLayerProjection
+		// oneVR: motion vectors for the runtime's frame synthesis, one per color view or none
+		beman::inplace_vector::inplace_vector<XrCompositionLayerSpaceWarpInfoFB, max_views> space_warp_views;
+		beman::inplace_vector::inplace_vector<XrFrameSynthesisInfoEXT, max_views> frame_synthesis_views;
 
 		std::optional<XrCompositionLayerColorScaleBiasKHR> color_scale_bias;
 		std::optional<XrCompositionLayerDepthTestFB> depth_test;
@@ -198,6 +201,9 @@ protected:
 	void set_color_scale_bias(XrColor4f scale, XrColor4f bias);
 	void set_depth_test(bool write, XrCompareOpFB op);
 	void set_layer_settings(XrCompositionLayerSettingsFlagsFB flags);
+	// oneVR: for the last projection layer
+	void set_space_warp(std::span<const XrCompositionLayerSpaceWarpInfoFB> views);
+	void set_frame_synthesis(std::span<const XrFrameSynthesisInfoEXT> views);
 
 	void render_end();
 

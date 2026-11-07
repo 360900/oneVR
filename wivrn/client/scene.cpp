@@ -418,6 +418,22 @@ void scene::set_layer_settings(XrCompositionLayerSettingsFlagsFB flags)
 	};
 }
 
+void scene::set_space_warp(std::span<const XrCompositionLayerSpaceWarpInfoFB> views)
+{
+	assert(not layers.empty());
+	assert(std::holds_alternative<XrCompositionLayerProjection>(layers.back().composition_layer));
+	assert(views.size() == layers.back().color_views.size());
+	layers.back().space_warp_views.assign(views.begin(), views.end());
+}
+
+void scene::set_frame_synthesis(std::span<const XrFrameSynthesisInfoEXT> views)
+{
+	assert(not layers.empty());
+	assert(std::holds_alternative<XrCompositionLayerProjection>(layers.back().composition_layer));
+	assert(views.size() == layers.back().color_views.size());
+	layers.back().frame_synthesis_views.assign(views.begin(), views.end());
+}
+
 void scene::render_end()
 {
 	// Fixup all pointers
@@ -428,8 +444,27 @@ void scene::render_end()
 		                [&](XrCompositionLayerProjection & layer) {
 			                layer.views = i.color_views.data();
 
-			                for (auto [color, depth]: std::views::zip(i.color_views, i.depth_views))
-				                color.next = &depth;
+			                // oneVR: each view chains its depth, space warp and frame synthesis info
+			                for (size_t view = 0; view < i.color_views.size(); ++view)
+			                {
+				                const void * next = nullptr;
+				                if (view < i.frame_synthesis_views.size())
+				                {
+					                i.frame_synthesis_views[view].next = next;
+					                next = &i.frame_synthesis_views[view];
+				                }
+				                if (view < i.space_warp_views.size())
+				                {
+					                i.space_warp_views[view].next = next;
+					                next = &i.space_warp_views[view];
+				                }
+				                if (view < i.depth_views.size())
+				                {
+					                i.depth_views[view].next = next;
+					                next = &i.depth_views[view];
+				                }
+				                i.color_views[view].next = next;
+			                }
 
 			                return reinterpret_cast<XrCompositionLayerBaseHeader *>(&layer);
 		                },

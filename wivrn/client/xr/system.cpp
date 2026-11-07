@@ -296,6 +296,24 @@ XrSystemSimultaneousHandsAndControllersPropertiesMETA xr::system::simultaneous_h
 	return simultaneous_prop;
 }
 
+XrSystemSpaceWarpPropertiesFB xr::system::space_warp_properties() const
+{
+	if (!id)
+		throw std::invalid_argument("this");
+
+	XrSystemSpaceWarpPropertiesFB space_warp_prop{
+	        .type = XR_TYPE_SYSTEM_SPACE_WARP_PROPERTIES_FB,
+	};
+
+	XrSystemProperties prop{
+	        .type = XR_TYPE_SYSTEM_PROPERTIES,
+	        .next = &space_warp_prop,
+	};
+	CHECK_XR(xrGetSystemProperties(*inst, id, &prop));
+
+	return space_warp_prop;
+}
+
 xr::passthrough_type xr::system::passthrough_supported() const
 {
 	if (utils::contains(environment_blend_modes(XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO), XR_ENVIRONMENT_BLEND_MODE_ALPHA_BLEND))
@@ -410,6 +428,11 @@ XrViewConfigurationProperties xr::system::view_configuration_properties(XrViewCo
 std::vector<XrViewConfigurationView> xr::system::view_configuration_views(XrViewConfigurationType type) const
 {
 	return details::enumerate<XrViewConfigurationView>(xrEnumerateViewConfigurationViews, *inst, id, type);
+}
+
+std::vector<XrFrameSynthesisConfigViewEXT> xr::system::frame_synthesis_config_views(XrViewConfigurationType type) const
+{
+	return std::get<1>(details::enumerate2<XrViewConfigurationView, XrFrameSynthesisConfigViewEXT>(xrEnumerateViewConfigurationViews, *inst, id, type));
 }
 
 std::vector<XrEnvironmentBlendMode> xr::system::environment_blend_modes(XrViewConfigurationType type) const

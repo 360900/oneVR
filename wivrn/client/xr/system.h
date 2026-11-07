@@ -95,6 +95,7 @@ public:
 	XrSystemBodyTrackingPropertiesBD bd_body_tracking_properties() const;
 	XrSystemBoundaryVisibilityPropertiesMETA boundary_visibility_properties() const;
 	XrSystemSimultaneousHandsAndControllersPropertiesMETA simultaneous_hands_and_controllers_properties() const;
+	XrSystemSpaceWarpPropertiesFB space_warp_properties() const; // oneVR
 
 	bool hand_tracking_supported() const;
 	bool hand_mesh_fb_supported() const;
@@ -109,6 +110,7 @@ public:
 	std::vector<XrViewConfigurationType> view_configurations() const;
 	XrViewConfigurationProperties view_configuration_properties(XrViewConfigurationType) const;
 	std::vector<XrViewConfigurationView> view_configuration_views(XrViewConfigurationType) const;
+	std::vector<XrFrameSynthesisConfigViewEXT> frame_synthesis_config_views(XrViewConfigurationType) const; // oneVR
 	std::vector<XrEnvironmentBlendMode> environment_blend_modes(XrViewConfigurationType) const;
 };
 } // namespace xr

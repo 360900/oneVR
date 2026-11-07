@@ -1377,6 +1377,7 @@ void application::initialize()
 	        XR_KHR_VISIBILITY_MASK_EXTENSION_NAME,
 
 	        XR_EXT_EYE_GAZE_INTERACTION_EXTENSION_NAME,
+	        XR_EXT_FRAME_SYNTHESIS_EXTENSION_NAME,
 	        XR_EXT_HAND_INTERACTION_EXTENSION_NAME,
 	        XR_EXT_HAND_TRACKING_EXTENSION_NAME,
 	        XR_EXT_HAND_TRACKING_DATA_SOURCE_EXTENSION_NAME,
@@ -1398,6 +1399,7 @@ void application::initialize()
 	        XR_FB_FOVEATION_CONFIGURATION_EXTENSION_NAME,
 	        XR_FB_FOVEATION_VULKAN_EXTENSION_NAME,
 	        XR_FB_PASSTHROUGH_EXTENSION_NAME,
+	        XR_FB_SPACE_WARP_EXTENSION_NAME,
 	        XR_FB_SWAPCHAIN_UPDATE_STATE_EXTENSION_NAME,
 
 	        XR_HTC_PASSTHROUGH_EXTENSION_NAME,
@@ -1425,6 +1427,11 @@ void application::initialize()
 		if (it != opt_extensions.end() and not runtime_hmd_traits.blacklisted_extensions.contains(ext.extensionName))
 			xr_extensions.push_back(*it);
 	}
+
+	// oneVR: XR_EXT_frame_synthesis replaces XR_FB_space_warp, and each one makes the
+	// compositor set memory aside, so only the newer one when the runtime has both
+	if (std::ranges::any_of(xr_extensions, [](const char * i) { return strcmp(i, XR_EXT_FRAME_SYNTHESIS_EXTENSION_NAME) == 0; }))
+		std::erase_if(xr_extensions, [](const char * i) { return strcmp(i, XR_FB_SPACE_WARP_EXTENSION_NAME) == 0; });
 
 #ifdef __ANDROID__
 	xr_instance =
