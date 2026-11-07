@@ -1284,17 +1284,17 @@ void scenes::lobby::on_focused()
 			const auto * right_hand_mesh_fb = right_hand->mesh();
 			if (left_hand_mesh_fb and right_hand_mesh_fb)
 			{
-				// oneVR: glass hands go in the pass drawn over the panels, like the rays
-				hand_model::add_hand(*this, XR_HAND_LEFT_EXT, *left_hand_mesh_fb, layer_rays, hand_model::look::glass);
-				hand_model::add_hand(*this, XR_HAND_RIGHT_EXT, *right_hand_mesh_fb, layer_rays, hand_model::look::glass);
+				// oneVR: hands go in the pass drawn over the panels, like the rays
+				hand_model::add_hand(*this, XR_HAND_LEFT_EXT, *left_hand_mesh_fb, layer_rays);
+				hand_model::add_hand(*this, XR_HAND_RIGHT_EXT, *right_hand_mesh_fb, layer_rays);
 				using_hand_mesh_fb = true;
 			}
 		}
 
 		if (!using_hand_mesh_fb)
 		{
-			hand_model::add_hand(*this, XR_HAND_LEFT_EXT, "assets://left-hand.glb", layer_rays, hand_model::look::glass);
-			hand_model::add_hand(*this, XR_HAND_RIGHT_EXT, "assets://right-hand.glb", layer_rays, hand_model::look::glass);
+			hand_model::add_hand(*this, XR_HAND_LEFT_EXT, "assets://left-hand.glb", layer_rays);
+			hand_model::add_hand(*this, XR_HAND_RIGHT_EXT, "assets://right-hand.glb", layer_rays);
 		}
 	}
 

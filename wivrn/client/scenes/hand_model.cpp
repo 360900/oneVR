@@ -112,32 +112,45 @@ static const vk::VertexInputAttributeDescription & find_hand_mesh_fb_attribute(c
 	throw std::runtime_error("Missing hand mesh FB vertex attribute");
 }
 
-// oneVR: a translucent or glass hand instead of a grey solid one, see hand_model::look
-static std::shared_ptr<renderer::material> create_hand_material(scene & scene, XrHandEXT hand, hand_model::look style)
+// oneVR: a hand drawn like a sketch, a dark tint inside a light outline, see hand.frag. The outline
+// is a second draw of the mesh after the tint, so the tint's depth leaves only what's outside
+static std::shared_ptr<renderer::material> create_hand_material(scene & scene, XrHandEXT hand, bool outline)
 {
-	return scene.create_material([hand, style](renderer::material & material) {
-		if (style == hand_model::look::glass)
-		{
-			// oneDesign's dark float surface over its black luminosity layer, in linear light
-			material.staging.base_color_factor = {0.018f, 0.019f, 0.022f, 0.12f}; // fill, alpha darkens the room
-			material.staging.base_emissive_factor = {0.94f, 0.96f, 1.0f, 0.95f};  // outline
-			material.fragment_shader = "hand_glass.frag";
-		}
-		else
-		{
-			material.staging.base_color_factor = {0.62f, 0.74f, 0.84f, 0.9f};  // fill, alpha scales the whole hand
-			material.staging.base_emissive_factor = {0.9f, 0.97f, 1.0f, 1.0f}; // rim
-			material.fragment_shader = "hand.frag";
-		}
+	return scene.create_material([hand, outline](renderer::material & material) {
+		// in linear light; alpha for the tint is how much of the room it darkens
+		material.staging.base_color_factor = outline ? glm::vec4{0.92f, 0.94f, 0.97f, 0.95f} : glm::vec4{0.01f, 0.011f, 0.013f, 0.15f};
 		material.staging.metallic_factor = 0.0f;
 		material.staging.roughness_factor = 1.0f;
-		material.name = hand == XR_HAND_LEFT_EXT ? "left-hand-material" : "right-hand-material";
+		material.name = std::string(hand == XR_HAND_LEFT_EXT ? "left" : "right") + (outline ? "-hand-outline-material" : "-hand-material");
+		material.fragment_shader = "hand.frag";
 		material.double_sided = false;
 		material.blend_enable = true;
+		material.draw_order = outline ? 1 : 0;
 		// depth_write_enable stays true: the lobby composites the hands' layer with
 		// XR_FB_composition_layer_depth_test (LESS_OR_EQUAL), where a pixel without depth
 		// counts as infinitely far and would vanish behind the panels and the sky dome
 	});
+}
+
+// oneVR: gives every primitive of a hand's mesh the tint and adds its outline: the mesh's back faces,
+// grown on the screen
+static void shade_hand(scene & scene, XrHandEXT hand, renderer::mesh & mesh)
+{
+	auto tint = create_hand_material(scene, hand, false);
+	auto outline = create_hand_material(scene, hand, true);
+	const size_t count = mesh.primitives.size();
+	for (size_t i = 0; i < count; i++)
+	{
+		auto & primitive = mesh.primitives[i];
+		primitive.material_ = tint;
+		primitive.cull_mode = vk::CullModeFlagBits::eBack;
+
+		auto line = primitive;
+		line.material_ = outline;
+		line.vertex_shader = "hand_outline_skinned.vert";
+		line.cull_mode = vk::CullModeFlagBits::eFront;
+		mesh.primitives.push_back(std::move(line));
+	}
 }
 
 static std::shared_ptr<renderer::mesh> create_hand_mesh_fb_mesh(scene & scene, const xr::hand_tracker::mesh_data & mesh)
@@ -259,15 +272,13 @@ static const std::array<std::pair<XrHandJointEXT, std::string_view>, XR_HAND_JOI
 void hand_model::add_hand(scene & scene,
                           XrHandEXT hand,
                           const std::filesystem::path & gltf_path,
-                          uint32_t layer_mask,
-                          look style)
+                          uint32_t layer_mask)
 {
 	auto && [entity, node] = scene.add_gltf(gltf_path, layer_mask);
 
 	node.name = gltf_path.stem();
 
-	// every mesh under the hand root gets the hand's material
-	auto material = create_hand_material(scene, hand, style);
+	// every mesh under the hand root is shaded as a hand
 	for (auto && [e, n]: scene.world.view<components::node>().each())
 	{
 		if (not n.mesh)
@@ -276,8 +287,7 @@ void hand_model::add_hand(scene & scene,
 		for (auto p = n.parent; p != entt::null and not under_hand; p = scene.world.get<components::node>(p).parent)
 			under_hand = p == entity;
 		if (under_hand)
-			for (auto & primitive: n.mesh->primitives)
-				primitive.material_ = material;
+			shade_hand(scene, hand, *n.mesh);
 	}
 
 	for (auto [joint, name]: joints)
@@ -294,17 +304,13 @@ void hand_model::add_hand(scene & scene,
 void hand_model::add_hand(scene & scene,
                           XrHandEXT hand,
                           const xr::hand_tracker::mesh_data & mesh,
-                          uint32_t layer_mask,
-                          look style)
+                          uint32_t layer_mask)
 {
-	auto material = create_hand_material(scene, hand, style);
-
 	entt::entity entity = scene.world.create();
 	auto & node = scene.world.emplace<components::node>(entity);
 	node.name = hand == XR_HAND_LEFT_EXT ? "left-hand-mesh" : "right-hand-mesh";
 	node.mesh = create_hand_mesh_fb_mesh(scene, mesh);
-	for (auto & primitive: node.mesh->primitives)
-		primitive.material_ = material;
+	shade_hand(scene, hand, *node.mesh);
 	node.visible = false;
 	node.layer_mask = layer_mask;
 	node.joints.reserve(mesh.joint_bind_poses.size());

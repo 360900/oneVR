@@ -1,5 +1,6 @@
 /*
- * oneVR: translucent hands with a bright rim, like the runtime's own
+ * oneVR: a hand drawn like a sketch: a flat dark tint inside, held by a flat light outline drawn
+ * with hand_outline_skinned.vert, each its material's base color
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -26,17 +27,6 @@ layout(location = 0) out vec4 out_color;
 
 void main()
 {
-    vec3 n = normalize(normal);
-    vec3 view_dir = normalize(-frag_pos.xyz);
-
-    // faint fill facing the eye, bright edge where the surface turns away
-    float facing = max(dot(n, view_dir), 0);
-    float rim = pow(1 - facing, 2.5);
-
-    vec3 fill = material.base_color_factor.rgb;
-    vec3 edge = material.base_emissive_factor.rgb;
-    float alpha = material.base_color_factor.a * mix(0.18, 0.95, rim);
-
     // premultiplied, the eye buffer is blended over passthrough and the panels
-    out_color = vec4(mix(fill, edge, rim) * alpha, alpha);
+    out_color = vec4(material.base_color_factor.rgb * material.base_color_factor.a, material.base_color_factor.a);
 }

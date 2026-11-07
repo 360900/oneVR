@@ -93,6 +93,9 @@ struct material
 	bool blend_enable = false;
 	bool depth_test_enable = true;
 	bool depth_write_enable = true;
+	// oneVR: blended primitives draw by this, lowest first, then farthest first: an outline drawn
+	// after its shape is hidden by the shape's depth
+	int draw_order = 0;
 
 	gpu_data staging;
 

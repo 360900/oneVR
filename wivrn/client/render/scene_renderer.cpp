@@ -994,12 +994,20 @@ void scene_renderer::render(
 	}
 
 	// Sort by blending / distance
-	std::ranges::stable_sort(primitives, [](const auto & a, const auto & b) -> bool {
+	auto draw_order = [&](const auto & entry) {
+		const auto & material = std::get<3>(entry)->material_;
+		return std::get<0>(entry) ? (material ? *material : *default_material).draw_order : 0;
+	};
+	std::ranges::stable_sort(primitives, [&](const auto & a, const auto & b) -> bool {
 		// Put the opaque objects first
 		if (std::get<0>(a) < std::get<0>(b))
 			return true;
 		if (std::get<0>(a) > std::get<0>(b))
 			return false;
+
+		// oneVR: then blended ones by their material's order
+		if (draw_order(a) != draw_order(b))
+			return draw_order(a) < draw_order(b);
 
 		// If blending is disabled (std::get<0> == false), put the closest objects first
 		// If blending is enabled (std::get<0> == true), put the farthest objects first
