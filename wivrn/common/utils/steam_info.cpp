@@ -187,11 +187,24 @@ std::unordered_set<uint64_t> installed_appids(std::filesystem::path root)
 
 		for (const auto & kv: std::get<values_t>(vdf.value))
 		{
+			// Steam rewrites this list long after a game is uninstalled; its manifest goes at once
+			std::optional<std::filesystem::path> steamapps;
+			try
+			{
+				const auto & path = std::get<wivrn::vdf::string>(kv["path"].value).data;
+				steamapps = std::filesystem::path(path) / "steamapps";
+			}
+			catch (...)
+			{}
 			for (const auto & [appid, _]: std::get<values_t>(kv["apps"].value))
 			{
 				uint64_t val;
-				if (std::from_chars(appid.data.begin(), appid.data.end(), val).ec == std::errc())
-					res.emplace(val);
+				if (std::from_chars(appid.data.begin(), appid.data.end(), val).ec != std::errc())
+					continue;
+				std::error_code ec;
+				if (steamapps and not std::filesystem::exists(*steamapps / std::format("appmanifest_{}.acf", val), ec))
+					continue;
+				res.emplace(val);
 			}
 		}
 	}
