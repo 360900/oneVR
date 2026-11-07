@@ -22,8 +22,8 @@ use super::{
     swapchain::{WlxSwapchain, create_swapchain},
 };
 
-/// oneVR: the sky without a custom texture, the same one as the lobby's, see res/table_mountain_2_8k.txt
-const DEFAULT_TEXTURE: &[u8] = include_bytes!("../../res/table_mountain_2_8k.dds");
+/// oneVR: the sky without a custom texture, the same one as the lobby's, see res/table_mountain_2_4k.txt
+const DEFAULT_TEXTURE: &[u8] = include_bytes!("../../res/table_mountain_2_4k.dds");
 
 #[allow(clippy::struct_field_names)]
 pub(super) struct Skybox {
@@ -354,7 +354,7 @@ mod tests {
         let surface = Surface::from_dds(&dds).unwrap();
         assert_eq!(
             (surface.width, surface.height, surface.depth),
-            (8192, 4096, 1)
+            (4096, 2048, 1)
         );
         // like the downloaded skymaps, which frag_srgb expects
         assert_eq!(surface.image_format, ImageFormat::BC7RgbaUnorm);

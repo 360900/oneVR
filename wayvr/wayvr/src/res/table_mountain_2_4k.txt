@@ -1,0 +1,3 @@
+table_mountain_2_4k.dds: Table Mountain 2, the original WlxOverlay-S skymap, adapted for VR by Galister from Rico Cilliers' Poly Haven HDRI (https://polyhaven.com/a/table_mountain_2)
+CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/
+As https://wayvr.org/skymaps/files/table_mountain_2_4k.dds. The lobby's dome (wivrn/assets-source/sky.glb) shows the same image.
