@@ -27,8 +27,8 @@ use crate::{
 use super::{
     XrState,
     hand_input::{
-        ClapHand, DoubleClap, FingerPinches, FingerTips, GraspGate, HandLog, Palm, PoseFilter,
-        index_bend, is_open, wrist_pose,
+        ClapHand, ClapLog, DoubleClap, FingerPinches, FingerTips, GraspGate, HandLog, HandPlace,
+        Palm, PoseFilter, index_bend, is_open, wrist_pose,
     },
     helpers::posef_to_transform,
 };
@@ -53,6 +53,7 @@ pub(super) struct OpenXrInputSource {
     clap: DoubleClap,
     // TEMP
     hand_logs: [HandLog; 2],
+    clap_log: ClapLog,
     ready_paths: [xr::Path; 2],
 }
 
@@ -68,6 +69,9 @@ struct HandReading {
     pinches: (bool, bool),
     clap: ClapHand,
     wrist: Option<Affine3A>,
+    // TEMP: for `ClapLog`
+    palm: Option<Palm>,
+    open: bool,
 }
 
 /// oneVR: what a tracked hand adds to its pointer's update
@@ -391,6 +395,7 @@ impl OpenXrInputSource {
             finger_pinches: Default::default(),
             clap: DoubleClap::default(),
             hand_logs: Default::default(),
+            clap_log: ClapLog::default(),
             ready_paths: [
                 xr.instance.string_to_path(GRASP_READY_PATHS[0])?,
                 xr.instance.string_to_path(GRASP_READY_PATHS[1])?,
@@ -424,7 +429,13 @@ impl OpenXrInputSource {
     /// oneVR: locates the joints only while the hand is the input: asking makes the headset track
     /// hands, which a game played with controllers shouldn't pay for. Returns the hand's finger
     /// pinches, see [`FingerPinches::update`], its palm if it may clap, and its wrist.
-    fn gate_grasps(&mut self, xr: &XrState, side: usize, frame_secs: f32) -> HandReading {
+    fn gate_grasps(
+        &mut self,
+        xr: &XrState,
+        side: usize,
+        frame_secs: f32,
+        hmd: Affine3A,
+    ) -> HandReading {
         let active = self
             .physical_inputs
             .iter()
@@ -467,12 +478,16 @@ impl OpenXrInputSource {
                         }
                     )
             });
-            self.hand_logs[side].update(side, raw, gated, ready, bend, frame_secs);
+            let palm = joints.as_ref().and_then(Palm::new);
+            let place = HandPlace::new(hmd, joints.as_ref().and_then(wrist_pose), palm);
+            self.hand_logs[side].update(side, raw, gated, ready, bend, place, frame_secs);
         }
         HandReading {
             pinches,
             clap: clap_hand,
             wrist: joints.as_ref().and_then(wrist_pose),
+            palm: joints.as_ref().and_then(Palm::new),
+            open: is_open(bend),
         }
     }
 
@@ -495,7 +510,13 @@ impl OpenXrInputSource {
             input.update(&xr.session)?;
         }
         let frame_secs = self.frame_secs(xr);
-        let readings = [0, 1].map(|side| self.gate_grasps(xr, side, frame_secs));
+        let hmd = app.input_state.hmd;
+        let readings = [0, 1].map(|side| self.gate_grasps(xr, side, frame_secs, hmd));
+        self.clap_log.update(
+            readings.map(|reading| reading.palm),
+            readings.map(|reading| reading.open),
+            frame_secs,
+        );
         let pinches = readings.map(|reading| reading.pinches);
         for (pointer, reading) in app.input_state.pointers.iter_mut().zip(&readings) {
             pointer.wrist = reading.wrist;
@@ -932,7 +953,7 @@ impl OpenXrHandSource {
 /// oneVR: as the dashboard's passthrough button, where the headset has passthrough
 fn toggle_passthrough(app: &mut AppState) {
     if !app.feats.passthru {
-        log::debug!("Clap: the headset has no passthrough");
+        log::info!("Clap: the headset has no passthrough");
         return;
     }
     let config = &mut app.session.config;

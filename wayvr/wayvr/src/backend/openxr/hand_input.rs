@@ -80,9 +80,57 @@ pub(super) struct HandLog {
     grabs: u32,
     was_fist: bool,
     was_grab: bool,
+    height: Range,
+    palm_down: Range,
+    reach: Range,
+}
+
+/// TEMP: where a hand is and how it's turned, for telling typing from grabbing
+#[derive(Clone, Copy)]
+pub(super) struct HandPlace {
+    /// The wrist's height below the head, in m, negative below
+    pub height: f32,
+    /// The palm's normal against straight down, 1 facing the floor
+    pub palm_down: f32,
+    /// The wrist's distance from the head, level, in m
+    pub reach: f32,
+}
+
+impl HandPlace {
+    pub(super) fn new(hmd: Affine3A, wrist: Option<Affine3A>, palm: Option<Palm>) -> Option<Self> {
+        let (wrist, palm) = (wrist?, palm?);
+        let to_wrist = Vec3::from(wrist.translation - hmd.translation);
+        Some(Self {
+            height: to_wrist.y,
+            palm_down: palm.normal.dot(Vec3::NEG_Y),
+            reach: Vec3::new(to_wrist.x, 0.0, to_wrist.z).length(),
+        })
+    }
+}
+
+/// TEMP: a value's least and greatest in a log's second
+#[derive(Default, Clone, Copy)]
+struct Range(Option<(f32, f32)>);
+
+impl Range {
+    fn add(&mut self, value: f32) {
+        self.0 = Some(self.0.map_or((value, value), |(min, max)| {
+            (min.min(value), max.max(value))
+        }));
+    }
+}
+
+impl std::fmt::Display for Range {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            Some((min, max)) => write!(f, "{min:.2}..{max:.2}"),
+            None => write!(f, "-"),
+        }
+    }
 }
 
 impl HandLog {
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn update(
         &mut self,
         side: usize,
@@ -90,9 +138,15 @@ impl HandLog {
         gated: f32,
         ready: bool,
         bend: Option<f32>,
+        place: Option<HandPlace>,
         secs: f32,
     ) {
         self.secs += secs;
+        if let Some(place) = place {
+            self.height.add(place.height);
+            self.palm_down.add(place.palm_down);
+            self.reach.add(place.reach);
+        }
         self.frames += 1;
         self.ready_frames += u32::from(ready);
         self.grasp_max = self.grasp_max.max(raw);
@@ -105,11 +159,20 @@ impl HandLog {
         let grab = gated > 0.0;
         self.fists += u32::from(fist && !self.was_fist);
         self.grabs += u32::from(grab && !self.was_grab);
+        if grab && !self.was_grab {
+            log::info!(
+                "TEMP grab {}: bend={bend:.2?} height={:.2?} palm_down={:.2?} reach={:.2?}",
+                ["left", "right"][side],
+                place.map(|p| p.height),
+                place.map(|p| p.palm_down),
+                place.map(|p| p.reach),
+            );
+        }
         self.was_fist = fist;
         self.was_grab = grab;
         if self.secs >= 1.0 {
             log::info!(
-                "TEMP hand {}: grasp_max={:.2} bend={:.2?}..{:.2?} joints={}% ready={}% fists={} grabs={}",
+                "TEMP hand {}: grasp_max={:.2} bend={:.2?}..{:.2?} joints={}% ready={}% fists={} grabs={} height={} palm_down={} reach={}",
                 ["left", "right"][side],
                 self.grasp_max,
                 self.bend_min,
@@ -118,6 +181,9 @@ impl HandLog {
                 self.ready_frames * 100 / self.frames,
                 self.fists,
                 self.grabs,
+                self.height,
+                self.palm_down,
+                self.reach,
             );
             *self = Self {
                 was_fist: fist,
@@ -402,6 +468,57 @@ impl ClapDetector {
     }
 }
 
+/// TEMP: how hands that come close look to [`ClapDetector`], logged once a second while they do
+#[derive(Default)]
+pub(super) struct ClapLog {
+    secs: f32,
+    /// Frames with both palms within 30 cm
+    close: u32,
+    /// Of those, frames with both hands open
+    open: u32,
+    nearest: Option<f32>,
+    /// At the nearest: the normals' dot, -1 facing
+    facing: f32,
+    last: Option<f32>,
+    speed_max: f32,
+}
+
+impl ClapLog {
+    pub(super) fn update(&mut self, palms: [Option<Palm>; 2], open: [bool; 2], dt: f32) {
+        self.secs += dt;
+        if let [Some(left), Some(right)] = palms {
+            let distance = left.position.distance(right.position);
+            if let Some(last) = self.last {
+                self.speed_max = self.speed_max.max((last - distance) / dt);
+            }
+            self.last = Some(distance);
+            if distance < 0.3 {
+                self.close += 1;
+                self.open += u32::from(open[0] && open[1]);
+                if self.nearest.is_none_or(|nearest| distance < nearest) {
+                    self.nearest = Some(distance);
+                    self.facing = left.normal.dot(right.normal);
+                }
+            }
+        } else {
+            self.last = None;
+        }
+        if self.secs >= 1.0 {
+            if self.close > 0 {
+                log::info!(
+                    "TEMP clap: close={} open={} nearest={:.3?} facing={:.2} speed_max={:.2}",
+                    self.close,
+                    self.open,
+                    self.nearest,
+                    self.facing,
+                    self.speed_max,
+                );
+            }
+            *self = Self::default();
+        }
+    }
+}
+
 /// Two claps in quick succession, so applause or a single clap doesn't count
 #[derive(Default)]
 pub(super) struct DoubleClap {
@@ -416,6 +533,7 @@ impl DoubleClap {
         if !self.clap.update(hands, dt) {
             return false;
         }
+        log::info!("TEMP clap: one clap, second={}", self.second_secs > 0.0);
         if self.second_secs > 0.0 {
             // a third clap starts over
             self.second_secs = 0.0;
