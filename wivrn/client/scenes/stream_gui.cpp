@@ -1107,6 +1107,14 @@ void scenes::stream::draw_gui(XrTime predicted_display_time, XrDuration predicte
 				hide_right_controller = true;
 		}
 
+		// oneVR: as in the lobby, a controller shows only while its hand holds one
+		auto holding = [this](int i) {
+			auto profile = interaction_profiles[i].load();
+			return profile != interaction_profile::none and profile != interaction_profile::ext_hand_interaction_ext;
+		};
+		hide_left_controller |= not holding(0);
+		hide_right_controller |= not holding(1);
+
 		input->apply(world,
 		             world_space,
 		             predicted_display_time,
