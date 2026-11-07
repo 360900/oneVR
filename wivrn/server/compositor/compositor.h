@@ -107,6 +107,9 @@ private:
 	status_type encode_request{-1}; // id of the image to encode
 	std::jthread encoder_thread;
 	std::atomic<uint32_t> skipped_frames = 0; // oneVR: encoders still busy with the previous one
+	// oneVR: compositor thread only, see layer_commit
+	bool headset_was_shown = true;
+	int64_t headset_shown_ns = 0;
 
 	struct
 	{

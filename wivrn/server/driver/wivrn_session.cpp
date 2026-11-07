@@ -436,6 +436,9 @@ void wivrn_session::resume_session()
 
 	// reset session components and send descriptor packets to headset
 
+	// oneVR: the headset sends its state once its stream starts
+	onevr_headset_shown = true;
+
 	if (audio_handle)
 		audio_handle->resume();
 
@@ -868,6 +871,7 @@ void wivrn_session::operator()(from_headset::session_state_changed && event)
 			break;
 	}
 
+	onevr_headset_shown = visible;
 	update_client_states(visible, focused);
 }
 void wivrn_session::operator()(from_headset::user_presence_changed && event)

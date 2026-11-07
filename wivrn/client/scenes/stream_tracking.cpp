@@ -379,8 +379,9 @@ void scenes::stream::tracking()
 
 			if (pattern_position == pattern.size())
 			{
-				// Upper limit to 200FPS
-				frame_duration = std::max<XrDuration>(5'000'000, display_time_period);
+				// Upper limit to 200FPS. oneVR: 10 Hz while the runtime asks for no frames (system
+				// menu, taken off), the PC apps are hidden and the server sends no video
+				frame_duration = onevr_shown ? std::max<XrDuration>(5'000'000, display_time_period) : 100'000'000;
 				// Wait for next frame
 				XrTime now = instance.now();
 				pattern_begin = display_time_phase + (std::max(pattern_begin + frame_duration, now) / frame_duration) * frame_duration;

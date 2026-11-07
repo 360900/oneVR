@@ -291,6 +291,23 @@ xrt_result_t compositor::layer_commit(xrt_graphics_sync_handle_t sync_handle)
 		return XRT_SUCCESS;
 	}
 
+	// oneVR: a headset that renders nothing (its system menu, taken off) gets no video, so its
+	// decoder and radio idle. The apps were told they're hidden and need a few frames to draw
+	// again: frames without layers wait for them up to half a second, and the headset keeps
+	// showing its last frame instead of a black one
+	{
+		const bool shown = session.headset_shown();
+		const int64_t now = os_monotonic_get_ns();
+		if (shown and not headset_was_shown)
+			headset_shown_ns = now;
+		headset_was_shown = shown;
+		if (not shown or (layer_accum.layer_count == 0 and now - headset_shown_ns < U_TIME_1S_IN_NS / 2))
+		{
+			comp_frame_clear_locked(&frame.rendering);
+			return XRT_SUCCESS;
+		}
+	}
+
 	int i = acquire_image();
 	if (i < 0)
 	{

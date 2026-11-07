@@ -122,6 +122,10 @@ private:
 	XrTime last_display_time = 0;
 	float last_gpu_time = 0; // seconds, previous frame, for the power governor
 	std::atomic<XrDuration> real_display_period = 0;
+	// oneVR: the runtime asks for frames; while it doesn't, the server sends no video and
+	// tracking slows down. shown_since lets the first frames after it wait for new video
+	std::atomic<bool> onevr_shown = true;
+	XrTime onevr_shown_since = 0;
 	std::optional<std::thread> tracking_thread;
 
 	std::shared_mutex decoder_mutex;

@@ -854,6 +854,9 @@ void scenes::stream::render(const XrFrameState & frame_state)
 
 	// the runtime stops asking for frames while the system menu is up or the headset is off
 	application::get_power().set_visible(frame_state.shouldRender);
+	if (frame_state.shouldRender and not onevr_shown)
+		onevr_shown_since = instance.now();
+	onevr_shown = frame_state.shouldRender;
 	if (frame_state.shouldRender and last_display_time)
 		application::get_power().frame(instance.now(), frame_state.predictedDisplayPeriod, real_display_period, application::get_cpu_time().count() * 1e-9f, last_gpu_time);
 
@@ -962,7 +965,9 @@ void scenes::stream::render(const XrFrameState & frame_state)
 		}
 
 		blit_handle->feedback.blitted = now;
-		if (blit_handle->feedback.blitted - blit_handle->feedback.received_from_decoder > 1'000'000'000)
+		// oneVR: the server sent nothing while we were hidden, the last frame is older
+		if (blit_handle->feedback.blitted - blit_handle->feedback.received_from_decoder > 1'000'000'000 and
+		    now - onevr_shown_since > 1'000'000'000)
 			set_state(state::stalled);
 		++blit_handle->feedback.times_displayed;
 		blit_handle->feedback.displayed = frame_state.predictedDisplayTime;
@@ -1058,10 +1063,11 @@ void scenes::stream::render(const XrFrameState & frame_state)
 	// oneVR: hands move between video frames
 	const bool hands = onevr_locate_hands(frame_state.predictedDisplayTime);
 
-	// Allow the headset to time warp if we are redisplaying a frame
+	// Allow the headset to time warp if we are redisplaying a frame. oneVR: not right after
+	// the runtime asked for frames again, it holds the empty ones we gave it while hidden
 	if ((not application::get_hmd_traits().discard_frame) or
 	    std::ranges::any_of(current_blit_handles, [](const auto & h) { return h and h->feedback.times_displayed < 2; }) or
-	    is_gui_interactable() or hands)
+	    is_gui_interactable() or hands or now - onevr_shown_since < 1'000'000'000)
 	{
 		assert(swapchain);
 

@@ -114,6 +114,8 @@ class wivrn_session : public xrt_system_devices
 
 	clock_offset_estimator offset_est;
 	std::atomic<XrDuration> tracking_latency; // production to reception time
+	// oneVR: the headset renders the stream, not in its system menu or taken off
+	std::atomic<bool> onevr_headset_shown = true;
 
 	std::unique_ptr<audio_device> audio_handle;
 
@@ -148,6 +150,10 @@ public:
 
 	clock_offset get_offset();
 	bool connected();
+	bool headset_shown() const
+	{
+		return onevr_headset_shown;
+	}
 	const from_headset::headset_info_packet & get_info() const
 	{
 		return headset_info;
