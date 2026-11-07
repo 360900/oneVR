@@ -937,6 +937,7 @@ fn start_grab(par: StartGrabParams) {
         Box::new({
             let pos = state.positioning;
             let name = par.name.clone();
+            let hands = pointer.hand_tracked;
             move |app, o| {
                 let _ = o
                     .backend
@@ -946,6 +947,7 @@ fn start_grab(par: StartGrabParams) {
                             name,
                             pos,
                             editing: par.editing,
+                            hands,
                         },
                     )
                     .inspect_err(|e| log::warn!("Error during Notify OverlayGrabbed: {e:?}"));
@@ -966,6 +968,7 @@ fn start_grab(par: StartGrabParams) {
         && !pointer.handsfree
     {
         let pos = state.positioning;
+        let hands = pointer.hand_tracked;
         app.tasks.enqueue(TaskType::Overlay(OverlayTask::Modify(
             OverlaySelector::Name(GRAB_HELP_NAME.clone()),
             Box::new(move |app, o| {
@@ -977,11 +980,18 @@ fn start_grab(par: StartGrabParams) {
                             name: par.name,
                             pos,
                             editing: par.editing,
+                            hands,
                         },
                     )
                     .inspect_err(|e| log::warn!("Error during Notify OverlayGrabbed: {e:?}"));
 
                 o.default_state.positioning = Positioning::FollowHand { hand, lerp: 0.1 };
+                // oneVR: above a fist, which would hide tips at the hand
+                o.default_state.transform.translation = if hands {
+                    Vec3A::new(0.0, GRAB_HELP_ABOVE_HAND, 0.0)
+                } else {
+                    Vec3A::ZERO
+                };
                 o.default_state.align_to_hmd = true;
                 o.activate(app, true);
             }),
@@ -1164,6 +1174,9 @@ where
         log::debug!("Hand {}: dropped {}", idx, overlay.config.name);
     }
 }
+
+/// oneVR: the grab-help panel's height over a tracked hand, in its pointer's space
+const GRAB_HELP_ABOVE_HAND: f32 = 0.12;
 
 /// oneVR: when the hand `idx` starts a grab on `overlay`, whether it stretches the panel that the
 /// other hand holds. Both have to be tracked hands, a controller resizes with its thumbstick.

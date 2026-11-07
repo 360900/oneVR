@@ -53,6 +53,9 @@ pub fn create_grab_help(app: &mut AppState) -> anyhow::Result<OverlayWindowConfi
         .get_widget_id("grabbing_anchored_edit")?;
     let id_floating = panel.parser_state.data.get_widget_id("grabbing_floating")?;
     let id_follow = panel.parser_state.data.get_widget_id("grabbing_follow")?;
+    // oneVR: a controller's tips or a tracked hand's
+    let id_controller_tips = panel.parser_state.data.get_widget_id("controller_tips")?;
+    let id_hand_tips = panel.parser_state.data.get_widget_id("hand_tips")?;
 
     let all = [
         id_watch,
@@ -66,7 +69,13 @@ pub fn create_grab_help(app: &mut AppState) -> anyhow::Result<OverlayWindowConfi
     panel.on_notify = Some(Box::new(move |panel, _app, event_data| {
         let mut alterables = EventAlterables::default();
 
-        let OverlayEventData::OverlayGrabbed { name, pos, editing } = event_data else {
+        let OverlayEventData::OverlayGrabbed {
+            name,
+            pos,
+            editing,
+            hands,
+        } = event_data
+        else {
             return Ok(());
         };
 
@@ -87,6 +96,8 @@ pub fn create_grab_help(app: &mut AppState) -> anyhow::Result<OverlayWindowConfi
         for id in &all {
             alterables.set_widget_visible(*id, *id == show_id);
         }
+        alterables.set_widget_visible(id_controller_tips, !hands);
+        alterables.set_widget_visible(id_hand_tips, hands);
 
         panel.layout.process_alterables(alterables)?;
 

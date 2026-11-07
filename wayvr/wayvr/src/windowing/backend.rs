@@ -149,6 +149,8 @@ pub enum OverlayEventData {
         name: Arc<str>,
         pos: Positioning,
         editing: bool,
+        /// oneVR: a tracked hand grabbed, not a controller
+        hands: bool,
     },
     CustomCommand {
         element: String,

@@ -18,6 +18,11 @@ building the APK.
   grabs and the dashboard does not reopen on its own; tune if still off. A double fist now
   counts only while the hand points at nothing and holds nothing (a quick regrab toggled
   the dashboard): confirm regrabbing a screen toggles nothing and both double fists work.
+- Hand gestures (#3): a thumb+middle pinch right clicks, thumb+ring middle clicks (pointer
+  turns orange/purple); a held fist pushes/pulls the panel by reach; a second fist on the
+  same panel resizes by spread; grab tips show hand pictures above the fist. Confirm the
+  pinches don't fire in a fist or an index pinch, and tune `FINGER_PINCH_*` (hand_input.rs),
+  `DEPTH_POWER` (hand_grab.rs) and `GRAB_HELP_ABOVE_HAND` (backend/input.rs) if off.
 - Cover options gear (#8): now overlaid in the cover's top-right corner; games not on Auto
   show a short Touch/Index badge with an icon beside it. Confirm both stay inside the cover
   and the badge reads on bright covers.
@@ -64,10 +69,6 @@ Headset interaction (do with the device):
   `Positioning::FollowHandGrip` (or a grip flag on FollowHand) so only the watch uses grip
   while the pointer ray keeps aim. Touches wlx-common/windowing, both input backends,
   window.rs, openxr_actions.json5. Tune WATCH_POS/WATCH_ROT on the Quest.
-- Hand gesture pictures in grab-help (#3): the grab-help shows controller joystick/trigger/B
-  pictures, which don't map to hands (hands grab+move, no scroll to adjust distance/size).
-  Design hand-specific help (fist = grab/move, pinch = click) with hand SVGs, shown when the
-  active profile is hand_interaction_ext.
 - Choppy pointers/rays (#5): pose is lerped from wayvr's own loop fps; choppiness points at
   a low render/update rate (power governor or capture stalls). Two headset causes are fixed:
   streams ran at the lobby's power savings clocks, and after a stall a stream kept the
