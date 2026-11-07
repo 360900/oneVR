@@ -1574,6 +1574,11 @@ try
 				recenter_requested = true;
 			break;
 		case XR_TYPE_EVENT_DATA_DISPLAY_REFRESH_RATE_CHANGED_FB:
+			// oneVR: the lobby passes on the change to its own rate while it shows, the server
+			// would take it as the stream's and send it back in the next stream description.
+			// on_focused() and setup() ask for the stream's rate, their change comes back here
+			if (not focused or onevr_refresh_rate == 0)
+				break;
 			network_session->send_control(from_headset::refresh_rate_changed{
 			        .from = event.refresh_rate_changed.fromDisplayRefreshRate,
 			        .to = event.refresh_rate_changed.toDisplayRefreshRate,
