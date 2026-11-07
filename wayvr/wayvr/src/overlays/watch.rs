@@ -23,9 +23,11 @@ use wlx_common::{
 
 pub const WATCH_NAME: &str = "watch";
 pub const WATCH_POS: Vec3 = vec3(-0.03, -0.01, 0.125);
-/// oneVR: the watch's center over a tracked hand's wrist joint, in its space: on the back of the
-/// forearm, past the hand that the headset draws over it
-const WRIST_WATCH_POS: Vec3A = Vec3A::new(0.0, 0.03, 0.08);
+/// oneVR: the watch's center from a tracked hand's wrist joint, in its space before the tilt: on the
+/// back of the forearm, just past the hand
+const WRIST_WATCH_POS: Vec3A = Vec3A::new(0.0, 0.025, 0.05);
+/// oneVR: how far the watch turns around the forearm toward the thumb, which faces the user
+const WRIST_WATCH_TILT: f32 = std::f32::consts::FRAC_PI_4;
 pub const WATCH_ROT: Quat = Quat::from_xyzw(-0.707_106_6, 0.000_796_361_8, 0.707_106_6, 0.0);
 
 #[derive(Default)]
@@ -163,17 +165,20 @@ pub fn create_watch(app: &mut AppState) -> anyhow::Result<OverlayWindowConfig> {
 }
 
 /// oneVR: where the watch sits for a tracked hand, in its wrist joint's space (XR_EXT_hand_tracking:
-/// -Z toward the fingers, +Y out of the back of the hand). It faces out of the back of the wrist,
-/// and with the forearm across the chest its top points away from the elbow's side, up.
+/// -Z toward the fingers, +Y out of the back of the hand, +X toward the left thumb and away from the
+/// right one). It faces out of the back of the wrist turned toward the thumb, which faces the user
+/// with the forearm across the chest, and its top points away from the user.
 pub fn on_wrist(hand: LeftRight, scale: f32) -> Affine3A {
     // columns: the watch's right, up and front
-    let rotation = match hand {
-        LeftRight::Left => Mat3A::from_cols(Vec3A::NEG_Z, Vec3A::NEG_X, Vec3A::Y),
-        LeftRight::Right => Mat3A::from_cols(Vec3A::Z, Vec3A::X, Vec3A::Y),
+    let (rotation, toward_thumb) = match hand {
+        LeftRight::Left => (Mat3A::from_cols(Vec3A::NEG_Z, Vec3A::NEG_X, Vec3A::Y), -1.0),
+        LeftRight::Right => (Mat3A::from_cols(Vec3A::Z, Vec3A::X, Vec3A::Y), 1.0),
     };
+    // around the forearm, so it stays on its surface
+    let tilt = Mat3A::from_rotation_z(toward_thumb * WRIST_WATCH_TILT);
     Affine3A {
-        matrix3: rotation * scale,
-        translation: WRIST_WATCH_POS,
+        matrix3: tilt * rotation * scale,
+        translation: tilt * WRIST_WATCH_POS,
     }
 }
 
@@ -207,10 +212,11 @@ fn sets_or_overlays(panel: &mut GuiPanel<WatchState>, app: &mut AppState) {
 mod tests {
     use super::*;
 
-    /// A wrist across the chest, its back toward the viewer, who looks along -Z: the watch faces
-    /// them, upright and readable
+    /// A forearm across the chest with the back of the wrist up, the user above and behind it:
+    /// the watch faces up and toward them, its top away from them, readable
     fn assert_readable(hand: LeftRight, fingers: Vec3A) {
-        let back = Vec3A::Z;
+        // the user's body is toward +Z, up is +Y
+        let back = Vec3A::Y;
         let z = -fingers;
         let wrist = Affine3A {
             matrix3: Mat3A::from_cols(back.cross(z), back, z),
@@ -218,16 +224,20 @@ mod tests {
         };
         let watch = wrist * on_wrist(hand, 1.0);
         assert!(watch.matrix3.determinant() > 0.0, "{hand:?} is mirrored");
+        let toward_user = Vec3A::new(0.0, 1.0, 1.0).normalize();
         assert!(
-            watch.z_axis.abs_diff_eq(Vec3A::Z, 1e-6),
+            watch.z_axis.abs_diff_eq(toward_user, 1e-6),
             "{hand:?} faces {}",
             watch.z_axis
         );
+        let top = Vec3A::new(0.0, 1.0, -1.0).normalize();
         assert!(
-            watch.y_axis.abs_diff_eq(Vec3A::Y, 1e-6),
+            watch.y_axis.abs_diff_eq(top, 1e-6),
             "{hand:?} has its top at {}",
             watch.y_axis
         );
+        // on the forearm, toward the user from its top
+        assert!(watch.translation.z > 0.0 && watch.translation.y > 0.0);
     }
 
     #[test]

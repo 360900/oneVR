@@ -64,6 +64,46 @@ impl PoseFilter {
     }
 }
 
+/// [`WristFilter`]: each of its two stages' time constant, in s. A wrist that moves in the
+/// tracker's steps moves within 15% of an even speed, for about 40 ms of lag.
+const WRIST_TAU: f32 = 0.02;
+/// [`WristFilter`]: a wrist that moved this far in a frame was found again elsewhere, in m
+const WRIST_JUMP: f32 = 0.15;
+
+/// Smooths a wrist that the watch sits on. The runtime tracks hands slower than the display and
+/// the server interpolates between its samples at uneven times, so the pose moves in uneven
+/// steps, which a watch held to it shows. Two low-pass stages in a row leave a smooth motion.
+#[derive(Default)]
+pub(super) struct WristFilter {
+    stages: Option<[(Vec3, Quat); 2]>,
+}
+
+impl WristFilter {
+    pub(super) fn update(&mut self, wrist: Option<Affine3A>, secs: f32) -> Option<Affine3A> {
+        let Some(wrist) = wrist else {
+            self.stages = None;
+            return None;
+        };
+        let sample = (
+            Vec3::from(wrist.translation),
+            Quat::from_affine3(&wrist).normalize(),
+        );
+        let stages = match &mut self.stages {
+            Some(stages) if stages[1].0.distance(sample.0) <= WRIST_JUMP => stages,
+            stages => stages.insert([sample; 2]),
+        };
+        let step = secs / (WRIST_TAU + secs);
+        let mut input = sample;
+        for stage in stages.iter_mut() {
+            stage.0 = stage.0.lerp(input.0, step);
+            stage.1 = stage.1.slerp(input.1, step).normalize();
+            input = *stage;
+        }
+        let (position, rotation) = stages[1];
+        Some(Affine3A::from_rotation_translation(rotation, position))
+    }
+}
+
 /// TEMP: what a hand's grasp values look like, logged once a second for tuning the gate
 #[derive(Default)]
 pub(super) struct HandLog {
@@ -687,6 +727,42 @@ mod tests {
     #[test]
     fn a_half_bent_index_does_not_open() {
         assert!(!run(&mut gate(), 1.0, Some(0.5), 2.0));
+    }
+
+    #[test]
+    fn a_stepping_wrist_moves_evenly() {
+        // 1 m/s, sampled at 50 Hz and shown at 72 Hz
+        let mut filter = WristFilter::default();
+        let mut speeds = Vec::new();
+        let mut last = 0.0;
+        for frame in 0..200 {
+            let time = frame as f32 * DT;
+            let sample = (time * 50.0).floor() / 50.0;
+            let x = filter.update(Some(pose(sample)), DT).unwrap().translation.x;
+            if frame > 50 {
+                speeds.push((x - last) / DT);
+            }
+            last = x;
+        }
+        let (min, max) = speeds
+            .iter()
+            .fold((f32::MAX, f32::MIN), |(a, b), &v| (a.min(v), b.max(v)));
+        assert!(min > 0.85 && max < 1.15, "{min}..{max}");
+    }
+
+    #[test]
+    fn a_found_again_wrist_is_taken_as_it_is() {
+        let mut filter = WristFilter::default();
+        filter.update(Some(pose(0.0)), DT);
+        assert_eq!(
+            filter.update(Some(pose(1.0)), DT).unwrap().translation.x,
+            1.0
+        );
+        assert!(filter.update(None, DT).is_none());
+        assert_eq!(
+            filter.update(Some(pose(2.0)), DT).unwrap().translation.x,
+            2.0
+        );
     }
 
     #[test]

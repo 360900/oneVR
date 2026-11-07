@@ -28,7 +28,7 @@ use super::{
     XrState,
     hand_input::{
         ClapHand, ClapLog, DoubleClap, FingerPinches, FingerTips, GraspGate, HandLog, HandPlace,
-        Palm, PoseFilter, index_bend, is_open, wrist_pose,
+        Palm, PoseFilter, WristFilter, index_bend, is_open, wrist_pose,
     },
     helpers::posef_to_transform,
 };
@@ -53,6 +53,8 @@ pub(super) struct OpenXrInputSource {
     clap: DoubleClap,
     // TEMP
     hand_logs: [HandLog; 2],
+    // oneVR: the wrists the watch sits on
+    wrist_filters: [WristFilter; 2],
     clap_log: ClapLog,
     ready_paths: [xr::Path; 2],
 }
@@ -395,6 +397,7 @@ impl OpenXrInputSource {
             finger_pinches: Default::default(),
             clap: DoubleClap::default(),
             hand_logs: Default::default(),
+            wrist_filters: Default::default(),
             clap_log: ClapLog::default(),
             ready_paths: [
                 xr.instance.string_to_path(GRASP_READY_PATHS[0])?,
@@ -518,8 +521,14 @@ impl OpenXrInputSource {
             frame_secs,
         );
         let pinches = readings.map(|reading| reading.pinches);
-        for (pointer, reading) in app.input_state.pointers.iter_mut().zip(&readings) {
-            pointer.wrist = reading.wrist;
+        for (side, (pointer, reading)) in app
+            .input_state
+            .pointers
+            .iter_mut()
+            .zip(&readings)
+            .enumerate()
+        {
+            pointer.wrist = self.wrist_filters[side].update(reading.wrist, frame_secs);
         }
         // oneVR: hands that hold something don't clap, as a two-hand stretch closing fast
         let clap_hands = [0, 1].map(|side| {

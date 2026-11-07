@@ -265,12 +265,12 @@ const fn def_one() -> f32 {
 	1.0
 }
 
-const fn def_half() -> f32 {
-	0.5
+const fn def_watch_view_angle_min() -> f32 {
+	0.6
 }
 
-const fn def_point7() -> f32 {
-	0.7
+const fn def_watch_view_angle_max() -> f32 {
+	0.8
 }
 
 const fn def_point3() -> f32 {
@@ -369,10 +369,12 @@ pub struct GeneralConfig {
 	#[serde(default = "def_one")]
 	pub default_overlay_scale: f32,
 
-	#[serde(default = "def_half")]
+	// oneVR: the watch shows over a narrower angle, gone past about 55 degrees off its face
+	// instead of 61, see `OverlayWindowConfig::angle_fade`
+	#[serde(default = "def_watch_view_angle_min")]
 	pub watch_view_angle_min: f32,
 
-	#[serde(default = "def_point7")]
+	#[serde(default = "def_watch_view_angle_max")]
 	pub watch_view_angle_max: f32,
 
 	#[serde(default = "def_osc_port")]
