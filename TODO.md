@@ -28,9 +28,6 @@ building the APK.
   seen rendered yet: check both in VR (set `tutorial_graduated: false` in
   `~/.config/wayvr/conf.d/zz-saved-config.json5` to see the tutorial again). oneVR's Home has
   no button to reopen the tutorial, unlike upstream's.
-- Double clap for passthrough: two claps of open hands within 0.7 s toggle passthrough.
-  Confirm it fires on a normal double clap, not on hands brought together slowly or a two-hand stretch, and tune
-  `CLAP_*` and `DOUBLE_CLAP_SECS` (hand_input.rs) if off. Check whether it also shows while a game runs.
 - Cover options gear (#8): now overlaid in the cover's top-right corner; games not on Auto
   show a short Touch/Index badge with an icon beside it. Confirm both stay inside the cover
   and the badge reads on bright covers.
