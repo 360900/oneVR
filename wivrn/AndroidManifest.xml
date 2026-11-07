@@ -100,6 +100,8 @@
         <meta-data android:name="com.htc.vr.content.NumDoFController" android:value="6DoF"/>
 
         <meta-data android:name="handtracking" android:value="1" />
+        <!-- oneVR: Meta tracks hands at 25 to 30 Hz without it -->
+        <meta-data android:name="com.oculus.handtracking.frequency" android:value="HIGH" />
         <meta-data android:name="eyetracking_calibration" android:value="true" />
 
         <!-- https://developer.oculus.com/documentation/native/android/mobile-splash/ -->
