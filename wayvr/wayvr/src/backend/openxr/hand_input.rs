@@ -147,6 +147,149 @@ pub(super) fn index_bend(joints: &xr::HandJointLocations) -> Option<f32> {
     Some(first.try_normalize()?.dot(last.try_normalize()?))
 }
 
+/// [`FingerPinch`]: a fingertip this close to the thumb's may start a pinch, in m
+const FINGER_PINCH_PRESS: f32 = 0.02;
+/// [`FingerPinch`]: a fingertip this far from the thumb's ends a pinch, in m
+const FINGER_PINCH_RELEASE: f32 = 0.035;
+/// [`FingerPinch`]: the index tip has to be this far from the thumb's, or it is the index's pinch
+const INDEX_APART: f32 = 0.04;
+/// [`FingerPinch`]: a pinch has to last this long, which drops the joints' spikes
+const FINGER_PINCH_HOLD_SECS: f32 = 0.04;
+
+/// The tips of the fingers that pinch, None without valid joints
+#[derive(Clone, Copy)]
+pub(super) struct FingerTips {
+    thumb: Vec3,
+    index: Vec3,
+    middle: Vec3,
+    ring: Vec3,
+}
+
+impl FingerTips {
+    pub(super) fn new(joints: &xr::HandJointLocations) -> Option<Self> {
+        let position = |joint: xr::HandJoint| {
+            let location = &joints[joint];
+            location
+                .location_flags
+                .contains(xr::SpaceLocationFlags::POSITION_VALID)
+                .then(|| {
+                    let p = location.pose.position;
+                    Vec3::new(p.x, p.y, p.z)
+                })
+        };
+        Some(Self {
+            thumb: position(xr::HandJoint::THUMB_TIP)?,
+            index: position(xr::HandJoint::INDEX_TIP)?,
+            middle: position(xr::HandJoint::MIDDLE_TIP)?,
+            ring: position(xr::HandJoint::RING_TIP)?,
+        })
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Finger {
+    Middle,
+    Ring,
+}
+
+/// A pinch of the thumb with the middle or the ring finger. The runtime only reports the index's,
+/// so this one comes from the joints.
+struct FingerPinch {
+    finger: Finger,
+    held_secs: f32,
+    open: bool,
+}
+
+impl FingerPinch {
+    const fn new(finger: Finger) -> Self {
+        Self {
+            finger,
+            held_secs: 0.0,
+            open: false,
+        }
+    }
+
+    /// `bend` is the index's, see [`index_bend`]. Lost joints keep a pinch as it is: a pinch that
+    /// drops and comes back would click twice.
+    fn update(&mut self, tips: Option<FingerTips>, bend: Option<f32>, dt: f32) -> bool {
+        let Some(tips) = tips else {
+            self.held_secs = 0.0;
+            return self.open;
+        };
+        let (own, other) = match self.finger {
+            Finger::Middle => (tips.middle, tips.ring),
+            Finger::Ring => (tips.ring, tips.middle),
+        };
+        let distance = tips.thumb.distance(own);
+        if self.open {
+            self.open = distance < FINGER_PINCH_RELEASE;
+            self.held_secs = 0.0;
+            return self.open;
+        }
+        // in a fist the thumb lies near every fingertip, and the index is curled
+        let index_out = bend.is_some_and(|bend| bend > INDEX_CURLED);
+        let starts = distance <= FINGER_PINCH_PRESS
+            && distance < tips.thumb.distance(other)
+            && tips.thumb.distance(tips.index) >= INDEX_APART
+            && index_out;
+        if starts {
+            self.held_secs += dt;
+            self.open = self.held_secs >= FINGER_PINCH_HOLD_SECS;
+        } else {
+            self.held_secs = 0.0;
+        }
+        self.open
+    }
+
+    const fn reset(&mut self) {
+        self.held_secs = 0.0;
+        self.open = false;
+    }
+}
+
+/// A hand's right click, a thumb and middle finger pinch, and its middle click, a thumb and ring
+/// finger pinch
+pub(super) struct FingerPinches {
+    right: FingerPinch,
+    middle: FingerPinch,
+}
+
+impl Default for FingerPinches {
+    fn default() -> Self {
+        Self {
+            right: FingerPinch::new(Finger::Middle),
+            middle: FingerPinch::new(Finger::Ring),
+        }
+    }
+}
+
+impl FingerPinches {
+    /// Whether the hand right clicks and middle clicks. One pinch at a time: the other has to
+    /// end before a new one starts.
+    pub(super) fn update(
+        &mut self,
+        tips: Option<FingerTips>,
+        bend: Option<f32>,
+        dt: f32,
+    ) -> (bool, bool) {
+        if self.middle.open {
+            self.right.reset();
+            return (false, self.middle.update(tips, bend, dt));
+        }
+        let right = self.right.update(tips, bend, dt);
+        if right {
+            self.middle.reset();
+            return (true, false);
+        }
+        (false, self.middle.update(tips, bend, dt))
+    }
+
+    pub(super) const fn reset(&mut self) {
+        self.right.reset();
+        self.middle.reset();
+    }
+}
+
 /// Decides whether a hand's `grasp_ext` value counts. Runtimes can report a high value for a hand
 /// that points, whose other fingers are curled, and a grab would start on the first such frame.
 pub(super) struct GraspGate {
@@ -318,6 +461,129 @@ mod tests {
         let mut gate = gate();
         run(&mut gate, 1.0, FIST, GRASP_HOLD_SECS + DT);
         assert!(gate.update(1.0, None, DT));
+    }
+
+    const INDEX_OUT: Option<f32> = Some(0.9);
+
+    /// Tips with the middle and ring fingers `middle` and `ring` m from the thumb, the index 6 cm
+    fn tips(middle: f32, ring: f32) -> Option<FingerTips> {
+        Some(FingerTips {
+            thumb: Vec3::ZERO,
+            index: Vec3::new(0.06, 0.0, 0.0),
+            middle: Vec3::new(0.0, middle, 0.0),
+            ring: Vec3::new(0.0, 0.0, ring),
+        })
+    }
+
+    fn pinch(
+        pinches: &mut FingerPinches,
+        tips: Option<FingerTips>,
+        bend: Option<f32>,
+        secs: f32,
+    ) -> (bool, bool) {
+        let mut state = (false, false);
+        for _ in 0..(secs / DT).ceil() as usize {
+            state = pinches.update(tips, bend, DT);
+        }
+        state
+    }
+
+    const HOLD: f32 = FINGER_PINCH_HOLD_SECS + DT;
+
+    #[test]
+    fn a_middle_pinch_right_clicks() {
+        let mut pinches = FingerPinches::default();
+        assert_eq!(
+            pinch(&mut pinches, tips(0.01, 0.05), INDEX_OUT, HOLD),
+            (true, false)
+        );
+        assert_eq!(
+            pinch(&mut pinches, tips(0.05, 0.05), INDEX_OUT, DT),
+            (false, false)
+        );
+    }
+
+    #[test]
+    fn a_ring_pinch_middle_clicks() {
+        let mut pinches = FingerPinches::default();
+        assert_eq!(
+            pinch(&mut pinches, tips(0.05, 0.01), INDEX_OUT, HOLD),
+            (false, true)
+        );
+    }
+
+    #[test]
+    fn the_nearer_finger_pinches() {
+        let mut pinches = FingerPinches::default();
+        assert_eq!(
+            pinch(&mut pinches, tips(0.018, 0.012), INDEX_OUT, HOLD),
+            (false, true)
+        );
+    }
+
+    #[test]
+    fn a_short_touch_does_not_pinch() {
+        let mut pinches = FingerPinches::default();
+        assert_eq!(
+            pinch(
+                &mut pinches,
+                tips(0.01, 0.05),
+                INDEX_OUT,
+                FINGER_PINCH_HOLD_SECS / 2.0
+            ),
+            (false, false)
+        );
+    }
+
+    #[test]
+    fn a_fist_does_not_pinch() {
+        let mut pinches = FingerPinches::default();
+        assert_eq!(
+            pinch(&mut pinches, tips(0.01, 0.05), FIST, 1.0),
+            (false, false)
+        );
+        assert_eq!(
+            pinch(&mut pinches, tips(0.01, 0.05), None, 1.0),
+            (false, false)
+        );
+    }
+
+    #[test]
+    fn the_index_pinch_is_not_a_middle_pinch() {
+        let mut pinches = FingerPinches::default();
+        let mut close = tips(0.015, 0.05).unwrap();
+        close.index = Vec3::new(0.01, 0.0, 0.0);
+        assert_eq!(
+            pinch(&mut pinches, Some(close), INDEX_OUT, 1.0),
+            (false, false)
+        );
+    }
+
+    #[test]
+    fn a_pinch_holds_until_the_release_distance() {
+        let mut pinches = FingerPinches::default();
+        pinch(&mut pinches, tips(0.01, 0.05), INDEX_OUT, HOLD);
+        // and the index or the fist no longer matter
+        assert_eq!(pinches.update(tips(0.03, 0.05), FIST, DT), (true, false));
+        assert_eq!(pinches.update(tips(0.04, 0.05), FIST, DT), (false, false));
+    }
+
+    #[test]
+    fn lost_joints_keep_a_pinch() {
+        let mut pinches = FingerPinches::default();
+        pinch(&mut pinches, tips(0.01, 0.05), INDEX_OUT, HOLD);
+        assert_eq!(pinches.update(None, None, DT), (true, false));
+    }
+
+    #[test]
+    fn one_pinch_at_a_time() {
+        let mut pinches = FingerPinches::default();
+        pinch(&mut pinches, tips(0.05, 0.01), INDEX_OUT, HOLD);
+        // the middle finger joins the ring's pinch
+        assert_eq!(
+            pinch(&mut pinches, tips(0.005, 0.01), INDEX_OUT, 1.0),
+            (false, true)
+        );
     }
 
     #[test]

@@ -25,7 +25,7 @@ use crate::{
 
 use super::{
     XrState,
-    hand_input::{GraspGate, HandLog, PoseFilter, index_bend},
+    hand_input::{FingerPinches, FingerTips, GraspGate, HandLog, PoseFilter, index_bend},
     helpers::posef_to_transform,
 };
 
@@ -43,6 +43,8 @@ pub(super) struct OpenXrInputSource {
     // oneVR: None where the runtime has none
     hand_trackers: [Option<xr::HandTracker>; 2],
     last_display_time: Option<xr::Time>,
+    // oneVR: a tracked hand's right and middle clicks
+    finger_pinches: [FingerPinches; 2],
     // TEMP
     hand_logs: [HandLog; 2],
     ready_paths: [xr::Path; 2],
@@ -53,6 +55,15 @@ const GRASP_READY_PATHS: [&str; 2] = [
     "/user/hand/left/input/grasp_ext/ready_ext",
     "/user/hand/right/input/grasp_ext/ready_ext",
 ];
+
+/// oneVR: what a tracked hand adds to its pointer's update
+#[derive(Clone, Copy)]
+pub(super) struct HandFrame {
+    /// The time since the last update, in seconds
+    secs: f32,
+    /// The right and middle clicks, see [`FingerPinches::update`]
+    pinches: (bool, bool),
+}
 
 pub(super) struct OpenXrPointer {
     source: OpenXrHandSource,
@@ -363,6 +374,7 @@ impl OpenXrInputSource {
             handsfree_pointer: OpenXrPointer::new(xr, fallback_source)?,
             hand_trackers: [hand_tracker(xr::Hand::LEFT), hand_tracker(xr::Hand::RIGHT)],
             last_display_time: None,
+            finger_pinches: Default::default(),
             hand_logs: Default::default(),
             ready_paths: [
                 xr.instance.string_to_path(GRASP_READY_PATHS[0])?,
@@ -395,13 +407,14 @@ impl OpenXrInputSource {
     }
 
     /// oneVR: locates the joints only while the hand is the input: asking makes the headset track
-    /// hands, which a game played with controllers shouldn't pay for
-    fn gate_grasps(&mut self, xr: &XrState, side: usize, frame_secs: f32) {
+    /// hands, which a game played with controllers shouldn't pay for. Returns the hand's finger
+    /// pinches, see [`FingerPinches::update`].
+    fn gate_grasps(&mut self, xr: &XrState, side: usize, frame_secs: f32) -> (bool, bool) {
         let active = self
             .physical_inputs
             .iter()
             .any(|input| input.is_active_grasp(side));
-        let bend = self.hand_trackers[side]
+        let joints = self.hand_trackers[side]
             .as_ref()
             .filter(|_| active)
             .and_then(|tracker| {
@@ -409,8 +422,15 @@ impl OpenXrInputSource {
                     .locate_hand_joints(tracker, xr.predicted_display_time)
                     .ok()
                     .flatten()
-            })
-            .and_then(|joints| index_bend(&joints));
+            });
+        let bend = joints.as_ref().and_then(index_bend);
+        let pinches = if active {
+            let tips = joints.as_ref().and_then(FingerTips::new);
+            self.finger_pinches[side].update(tips, bend, frame_secs)
+        } else {
+            self.finger_pinches[side].reset();
+            (false, false)
+        };
         // TEMP: the values before the gate, for `HandLog`
         let raw = self.grasp_value(side);
         for input in &mut self.physical_inputs {
@@ -430,6 +450,7 @@ impl OpenXrInputSource {
             });
             self.hand_logs[side].update(side, raw, gated, ready, bend, frame_secs);
         }
+        pinches
     }
 
     // TEMP
@@ -451,9 +472,10 @@ impl OpenXrInputSource {
             input.update(&xr.session)?;
         }
         let frame_secs = self.frame_secs(xr);
-        for side in 0..2 {
-            self.gate_grasps(xr, side, frame_secs);
-        }
+        let pinches = [
+            self.gate_grasps(xr, 0, frame_secs),
+            self.gate_grasps(xr, 1, frame_secs),
+        ];
         let physical_inputs = &self.physical_inputs;
 
         app.input_state.eye_gaze = if xr.extra_exts.ext_eye_gaze_interaction {
@@ -489,18 +511,21 @@ impl OpenXrInputSource {
 
         if picking_focus.is_none() {
             let should_disable_lerp = app.input_state.should_disable_lerp();
-            for i in 0..2 {
+            for (i, pinches) in pinches.into_iter().enumerate() {
                 let pointer = &mut app.input_state.pointers[i];
-                let hand_secs = physical_inputs
+                let hand = physical_inputs
                     .iter()
                     .any(|input| input.is_active_grasp(i))
-                    .then_some(frame_secs);
+                    .then_some(HandFrame {
+                        secs: frame_secs,
+                        pinches,
+                    });
                 self.pointers[i].update(
                     pointer,
                     xr,
                     &app.session,
                     !should_disable_lerp,
-                    hand_secs,
+                    hand,
                     physical_inputs,
                 )?;
                 any_tracked |= pointer.tracked;
@@ -518,6 +543,7 @@ impl OpenXrInputSource {
                 pointer.now = PointerState::default();
                 pointer.tracked = false;
                 pointer.handsfree = false;
+                pointer.hand_tracked = false;
             }
         }
 
@@ -654,6 +680,7 @@ impl OpenXrPointer {
         handsfree_state: &PointerState,
         physical_inputs: &[PhysicalInput],
     ) -> anyhow::Result<()> {
+        pointer.hand_tracked = false;
         match session.config.handsfree_pointer {
             HandsfreePointer::None => return Ok(()),
             HandsfreePointer::Hmd | HandsfreePointer::HmdOnly => {
@@ -713,7 +740,7 @@ impl OpenXrPointer {
         xr: &XrState,
         session: &AppSession,
         do_lerp: bool,
-        hand_secs: Option<f32>,
+        hand: Option<HandFrame>,
         physical_inputs: &[PhysicalInput],
     ) -> anyhow::Result<()> {
         pointer.handsfree = false;
@@ -727,11 +754,22 @@ impl OpenXrPointer {
             },
         )?;
         // oneVR: a tracked hand gets its own filter, what a lerp lets through stutters on a far panel
-        match hand_secs.filter(|_| do_lerp && pointer.tracked) {
-            Some(secs) => pointer.pose = self.hand_filter.update(pointer.raw_pose, secs),
+        match hand.filter(|_| do_lerp && pointer.tracked) {
+            Some(hand) => pointer.pose = self.hand_filter.update(pointer.raw_pose, hand.secs),
             None => self.hand_filter.reset(),
         }
+        pointer.hand_tracked = hand.is_some() && pointer.tracked;
         self.pointer_load_actions(pointer, xr, physical_inputs)?;
+
+        // oneVR: a finger pinch clicks with its button, as a controller's click with a modifier.
+        // Not while grabbing, where the click and the modifier change what the grab does.
+        let grabbing = pointer.now.grab || pointer.interaction.grabbed.is_some();
+        let (pinch_right, pinch_middle) = hand.map_or((false, false), |hand| hand.pinches);
+        if pointer.hand_tracked && !grabbing && (pinch_right || pinch_middle) {
+            pointer.now.click = true;
+            pointer.now.click_modifier_right |= pinch_right;
+            pointer.now.click_modifier_middle |= pinch_middle;
+        }
 
         Ok(())
     }

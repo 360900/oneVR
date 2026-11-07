@@ -349,6 +349,8 @@ pub struct Pointer {
     pub(super) interaction: InteractionState,
     pub tracked: bool,
     pub handsfree: bool,
+    /// oneVR: a tracked hand points, not a controller
+    pub hand_tracked: bool,
     /// distance of the most recent ray hit on a wayland client window, used for drag n drop
     pub last_wvr_hit_distance: Option<f32>,
 }
@@ -367,6 +369,7 @@ impl Pointer {
             interaction: InteractionState::default(),
             tracked: false,
             handsfree: false,
+            hand_tracked: false,
             last_wvr_hit_distance: None,
         }
     }
