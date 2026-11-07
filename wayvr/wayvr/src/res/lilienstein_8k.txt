@@ -1,3 +1,0 @@
-lilienstein_8k.dds: Lilienstein by Andreas Mischok, Poly Haven (https://polyhaven.com/a/lilienstein)
-CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/
-BC7 of the tonemapped JPEG, turned 100.8 degrees like the lobby's dome (wivrn/assets-source/sky.glb).

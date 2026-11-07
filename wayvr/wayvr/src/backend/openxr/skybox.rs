@@ -22,8 +22,8 @@ use super::{
     swapchain::{WlxSwapchain, create_swapchain},
 };
 
-/// oneVR: the sky without a custom texture, the same one as the lobby's, see res/lilienstein_8k.txt
-const DEFAULT_TEXTURE: &[u8] = include_bytes!("../../res/lilienstein_8k.dds");
+/// oneVR: the sky without a custom texture, the same one as the lobby's, see res/table_mountain_2_8k.txt
+const DEFAULT_TEXTURE: &[u8] = include_bytes!("../../res/table_mountain_2_8k.dds");
 
 #[allow(clippy::struct_field_names)]
 pub(super) struct Skybox {
