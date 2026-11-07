@@ -28,7 +28,7 @@ use super::{
     XrState,
     hand_input::{
         ClapHand, ClapLog, DoubleClap, FingerPinches, FingerTips, GraspGate, HandLog, HandPlace,
-        Palm, PoseFilter, WristFilter, index_bend, is_open, wrist_pose,
+        Palm, PoseFilter, WristFilter, fist_openness, index_bend, is_open, wrist_pose,
     },
     helpers::posef_to_transform,
 };
@@ -453,6 +453,8 @@ impl OpenXrInputSource {
                     .flatten()
             });
         let bend = joints.as_ref().and_then(index_bend);
+        // oneVR: a fist needs every finger and the thumb in it
+        let openness = joints.as_ref().and_then(fist_openness);
         let clap_hand = joints
             .as_ref()
             .filter(|_| is_open(bend))
@@ -467,7 +469,7 @@ impl OpenXrInputSource {
         // TEMP: the values before the gate, for `HandLog`
         let raw = self.grasp_value(side);
         for input in &mut self.physical_inputs {
-            input.gate_grasp(side, bend, frame_secs);
+            input.gate_grasp(side, openness, frame_secs);
         }
         if active {
             let gated = self.grasp_value(side);

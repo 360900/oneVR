@@ -48,6 +48,7 @@
     },
   },
   // Hand tracking: point with the hand, pinch to click, make a fist to grab;
+  // a fist needs every finger and the thumb in it, see hand_input::fist_openness;
   // a double fist with the left hand toggles the dashboard, with the right hand
   // shows or hides the screens. A double fist counts only while that hand points
   // at nothing and holds nothing, so retrying a grab doesn't trigger it.
@@ -71,20 +72,20 @@
       left: "/user/hand/left/input/grasp_ext/value",
       right: "/user/hand/right/input/grasp_ext/value",
       handsfree: "/user/hand/left/input/pinch_ext/value",
-      // a near-full fist; a pointing hand with one finger out should not grab
+      // a full fist; a pointing hand, a thumbs up or a raised finger should not grab
       // [release, press]
-      threshold_left: [0.7, 0.9],
-      threshold_right: [0.7, 0.9],
+      threshold_left: [0.8, 0.95],
+      threshold_right: [0.8, 0.95],
     },
     toggle_dashboard: {
       double_click: true,
       left: "/user/hand/left/input/grasp_ext/value",
-      threshold_left: [0.7, 0.9],
+      threshold_left: [0.8, 0.95],
     },
     show_hide: {
       double_click: true,
       right: "/user/hand/right/input/grasp_ext/value",
-      threshold_right: [0.7, 0.9],
+      threshold_right: [0.8, 0.95],
     },
   },
 

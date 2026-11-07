@@ -7,10 +7,18 @@ use openxr as xr;
 
 /// A fist has to last this long, which drops the runtime's spikes
 const GRASP_HOLD_SECS: f32 = 0.12;
-/// [`index_bend`] at or below this may start a grab, about 80 degrees
+/// [`index_bend`] at or below this curls the index, about 80 degrees
 const INDEX_CURLED: f32 = 0.2;
-/// [`index_bend`] above this ends a grab, about 50 degrees
+/// [`index_bend`] above this extends the index, about 50 degrees
 const INDEX_EXTENDED: f32 = 0.6;
+/// [`fist_openness`] at or below this may start a grab: every finger bent 90 degrees or more
+const FIST_CLOSED: f32 = 0.0;
+/// [`fist_openness`] above this ends a grab: a finger out by about 50 degrees
+const FIST_OPEN: f32 = 0.6;
+/// [`fist_openness`]: the thumb's tip this near the index or middle finger, in hand lengths, is in
+/// the fist, and this far out of it, as in a thumbs up
+const THUMB_IN: f32 = 0.5;
+const THUMB_OUT: f32 = 0.7;
 
 /// [`PoseFilter`]: the cutoff of a still hand, in Hz. Lower hides more jitter and lags more.
 const POSE_MIN_CUTOFF: f32 = 2.0;
@@ -251,6 +259,67 @@ pub(super) fn index_bend(joints: &xr::HandJointLocations) -> Option<f32> {
         position(xr::HandJoint::INDEX_INTERMEDIATE)? - position(xr::HandJoint::INDEX_PROXIMAL)?;
     let last = position(xr::HandJoint::INDEX_TIP)? - position(xr::HandJoint::INDEX_DISTAL)?;
     Some(first.try_normalize()?.dot(last.try_normalize()?))
+}
+
+/// How open a hand is for a fist: like [`index_bend`] for its most open finger, the thumb counted
+/// by how far its tip is from the index and middle fingers, so a thumbs up or one finger raised
+/// is no fist. None without valid joints.
+pub(super) fn fist_openness(joints: &xr::HandJointLocations) -> Option<f32> {
+    use xr::HandJoint as J;
+    let position = |joint: J| {
+        let location = &joints[joint];
+        location
+            .location_flags
+            .contains(xr::SpaceLocationFlags::POSITION_VALID)
+            .then(|| {
+                let p = location.pose.position;
+                Vec3::new(p.x, p.y, p.z)
+            })
+    };
+    let bend = |proximal: J, intermediate: J, distal: J, tip: J| -> Option<f32> {
+        let first = position(intermediate)? - position(proximal)?;
+        let last = position(tip)? - position(distal)?;
+        Some(first.try_normalize()?.dot(last.try_normalize()?))
+    };
+    let fingers = [
+        bend(
+            J::INDEX_PROXIMAL,
+            J::INDEX_INTERMEDIATE,
+            J::INDEX_DISTAL,
+            J::INDEX_TIP,
+        )?,
+        bend(
+            J::MIDDLE_PROXIMAL,
+            J::MIDDLE_INTERMEDIATE,
+            J::MIDDLE_DISTAL,
+            J::MIDDLE_TIP,
+        )?,
+        bend(
+            J::RING_PROXIMAL,
+            J::RING_INTERMEDIATE,
+            J::RING_DISTAL,
+            J::RING_TIP,
+        )?,
+        bend(
+            J::LITTLE_PROXIMAL,
+            J::LITTLE_INTERMEDIATE,
+            J::LITTLE_DISTAL,
+            J::LITTLE_TIP,
+        )?,
+    ];
+    let hand_length = position(J::WRIST)?.distance(position(J::MIDDLE_PROXIMAL)?);
+    if hand_length <= f32::EPSILON {
+        return None;
+    }
+    let thumb_tip = position(J::THUMB_TIP)?;
+    let thumb_gap = thumb_tip
+        .distance(position(J::INDEX_INTERMEDIATE)?)
+        .min(thumb_tip.distance(position(J::MIDDLE_INTERMEDIATE)?))
+        / hand_length;
+    // on the fingers' scale: in the fist at THUMB_IN, out of it at THUMB_OUT
+    let thumb =
+        FIST_CLOSED + (thumb_gap - THUMB_IN) / (THUMB_OUT - THUMB_IN) * (FIST_OPEN - FIST_CLOSED);
+    Some(fingers.into_iter().fold(thumb, f32::max))
 }
 
 /// [`FingerPinch`]: a fingertip this close to the thumb's may start a pinch, in m
@@ -585,7 +654,8 @@ impl DoubleClap {
 }
 
 /// Decides whether a hand's `grasp_ext` value counts. Runtimes can report a high value for a hand
-/// that points, whose other fingers are curled, and a grab would start on the first such frame.
+/// that points, gives a thumbs up or raises a finger, whose other fingers are curled, and a grab
+/// would start on the first such frame.
 pub(super) struct GraspGate {
     /// The grab's [release, press]
     thresholds: [f32; 2],
@@ -602,17 +672,17 @@ impl GraspGate {
         }
     }
 
-    /// `bend` is None when the joints say nothing: a fist doesn't start then, as a hand the headset
+    /// `openness` is the hand's [`fist_openness`], None when the joints say nothing: a fist doesn't start then, as a hand the headset
     /// is losing reports fists that aren't, and two of them toggled the dashboard. A grab that
     /// holds stays held.
-    pub(super) fn update(&mut self, value: f32, bend: Option<f32>, dt: f32) -> bool {
+    pub(super) fn update(&mut self, value: f32, openness: Option<f32>, dt: f32) -> bool {
         if self.open {
-            let extended = bend.is_some_and(|bend| bend > INDEX_EXTENDED);
+            let extended = openness.is_some_and(|openness| openness > FIST_OPEN);
             self.open = value >= self.thresholds[0] && !extended;
             self.held_secs = 0.0;
             return self.open;
         }
-        let curled = bend.is_some_and(|bend| bend <= INDEX_CURLED);
+        let curled = openness.is_some_and(|openness| openness <= FIST_CLOSED);
         if value >= self.thresholds[1] && curled {
             self.held_secs += dt;
             self.open = self.held_secs >= GRASP_HOLD_SECS;
@@ -637,7 +707,7 @@ mod tests {
     const POINTING: Option<f32> = Some(0.95);
 
     fn gate() -> GraspGate {
-        GraspGate::new([0.7, 0.9])
+        GraspGate::new([0.8, 0.95])
     }
 
     fn run(gate: &mut GraspGate, value: f32, bend: Option<f32>, secs: f32) -> bool {
@@ -765,6 +835,97 @@ mod tests {
         );
     }
 
+    /// A right hand, fingers along -Z from the wrist at the origin, palm down: each finger
+    /// straight or curled back under the hand, the thumb's tip on the fingers or up
+    fn hand(open: [bool; 4], thumb_up: bool) -> xr::HandJointLocations {
+        use xr::HandJoint as J;
+        let mut joints: xr::HandJointLocations = unsafe { std::mem::zeroed() };
+        let mut put = |joint: J, p: Vec3| {
+            joints[joint].location_flags = xr::SpaceLocationFlags::POSITION_VALID;
+            joints[joint].pose.position = xr::Vector3f {
+                x: p.x,
+                y: p.y,
+                z: p.z,
+            };
+        };
+        put(J::WRIST, Vec3::ZERO);
+        let fingers = [
+            [
+                J::INDEX_PROXIMAL,
+                J::INDEX_INTERMEDIATE,
+                J::INDEX_DISTAL,
+                J::INDEX_TIP,
+            ],
+            [
+                J::MIDDLE_PROXIMAL,
+                J::MIDDLE_INTERMEDIATE,
+                J::MIDDLE_DISTAL,
+                J::MIDDLE_TIP,
+            ],
+            [
+                J::RING_PROXIMAL,
+                J::RING_INTERMEDIATE,
+                J::RING_DISTAL,
+                J::RING_TIP,
+            ],
+            [
+                J::LITTLE_PROXIMAL,
+                J::LITTLE_INTERMEDIATE,
+                J::LITTLE_DISTAL,
+                J::LITTLE_TIP,
+            ],
+        ];
+        for (i, finger) in fingers.into_iter().enumerate() {
+            let base = Vec3::new(-0.02 + 0.02 * i as f32, 0.0, -0.09);
+            let intermediate = base + Vec3::new(0.0, 0.0, -0.04);
+            let (distal, tip) = if open[i] {
+                (
+                    intermediate + Vec3::new(0.0, 0.0, -0.025),
+                    intermediate + Vec3::new(0.0, 0.0, -0.045),
+                )
+            } else {
+                (
+                    intermediate + Vec3::new(0.0, -0.025, 0.0),
+                    intermediate + Vec3::new(0.0, -0.025, 0.02),
+                )
+            };
+            for (joint, p) in finger.into_iter().zip([base, intermediate, distal, tip]) {
+                put(joint, p);
+            }
+        }
+        let thumb_tip = if thumb_up {
+            Vec3::new(-0.04, 0.07, -0.09)
+        } else {
+            Vec3::new(-0.015, -0.02, -0.12)
+        };
+        put(J::THUMB_TIP, thumb_tip);
+        joints
+    }
+
+    fn opens(open: [bool; 4], thumb_up: bool) -> bool {
+        let openness = fist_openness(&hand(open, thumb_up));
+        run(&mut gate(), 1.0, openness, 2.0)
+    }
+
+    #[test]
+    fn a_fist_with_the_thumb_on_the_fingers_opens() {
+        assert!(opens([false; 4], false));
+    }
+
+    #[test]
+    fn a_thumbs_up_does_not_open() {
+        assert!(!opens([false; 4], true));
+    }
+
+    #[test]
+    fn a_raised_finger_does_not_open() {
+        for finger in 0..4 {
+            let mut open = [false; 4];
+            open[finger] = true;
+            assert!(!opens(open, false), "finger {finger}");
+        }
+    }
+
     #[test]
     fn without_joints_a_fist_does_not_open() {
         assert!(!run(&mut gate(), 1.0, None, 2.0));
@@ -782,8 +943,8 @@ mod tests {
     fn stays_open_down_to_the_release_threshold() {
         let mut gate = gate();
         run(&mut gate, 1.0, FIST, GRASP_HOLD_SECS + DT);
-        assert!(gate.update(0.75, FIST, DT));
-        assert!(!gate.update(0.65, FIST, DT));
+        assert!(gate.update(0.85, FIST, DT));
+        assert!(!gate.update(0.75, FIST, DT));
     }
 
     #[test]
