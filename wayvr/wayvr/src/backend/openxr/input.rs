@@ -27,7 +27,7 @@ use crate::{
 use super::{
     XrState,
     hand_input::{
-        ClapDetector, ClapHand, FingerPinches, FingerTips, GraspGate, HandLog, Palm, PoseFilter,
+        ClapHand, DoubleClap, FingerPinches, FingerTips, GraspGate, HandLog, Palm, PoseFilter,
         index_bend, is_open,
     },
     helpers::posef_to_transform,
@@ -49,8 +49,8 @@ pub(super) struct OpenXrInputSource {
     last_display_time: Option<xr::Time>,
     // oneVR: a tracked hand's right and middle clicks
     finger_pinches: [FingerPinches; 2],
-    // oneVR: a clap toggles passthrough
-    clap: ClapDetector,
+    // oneVR: a double clap toggles passthrough
+    clap: DoubleClap,
     // TEMP
     hand_logs: [HandLog; 2],
     ready_paths: [xr::Path; 2],
@@ -381,7 +381,7 @@ impl OpenXrInputSource {
             hand_trackers: [hand_tracker(xr::Hand::LEFT), hand_tracker(xr::Hand::RIGHT)],
             last_display_time: None,
             finger_pinches: Default::default(),
-            clap: ClapDetector::default(),
+            clap: DoubleClap::default(),
             hand_logs: Default::default(),
             ready_paths: [
                 xr.instance.string_to_path(GRASP_READY_PATHS[0])?,

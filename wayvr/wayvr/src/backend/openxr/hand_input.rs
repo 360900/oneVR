@@ -300,8 +300,11 @@ const CLAP_SPEED: f32 = 0.6;
 const CLAP_APPROACH_SECS: f32 = 0.2;
 /// [`ClapDetector`]: the palms' normals have to be at least this opposed, -1 facing each other
 const CLAP_FACING: f32 = -0.5;
-/// [`ClapDetector`]: hands this far apart may clap again, in m
-const CLAP_REARM_DISTANCE: f32 = 0.2;
+/// [`ClapDetector`]: hands this far apart may clap again, in m; hands part less between the
+/// claps of a quick double clap
+const CLAP_REARM_DISTANCE: f32 = 0.15;
+/// [`DoubleClap`]: the second clap has to come this soon after the first, in s
+const DOUBLE_CLAP_SECS: f32 = 0.7;
 
 /// Where a hand's palm is and which way it faces
 #[derive(Clone, Copy)]
@@ -381,6 +384,30 @@ impl ClapDetector {
             self.approach_secs = 0.0;
         }
         clap
+    }
+}
+
+/// Two claps in quick succession, so applause or a single clap doesn't count
+#[derive(Default)]
+pub(super) struct DoubleClap {
+    clap: ClapDetector,
+    /// Time left for the second clap, while the first counts
+    second_secs: f32,
+}
+
+impl DoubleClap {
+    pub(super) fn update(&mut self, hands: [ClapHand; 2], dt: f32) -> bool {
+        self.second_secs = (self.second_secs - dt).max(0.0);
+        if !self.clap.update(hands, dt) {
+            return false;
+        }
+        if self.second_secs > 0.0 {
+            // a third clap starts over
+            self.second_secs = 0.0;
+            return true;
+        }
+        self.second_secs = DOUBLE_CLAP_SECS;
+        false
     }
 }
 
@@ -773,6 +800,57 @@ mod tests {
         for _ in 0..20 {
             assert!(!clap.update([left, None], DT));
         }
+    }
+
+    /// Claps once from `from` m apart, returning what the double clap said
+    fn clap_once(double: &mut DoubleClap, from: f32) -> bool {
+        let speed = 1.5;
+        let frames = ((from - 0.04) / speed / DT).ceil() as usize;
+        let mut fired = false;
+        for i in 0..=frames {
+            let gap = (from - i as f32 * speed * DT).max(0.04);
+            fired |= double.update(palms(gap), DT);
+        }
+        fired
+    }
+
+    fn wait(double: &mut DoubleClap, gap: f32, secs: f32) {
+        for _ in 0..(secs / DT).ceil() as usize {
+            assert!(!double.update(palms(gap), DT));
+        }
+    }
+
+    #[test]
+    fn a_double_clap_fires() {
+        let mut double = DoubleClap::default();
+        assert!(!clap_once(&mut double, 0.3));
+        wait(&mut double, 0.2, 0.1);
+        assert!(clap_once(&mut double, 0.2));
+    }
+
+    #[test]
+    fn a_single_clap_does_not_fire() {
+        let mut double = DoubleClap::default();
+        assert!(!clap_once(&mut double, 0.3));
+        wait(&mut double, 0.3, 2.0);
+    }
+
+    #[test]
+    fn claps_too_far_apart_do_not_fire() {
+        let mut double = DoubleClap::default();
+        assert!(!clap_once(&mut double, 0.3));
+        wait(&mut double, 0.3, DOUBLE_CLAP_SECS + 0.1);
+        assert!(!clap_once(&mut double, 0.3));
+    }
+
+    #[test]
+    fn a_third_clap_starts_over() {
+        let mut double = DoubleClap::default();
+        clap_once(&mut double, 0.3);
+        wait(&mut double, 0.2, 0.05);
+        assert!(clap_once(&mut double, 0.2));
+        wait(&mut double, 0.2, 0.05);
+        assert!(!clap_once(&mut double, 0.2));
     }
 
     #[test]
