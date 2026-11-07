@@ -562,8 +562,9 @@ impl GraspGate {
         }
     }
 
-    /// `bend` is None when the joints say nothing, then the fist only has to last: lost joints
-    /// must not make grabbing impossible.
+    /// `bend` is None when the joints say nothing: a fist doesn't start then, as a hand the headset
+    /// is losing reports fists that aren't, and two of them toggled the dashboard. A grab that
+    /// holds stays held.
     pub(super) fn update(&mut self, value: f32, bend: Option<f32>, dt: f32) -> bool {
         if self.open {
             let extended = bend.is_some_and(|bend| bend > INDEX_EXTENDED);
@@ -571,7 +572,7 @@ impl GraspGate {
             self.held_secs = 0.0;
             return self.open;
         }
-        let curled = bend.is_none_or(|bend| bend <= INDEX_CURLED);
+        let curled = bend.is_some_and(|bend| bend <= INDEX_CURLED);
         if value >= self.thresholds[1] && curled {
             self.held_secs += dt;
             self.open = self.held_secs >= GRASP_HOLD_SECS;
@@ -689,8 +690,16 @@ mod tests {
     }
 
     #[test]
-    fn without_joints_a_held_fist_still_opens() {
-        assert!(run(&mut gate(), 1.0, None, GRASP_HOLD_SECS + DT));
+    fn without_joints_a_fist_does_not_open() {
+        assert!(!run(&mut gate(), 1.0, None, 2.0));
+    }
+
+    #[test]
+    fn losing_the_joints_restarts_a_fist() {
+        let mut gate = gate();
+        assert!(!run(&mut gate, 1.0, FIST, GRASP_HOLD_SECS * 0.75));
+        assert!(!gate.update(1.0, None, DT));
+        assert!(!run(&mut gate, 1.0, FIST, GRASP_HOLD_SECS * 0.75));
     }
 
     #[test]
