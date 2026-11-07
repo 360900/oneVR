@@ -35,7 +35,17 @@ pub struct TabWelcome<T> {
 	state_tab: Option<ParserState>,
 }
 
-const PAGE_COUNT: u8 = 6; // 0-5 inclusive
+/// oneVR: the pages in order, in `gui/tab/`; oneVR's hand tracking page follows the laser colors
+const PAGES: [&str; 7] = [
+	"welcome_page_0",
+	"welcome_page_1",
+	"welcome_page_2",
+	"welcome_page_3",
+	"welcome_page_hands",
+	"welcome_page_4",
+	"welcome_page_5",
+];
+const PAGE_COUNT: u8 = PAGES.len() as u8;
 
 impl<T> Tab<T> for TabWelcome<T> {
 	fn get_type(&self) -> TabType {
@@ -128,7 +138,7 @@ impl<T> TabWelcome<T> {
 		let state = wgui::parser::parse_from_assets(
 			&ParseDocumentParams {
 				globals,
-				path: AssetPathRef::BuiltIn(&format!("gui/tab/welcome_page_{}.xml", self.current_page)),
+				path: AssetPathRef::BuiltIn(&format!("gui/tab/{}.xml", PAGES[usize::from(self.current_page)])),
 				extra: Default::default(),
 			},
 			layout,
@@ -164,5 +174,93 @@ impl<T> TabWelcome<T> {
 		self.fill_page(layout)?;
 
 		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::{rc::Rc, sync::Mutex};
+
+	use wgui::{
+		assets::{AssetPathRef, AssetProvider},
+		i18n::Locale,
+		parser::ParseDocumentParams,
+		theme::WguiTheme,
+	};
+	use wlx_common::{dash_interface_emulated::DashInterfaceEmulated, locale::WayVRLangProvider};
+
+	use super::PAGES;
+	use crate::{
+		assets::Asset,
+		frontend::{Frontend, InitParams},
+	};
+
+	/// The parser's warnings, which it logs for an unknown tag or attribute instead of failing
+	static WARNINGS: Mutex<Vec<String>> = Mutex::new(Vec::new());
+
+	struct Warnings;
+
+	impl log::Log for Warnings {
+		fn enabled(&self, metadata: &log::Metadata) -> bool {
+			metadata.level() <= log::Level::Warn
+		}
+
+		fn log(&self, record: &log::Record) {
+			if self.enabled(record.metadata()) {
+				WARNINGS.lock().unwrap().push(record.args().to_string());
+			}
+		}
+
+		fn flush(&self) {}
+	}
+
+	/// oneVR: every page of the tutorial builds, with oneVR's among upstream's, and oneVR's
+	/// without a warning
+	#[test]
+	fn pages_build() {
+		let _ = log::set_logger(&Warnings);
+		log::set_max_level(log::LevelFilter::Warn);
+		let lang_provider = WayVRLangProvider::default();
+		let locale = Locale::from_env(&lang_provider);
+		let mut frontend = Frontend::new(InitParams {
+			interface: Box::new(DashInterfaceEmulated::new_headless(&locale, None)),
+			show_welcome: true,
+			has_monado: true,
+			lang_provider: &lang_provider,
+			theme: Rc::new(WguiTheme::default()),
+			executor: wlx_common::async_executor::create_local(),
+		})
+		.unwrap();
+		let parent = frontend.layout.content_root_widget;
+		for page in PAGES {
+			let path = format!("gui/tab/{page}.xml");
+			let params = ParseDocumentParams {
+				globals: frontend.globals.clone(),
+				path: AssetPathRef::BuiltIn(&path),
+				extra: Default::default(),
+			};
+			if let Err(e) = wgui::parser::parse_from_assets(&params, &mut frontend.layout, parent) {
+				panic!("{page}: {e:?}");
+			}
+		}
+		let warnings = WARNINGS.lock().unwrap();
+		let own: Vec<_> = warnings.iter().filter(|w| w.contains("welcome_page_hands")).collect();
+		assert!(own.is_empty(), "{own:#?}");
+	}
+
+	/// oneVR: the hand tracking page's strings are in oneVR's English
+	#[test]
+	fn hand_page_strings() {
+		let page = String::from_utf8(Asset.load_from_path("gui/tab/welcome_page_hands.xml").unwrap()).unwrap();
+		let en: serde_json::Value = serde_json::from_slice(&Asset.load_from_path("lang/en.json").unwrap()).unwrap();
+		let mut keys = 0;
+		for (start, _) in page.match_indices("\"ONEVR.") {
+			let key = &page[start + 1..];
+			let key = &key[..key.find('"').unwrap()];
+			let value = key.split('.').try_fold(&en, |v, k| v.get(k));
+			assert!(value.is_some_and(serde_json::Value::is_string), "{key} is missing");
+			keys += 1;
+		}
+		assert_eq!(keys, 9);
 	}
 }

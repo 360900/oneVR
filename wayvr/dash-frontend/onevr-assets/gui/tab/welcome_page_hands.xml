@@ -1,0 +1,35 @@
+<layout version="2">
+  <!-- oneVR: what a tracked hand clicks with, after the laser colors -->
+
+  <!-- icon, finger, click, laser: the laser's color in that mode -->
+  <template name="HandClick">
+    <rectangle flex_direction="column" align_items="center" gap="8" padding="16" width="190" round="12" color="surface" border_color="stroke" border="1">
+      <sprite src_builtin="${icon}" min_width="96" min_height="96" max_width="96" max_height="96" color="accent" />
+      <label size="16" weight="bold" wrap="1" align="center" translation="${finger}" />
+      <div flex_direction="row" gap="6" align_items="center">
+        <rectangle width="10" height="10" round="100%" color="${laser}" />
+        <label size="16" translation="${click}" />
+      </div>
+    </rectangle>
+  </template>
+
+  <elements>
+    <div flex_direction="column" align_items="center" gap="16" max_width="680" padding="16">
+      <div flex_direction="row" gap="8" align_items="center">
+        <sprite src_builtin="@/dashboard/hand.svg" width="40" height="40" color="accent" />
+        <label size="28" weight="bold" translation="ONEVR.WELCOME_HANDS.TITLE" />
+      </div>
+      <label size="18" wrap="1" align="center" translation="ONEVR.WELCOME_HANDS.INTRO" />
+
+      <div flex_direction="row" gap="16">
+        <HandClick icon="@/dashboard/hand-pinch-index.svg" finger="ONEVR.WELCOME_HANDS.INDEX" click="ONEVR.WELCOME_HANDS.LEFT_CLICK" laser="#00A6BC" />
+        <HandClick icon="@/dashboard/hand-pinch-middle.svg" finger="ONEVR.WELCOME_HANDS.MIDDLE" click="ONEVR.WELCOME_HANDS.RIGHT_CLICK" laser="#DB7800" />
+        <HandClick icon="@/dashboard/hand-pinch-ring.svg" finger="ONEVR.WELCOME_HANDS.RING" click="ONEVR.WELCOME_HANDS.MIDDLE_CLICK" laser="#A600BC" />
+      </div>
+
+      <label size="14" wrap="1" align="center" color="text2" translation="ONEVR.WELCOME_HANDS.LASER" />
+    </div>
+
+    <div height="38" /> <!-- the page buttons -->
+  </elements>
+</layout>

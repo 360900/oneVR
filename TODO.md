@@ -23,6 +23,11 @@ building the APK.
   same panel resizes by spread; grab tips show hand pictures above the fist. Confirm the
   pinches don't fire in a fist or an index pinch, and tune `FINGER_PINCH_*` (hand_input.rs),
   `DEPTH_POWER` (hand_grab.rs) and `GRAB_HELP_ABOVE_HAND` (backend/input.rs) if off.
+- Hand tracking tutorial page and hand icons: the tutorial, shown on a first launch, has a
+  Hand tracking page after Laser Colors, and the grab tips use new Phosphor-based icons. Not
+  seen rendered yet: check both in VR (set `tutorial_graduated: false` in
+  `~/.config/wayvr/conf.d/zz-saved-config.json5` to see the tutorial again). oneVR's Home has
+  no button to reopen the tutorial, unlike upstream's.
 - Double clap for passthrough: two claps of open hands within 0.7 s toggle passthrough.
   Confirm it fires on a normal double clap, not on hands brought together slowly or a two-hand stretch, and tune
   `CLAP_*` and `DOUBLE_CLAP_SECS` (hand_input.rs) if off. Check whether it also shows while a game runs.

@@ -275,6 +275,17 @@
       "WAITING": "Waiting for the headset",
       "CONNECTED": "{} is connected",
       "PAIRING": "Pairing, PIN {}"
+    },
+    "WELCOME_HANDS": {
+      "TITLE": "Hand tracking",
+      "INTRO": "Point with your hand, then touch your thumb to a finger to click. Make a fist to grab.",
+      "INDEX": "Thumb and index finger",
+      "MIDDLE": "Thumb and middle finger",
+      "RING": "Thumb and ring finger",
+      "LEFT_CLICK": "Left click",
+      "RIGHT_CLICK": "Right click",
+      "MIDDLE_CLICK": "Middle click",
+      "LASER": "The laser turns orange for a right click and purple for a middle click."
     }
   }
 }
