@@ -73,6 +73,26 @@ const char * const microphone_stamp = "onevr-microphone";
 const char * const hand_tracking_stamp = "onevr-hand-tracking";
 } // namespace
 
+void scenes::lobby::onevr_update_holding()
+{
+	const std::array<const char *, 2> paths = {"/user/hand/left", "/user/hand/right"};
+	for (size_t i = 0; i < paths.size(); i++)
+	{
+		try
+		{
+			// no profile is a hand nothing tracks, or one tracked without a profile for hands
+			auto profile = session.get_current_interaction_profile(paths[i]);
+			onevr_holding_controller[i] = not profile.empty() and profile != "/interaction_profiles/ext/hand_interaction_ext";
+			spdlog::info("{} holds a controller: {} ({})", paths[i], *onevr_holding_controller[i], profile);
+		}
+		catch (std::exception &)
+		{
+			// the session can't tell yet, as before actions are attached
+			onevr_holding_controller[i].reset();
+		}
+	}
+}
+
 void scenes::lobby::onevr_focused()
 {
 	if constexpr (onevr::stock_ui)

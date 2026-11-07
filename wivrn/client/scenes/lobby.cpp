@@ -1055,6 +1055,10 @@ void scenes::lobby::render(const XrFrameState & frame_state)
 			new_gui_position = check_recenter_gesture(xr::spaces::palm_right, *right, *head_position);
 	}
 
+	// oneVR: hands that left the view don't bring back the controllers lying somewhere
+	hide_left_controller |= onevr_holding_controller[0] == false;
+	hide_right_controller |= onevr_holding_controller[1] == false;
+
 	if (head_position and new_gui_position)
 	{
 		move_gui(head_position->first, *new_gui_position);
@@ -1216,6 +1220,7 @@ void scenes::lobby::on_focused()
 	// oneVR: picks the sky dome, so it runs before the environment loads: client.json from an
 	// older build may name another environment
 	onevr_focused();
+	onevr_update_holding();
 
 	try
 	{
@@ -1493,6 +1498,9 @@ void scenes::lobby::on_xr_event(const xr::event & event)
 			break;
 		case XR_TYPE_EVENT_DATA_REFERENCE_SPACE_CHANGE_PENDING:
 			recenter_gui = true;
+			break;
+		case XR_TYPE_EVENT_DATA_INTERACTION_PROFILE_CHANGED:
+			onevr_update_holding();
 			break;
 		default:
 			break;

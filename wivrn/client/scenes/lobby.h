@@ -35,6 +35,7 @@
 
 #include <chrono>
 #include <compare>
+#include <array>
 #include <optional>
 #include <uni_algo/case.h>
 #include <vector>
@@ -278,6 +279,10 @@ class lobby : public scene_impl<lobby>
 	bool onevr_discovery_settled() const;
 	bool onevr_list_kept() const;
 	void onevr_focused();
+	// oneVR: whether each hand holds a controller, from its interaction profile; unknown until the
+	// runtime tells. A controller left on a table can still be located, so that alone doesn't show it
+	std::array<std::optional<bool>, 2> onevr_holding_controller;
+	void onevr_update_holding();
 	void onevr_connected();
 	void onevr_remember_mac(const std::optional<std::array<uint8_t, 6>> & mac, const std::string & interface);
 	void onevr_wake(const configuration::server_data & server);
