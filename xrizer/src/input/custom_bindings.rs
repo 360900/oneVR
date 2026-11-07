@@ -3334,6 +3334,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // Syncs under Miri are slow enough for the stick to repeat.
     fn scroll_deltas_are_the_amounts() {
         // Blade & Sorcery reads the scroll amount from the deltas, others from x and y.
         let mut f = Fixture::new();
