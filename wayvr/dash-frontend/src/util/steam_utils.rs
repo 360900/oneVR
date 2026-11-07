@@ -1,6 +1,6 @@
 use keyvalues_parser::{Obj, Vdf};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 #[derive(Clone)]
 pub struct SteamUtils {
@@ -128,6 +128,60 @@ fn vdf_parse_appstate<'a>(app_id: AppID, vdf_root: &'a Vdf<'a>) -> Option<AppMan
 struct AppEntry {
 	pub root_path: String,
 	pub app_id: AppID,
+}
+
+/// oneVR: a library folder in libraryfolders.vdf and the apps it lists
+struct LibraryFolder {
+	path: PathBuf,
+	apps: HashSet<AppID>,
+}
+
+/// oneVR: every library folder with a path, also one that lists no apps
+fn vdf_library_folders(vdf_root: &Vdf<'_>) -> Option<Vec<LibraryFolder>> {
+	let folders = vdf_root.value.get_obj()?;
+	let folders = folders
+		.iter()
+		.filter(|(key, _)| key.parse::<u64>().is_ok())
+		.filter_map(|(_, values)| {
+			let folder = values.first()?.get_obj()?;
+			let apps = get_obj_first(folder, "apps")
+				.map(|apps| {
+					apps
+						.keys()
+						.filter_map(|id| Some(id.parse::<u64>().ok()?.to_string()))
+						.collect()
+				})
+				.unwrap_or_default();
+			Some(LibraryFolder {
+				path: PathBuf::from(get_str_first(folder, "path")?),
+				apps,
+			})
+		})
+		.collect();
+	Some(folders)
+}
+
+/// oneVR: of `app_ids`, the ones no library folder holds a manifest for. Steam removes the manifest
+/// at once on an uninstall but rewrites libraryfolders.vdf much later. An app a folder out of reach
+/// lists, as on a drive that isn't mounted, may still be installed.
+fn uninstalled_in<'a>(folders: &[LibraryFolder], app_ids: impl IntoIterator<Item = &'a str>) -> Vec<AppID> {
+	app_ids
+		.into_iter()
+		.filter(|id| {
+			folders.iter().all(|folder| {
+				let steamapps = folder.path.join("steamapps");
+				if !steamapps.is_dir() {
+					return !folder.apps.contains(*id);
+				}
+				// an error reading it counts as installed
+				steamapps
+					.join(format!("appmanifest_{id}.acf"))
+					.try_exists()
+					.is_ok_and(|exists| !exists)
+			})
+		})
+		.map(str::to_owned)
+		.collect()
 }
 
 pub fn launch(app_id: &AppID) -> anyhow::Result<()> {
@@ -290,6 +344,17 @@ impl SteamUtils {
 		Ok(manifest)
 	}
 
+	/// oneVR: of `app_ids`, the Steam games that were uninstalled; an error when Steam's library
+	/// folders can't be read, so nothing counts as uninstalled then
+	pub fn uninstalled<'a>(&self, app_ids: impl IntoIterator<Item = &'a str>) -> anyhow::Result<Vec<AppID>> {
+		let path = self.get_dir_steamapps().join("libraryfolders.vdf");
+		let vdf_data = std::fs::read_to_string(path)?;
+		let vdf_root = keyvalues_parser::parse(&vdf_data)?.into_vdf();
+		let folders = vdf_library_folders(&vdf_root).unwrap_or_default();
+		anyhow::ensure!(!folders.is_empty(), "libraryfolders.vdf lists no library folder");
+		Ok(uninstalled_in(&folders, app_ids))
+	}
+
 	pub fn list_installed_games(&self, sort_method: GameSortMethod) -> anyhow::Result<Vec<AppManifest>> {
 		let path = self.get_dir_steamapps().join("libraryfolders.vdf");
 		let vdf_data = std::fs::read_to_string(path)?;
@@ -332,5 +397,33 @@ impl SteamUtils {
 		}
 
 		Ok(games)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn uninstalled_games_have_no_manifest() {
+		let dir = std::env::temp_dir().join(format!("onevr-steam-{}", std::process::id()));
+		let (mounted, unmounted) = (dir.join("mounted"), dir.join("unmounted"));
+		std::fs::create_dir_all(mounted.join("steamapps")).unwrap();
+		std::fs::write(mounted.join("steamapps/appmanifest_620.acf"), "").unwrap();
+		let vdf_data = format!(
+			"\"libraryfolders\"\n{{\n\t\"0\"\n\t{{\n\t\t\"path\"\t\t\"{}\"\n\t\t\"apps\"\n\t\t{{\n\t\t\t\"620\"\t\t\"1\"\n\t\t\t\"570\"\t\t\"1\"\n\t\t}}\n\t}}\n\t\"1\"\n\t{{\n\t\t\"path\"\t\t\"{}\"\n\t\t\"apps\"\n\t\t{{\n\t\t\t\"440\"\t\t\"1\"\n\t\t}}\n\t}}\n}}\n",
+			mounted.display(),
+			unmounted.display()
+		);
+		let vdf_root = keyvalues_parser::parse(&vdf_data).unwrap().into_vdf();
+		let folders = vdf_library_folders(&vdf_root).unwrap();
+		assert_eq!(folders.len(), 2);
+
+		// 620 is installed, 570 is listed without a manifest, 440 may be on the unmounted drive and
+		// 730 is listed nowhere
+		let uninstalled = uninstalled_in(&folders, ["620", "570", "440", "730"]);
+		assert_eq!(uninstalled, ["570", "730"]);
+
+		std::fs::remove_dir_all(&dir).unwrap();
 	}
 }

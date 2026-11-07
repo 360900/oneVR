@@ -436,6 +436,7 @@ impl<T: 'static> TabOneVrLibrary<T> {
 			.map(|steam| steam_launch::read(steam.root(), &ids))
 			.unwrap_or_default();
 		self.candidates = candidates(steam_games, &entries);
+		forget_uninstalled();
 		self.added = added_apps::added();
 	}
 
@@ -1060,6 +1061,30 @@ fn steam_games() -> Vec<AppManifest> {
 			log::debug!("No Steam games: {e:?}");
 			Vec::new()
 		})
+}
+
+/// Removes the added Steam games that were uninstalled since; the server's next list is without them
+fn forget_uninstalled() {
+	let added = added_apps::added();
+	// add_steam names its entries by the Steam app id alone
+	let steam_ids = added
+		.iter()
+		.map(String::as_str)
+		.filter(|id| id.bytes().all(|b| b.is_ascii_digit()));
+	let uninstalled = match SteamUtils::new().and_then(|steam| steam.uninstalled(steam_ids)) {
+		Ok(uninstalled) => uninstalled,
+		Err(e) => {
+			log::debug!("Not looking for uninstalled Steam games: {e:?}");
+			return;
+		}
+	};
+	for id in uninstalled {
+		match added_apps::remove(&id) {
+			Ok(()) => log::info!("Removed {id} from the library, Steam uninstalled it"),
+			// the other dashboard window may have removed it first
+			Err(e) => log::debug!("Could not remove the uninstalled {id} from the library: {e:?}"),
+		}
+	}
 }
 
 /// Everything that could be added to the Library, except Steam tools, Steam's shortcuts to
