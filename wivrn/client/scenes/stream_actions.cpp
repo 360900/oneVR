@@ -18,6 +18,7 @@
  */
 
 #include "application.h"
+#include "scenes/hand_fist.h"
 #include "stream.h"
 #include <algorithm>
 #include <array>
@@ -152,6 +153,22 @@ bool scenes::stream::chord_state::check(XrTime now)
 	return true;
 }
 
+// oneVR: the runtime's grasp value for a hand, kept only for a full fist, see hand_fist.h
+float scenes::stream::onevr_gate_grasp(int side, float value)
+{
+	auto & tracker = side == 0 ? onevr_left_hand : onevr_right_hand;
+	// without hand tracking there are no joints to tell a fist by
+	if (not tracker)
+		return value;
+	XrTime now = instance.now();
+	std::optional<float> openness;
+	// the joints only when they can matter
+	if (value > 0)
+		if (auto joints = tracker->locate(application::space(xr::spaces::world), now).joints)
+			openness = fist_openness(*joints);
+	return onevr_fist_gates[side].update(value, openness, now);
+}
+
 void scenes::stream::read_actions()
 {
 	from_headset::inputs inputs;
@@ -182,7 +199,12 @@ void scenes::stream::read_actions()
 				case XR_ACTION_TYPE_FLOAT_INPUT: {
 					auto value = application::read_action_float(action);
 					if (value)
+					{
+						// oneVR: a thumbs up or a raised finger isn't a grab
+						if (id == device_id::LEFT_GRASP_VALUE or id == device_id::RIGHT_GRASP_VALUE)
+							value->second = onevr_gate_grasp(id == device_id::LEFT_GRASP_VALUE ? 0 : 1, value->second);
 						inputs.values.push_back({output_id, value->second, value->first});
+					}
 				}
 				break;
 

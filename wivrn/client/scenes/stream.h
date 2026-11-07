@@ -27,6 +27,7 @@
 #include "foveation.h"
 #include "render/imgui_impl.h"
 #include "scene.h"
+#include "scenes/hand_fist.h"
 #include "scenes/hand_smoother.h"
 #include "scenes/input_profile.h"
 #include "stream_defoveator.h"
@@ -180,6 +181,8 @@ private:
 	hand_confidence onevr_right_confidence;
 	hand_smoother onevr_left_smoother;
 	hand_smoother onevr_right_smoother;
+	// oneVR: games get a grasp only for a full fist, see read_actions
+	std::array<fist_gate, 2> onevr_fist_gates;
 	std::atomic<bool> onevr_hands_requested = true; // until the server says otherwise
 	void onevr_setup_hands();
 	bool onevr_locate_hands(XrTime predicted_display_time);
@@ -399,6 +402,7 @@ private:
 	void process_packets();
 	void tracking();
 	void read_actions();
+	float onevr_gate_grasp(int side, float value);
 
 	void on_interaction_profile_changed(const XrEventDataInteractionProfileChanged &);
 	void send_derived_pose();
