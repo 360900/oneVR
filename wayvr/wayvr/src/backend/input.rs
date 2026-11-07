@@ -358,6 +358,8 @@ pub struct Pointer {
     pub handsfree: bool,
     /// oneVR: a tracked hand points, not a controller
     pub hand_tracked: bool,
+    /// oneVR: the wrist joint of a tracked hand, which the watch sits on
+    pub wrist: Option<Affine3A>,
     /// distance of the most recent ray hit on a wayland client window, used for drag n drop
     pub last_wvr_hit_distance: Option<f32>,
 }
@@ -377,6 +379,7 @@ impl Pointer {
             tracked: false,
             handsfree: false,
             hand_tracked: false,
+            wrist: None,
             last_wvr_hit_distance: None,
         }
     }

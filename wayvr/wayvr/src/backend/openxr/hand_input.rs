@@ -333,6 +333,21 @@ impl Palm {
     }
 }
 
+/// The wrist joint's pose, None without a valid one. XR_EXT_hand_tracking: -Z points toward the
+/// fingers, +Y out of the back of the hand.
+pub(super) fn wrist_pose(joints: &xr::HandJointLocations) -> Option<Affine3A> {
+    let wrist = &joints[xr::HandJoint::WRIST];
+    let valid = xr::SpaceLocationFlags::POSITION_VALID | xr::SpaceLocationFlags::ORIENTATION_VALID;
+    if !wrist.location_flags.contains(valid) {
+        return None;
+    }
+    let (p, o) = (wrist.pose.position, wrist.pose.orientation);
+    Some(Affine3A::from_rotation_translation(
+        Quat::from_xyzw(o.x, o.y, o.z, o.w),
+        Vec3::new(p.x, p.y, p.z),
+    ))
+}
+
 /// A hand as a clap sees it: None for a hand that isn't the input, isn't tracked, or isn't open
 pub(super) type ClapHand = Option<Palm>;
 

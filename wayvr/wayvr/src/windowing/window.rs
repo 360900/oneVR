@@ -4,7 +4,10 @@ use std::{f32::consts::PI, sync::Arc, time::Instant};
 use wlx_common::windowing::{OverlayWindowState, PendingPlacement, Positioning};
 
 use crate::{
-    overlays::toast::TOAST_NAME,
+    overlays::{
+        toast::TOAST_NAME,
+        watch::{self, WATCH_NAME},
+    },
     state::AppState,
     subsystem::input::InputFocus,
     windowing::{
@@ -290,10 +293,14 @@ impl OverlayWindowConfig {
 
         let (target_transform, lerp) = match state.positioning {
             Positioning::FollowHead { lerp } => (app.input_state.hmd * cur_transform, lerp),
-            Positioning::FollowHand { hand, lerp } => (
-                app.input_state.pointers[hand as usize].pose * cur_transform,
-                lerp,
-            ),
+            Positioning::FollowHand { hand, lerp } => {
+                let pointer = &app.input_state.pointers[hand as usize];
+                // oneVR: a tracked hand's pointer is a ray, not on the wrist like a controller's
+                match pointer.wrist.filter(|_| &*self.name == WATCH_NAME) {
+                    Some(wrist) => (wrist * watch::on_wrist(hand, scale), lerp),
+                    None => (pointer.pose * cur_transform, lerp),
+                }
+            }
             Positioning::Anchored | Positioning::Floating => (app.anchor * cur_transform, 1.0),
             Positioning::Static => (state.transform, 1.0), // STAGE space
         };

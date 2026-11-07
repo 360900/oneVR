@@ -28,7 +28,7 @@ use super::{
     XrState,
     hand_input::{
         ClapHand, DoubleClap, FingerPinches, FingerTips, GraspGate, HandLog, Palm, PoseFilter,
-        index_bend, is_open,
+        index_bend, is_open, wrist_pose,
     },
     helpers::posef_to_transform,
 };
@@ -61,6 +61,14 @@ const GRASP_READY_PATHS: [&str; 2] = [
     "/user/hand/left/input/grasp_ext/ready_ext",
     "/user/hand/right/input/grasp_ext/ready_ext",
 ];
+
+/// oneVR: what the joints of a hand that is the input say, see [`OpenXrInputSource::gate_grasps`]
+#[derive(Clone, Copy)]
+struct HandReading {
+    pinches: (bool, bool),
+    clap: ClapHand,
+    wrist: Option<Affine3A>,
+}
 
 /// oneVR: what a tracked hand adds to its pointer's update
 #[derive(Clone, Copy)]
@@ -415,13 +423,8 @@ impl OpenXrInputSource {
 
     /// oneVR: locates the joints only while the hand is the input: asking makes the headset track
     /// hands, which a game played with controllers shouldn't pay for. Returns the hand's finger
-    /// pinches, see [`FingerPinches::update`], and its palm if it may clap.
-    fn gate_grasps(
-        &mut self,
-        xr: &XrState,
-        side: usize,
-        frame_secs: f32,
-    ) -> ((bool, bool), ClapHand) {
+    /// pinches, see [`FingerPinches::update`], its palm if it may clap, and its wrist.
+    fn gate_grasps(&mut self, xr: &XrState, side: usize, frame_secs: f32) -> HandReading {
         let active = self
             .physical_inputs
             .iter()
@@ -466,7 +469,11 @@ impl OpenXrInputSource {
             });
             self.hand_logs[side].update(side, raw, gated, ready, bend, frame_secs);
         }
-        (pinches, clap_hand)
+        HandReading {
+            pinches,
+            clap: clap_hand,
+            wrist: joints.as_ref().and_then(wrist_pose),
+        }
     }
 
     // TEMP
@@ -488,12 +495,15 @@ impl OpenXrInputSource {
             input.update(&xr.session)?;
         }
         let frame_secs = self.frame_secs(xr);
-        let (pinches, clap_hands): (Vec<_>, Vec<_>) = (0..2)
-            .map(|side| self.gate_grasps(xr, side, frame_secs))
-            .unzip();
+        let readings = [0, 1].map(|side| self.gate_grasps(xr, side, frame_secs));
+        let pinches = readings.map(|reading| reading.pinches);
+        for (pointer, reading) in app.input_state.pointers.iter_mut().zip(&readings) {
+            pointer.wrist = reading.wrist;
+        }
         // oneVR: hands that hold something don't clap, as a two-hand stretch closing fast
         let clap_hands = [0, 1].map(|side| {
-            clap_hands[side]
+            readings[side]
+                .clap
                 .filter(|_| app.input_state.pointers[side].interaction.grabbed.is_none())
         });
         if self.clap.update(clap_hands, frame_secs) {

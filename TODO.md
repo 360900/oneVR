@@ -70,13 +70,11 @@ building the APK.
 ## Open: from the 2026-10-30 test session
 
 Headset interaction (do with the device):
-- Watch wrist alignment (#4): the watch follows the hand AIM pose (a ray from the palm),
-  so it floats and rotates with pointing, not the wrist. Bind a GRIP pose
-  (`/input/grip/pose`) per hand, add `OpenXrInputProfile.grip` + normalize/suggest
-  handling, a `Pointer.grip_pose` located each frame (OpenVR backend sets it = pose), and a
-  `Positioning::FollowHandGrip` (or a grip flag on FollowHand) so only the watch uses grip
-  while the pointer ray keeps aim. Touches wlx-common/windowing, both input backends,
-  window.rs, openxr_actions.json5. Tune WATCH_POS/WATCH_ROT on the Quest.
+- Watch wrist alignment (#4): with a tracked hand the watch now sits on the wrist joint
+  (back of the forearm, `WRIST_WATCH_POS` in overlays/watch.rs); confirm on the Quest and tune.
+  With controllers it still follows the aim pose; a GRIP pose (`/input/grip/pose`) for the
+  watch there would need `OpenXrInputProfile.grip`, a `Pointer.grip_pose` and a grip-following
+  positioning. Tune WATCH_POS/WATCH_ROT on the Quest.
 - Choppy pointers/rays (#5): pose is lerped from wayvr's own loop fps; choppiness points at
   a low render/update rate (power governor or capture stalls). Two headset causes are fixed:
   streams ran at the lobby's power savings clocks, and after a stall a stream kept the
