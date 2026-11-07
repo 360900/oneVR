@@ -23,6 +23,9 @@ building the APK.
   same panel resizes by spread; grab tips show hand pictures above the fist. Confirm the
   pinches don't fire in a fist or an index pinch, and tune `FINGER_PINCH_*` (hand_input.rs),
   `DEPTH_POWER` (hand_grab.rs) and `GRAB_HELP_ABOVE_HAND` (backend/input.rs) if off.
+- Clap for passthrough: a clap of open hands toggles passthrough. Confirm it fires on a
+  normal clap, not on hands brought together slowly or a two-hand stretch, and tune
+  `CLAP_*` (hand_input.rs) if off. Check whether it also shows while a game runs.
 - Cover options gear (#8): now overlaid in the cover's top-right corner; games not on Auto
   show a short Touch/Index badge with an icon beside it. Confirm both stay inside the cover
   and the badge reads on bright covers.

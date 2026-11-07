@@ -20,12 +20,16 @@ use crate::{
     backend::input::{
         Haptics, InputState, Pointer, PointerState, TrackedDevice, TrackedDeviceRole,
     },
+    backend::task::{OpenXrTask, TaskType},
     state::{AppSession, AppState},
 };
 
 use super::{
     XrState,
-    hand_input::{FingerPinches, FingerTips, GraspGate, HandLog, PoseFilter, index_bend},
+    hand_input::{
+        ClapDetector, ClapHand, FingerPinches, FingerTips, GraspGate, HandLog, Palm, PoseFilter,
+        index_bend, is_open,
+    },
     helpers::posef_to_transform,
 };
 
@@ -45,6 +49,8 @@ pub(super) struct OpenXrInputSource {
     last_display_time: Option<xr::Time>,
     // oneVR: a tracked hand's right and middle clicks
     finger_pinches: [FingerPinches; 2],
+    // oneVR: a clap toggles passthrough
+    clap: ClapDetector,
     // TEMP
     hand_logs: [HandLog; 2],
     ready_paths: [xr::Path; 2],
@@ -375,6 +381,7 @@ impl OpenXrInputSource {
             hand_trackers: [hand_tracker(xr::Hand::LEFT), hand_tracker(xr::Hand::RIGHT)],
             last_display_time: None,
             finger_pinches: Default::default(),
+            clap: ClapDetector::default(),
             hand_logs: Default::default(),
             ready_paths: [
                 xr.instance.string_to_path(GRASP_READY_PATHS[0])?,
@@ -408,8 +415,13 @@ impl OpenXrInputSource {
 
     /// oneVR: locates the joints only while the hand is the input: asking makes the headset track
     /// hands, which a game played with controllers shouldn't pay for. Returns the hand's finger
-    /// pinches, see [`FingerPinches::update`].
-    fn gate_grasps(&mut self, xr: &XrState, side: usize, frame_secs: f32) -> (bool, bool) {
+    /// pinches, see [`FingerPinches::update`], and its palm if it may clap.
+    fn gate_grasps(
+        &mut self,
+        xr: &XrState,
+        side: usize,
+        frame_secs: f32,
+    ) -> ((bool, bool), ClapHand) {
         let active = self
             .physical_inputs
             .iter()
@@ -424,6 +436,10 @@ impl OpenXrInputSource {
                     .flatten()
             });
         let bend = joints.as_ref().and_then(index_bend);
+        let clap_hand = joints
+            .as_ref()
+            .filter(|_| is_open(bend))
+            .and_then(Palm::new);
         let pinches = if active {
             let tips = joints.as_ref().and_then(FingerTips::new);
             self.finger_pinches[side].update(tips, bend, frame_secs)
@@ -450,7 +466,7 @@ impl OpenXrInputSource {
             });
             self.hand_logs[side].update(side, raw, gated, ready, bend, frame_secs);
         }
-        pinches
+        (pinches, clap_hand)
     }
 
     // TEMP
@@ -472,10 +488,17 @@ impl OpenXrInputSource {
             input.update(&xr.session)?;
         }
         let frame_secs = self.frame_secs(xr);
-        let pinches = [
-            self.gate_grasps(xr, 0, frame_secs),
-            self.gate_grasps(xr, 1, frame_secs),
-        ];
+        let (pinches, clap_hands): (Vec<_>, Vec<_>) = (0..2)
+            .map(|side| self.gate_grasps(xr, side, frame_secs))
+            .unzip();
+        // oneVR: hands that hold something don't clap, as a two-hand stretch closing fast
+        let clap_hands = [0, 1].map(|side| {
+            clap_hands[side]
+                .filter(|_| app.input_state.pointers[side].interaction.grabbed.is_none())
+        });
+        if self.clap.update(clap_hands, frame_secs) {
+            toggle_passthrough(app);
+        }
         let physical_inputs = &self.physical_inputs;
 
         app.input_state.eye_gaze = if xr.extra_exts.ext_eye_gaze_interaction {
@@ -894,6 +917,23 @@ impl OpenXrHandSource {
             haptics: action_haptics,
         })
     }
+}
+
+/// oneVR: as the dashboard's passthrough button, where the headset has passthrough
+fn toggle_passthrough(app: &mut AppState) {
+    if !app.feats.passthru {
+        log::debug!("Clap: the headset has no passthrough");
+        return;
+    }
+    let config = &mut app.session.config;
+    config.use_passthrough = !config.use_passthrough;
+    log::info!(
+        "Clap: passthrough {}",
+        if config.use_passthrough { "on" } else { "off" }
+    );
+    app.session.config_dirty = true;
+    app.tasks
+        .enqueue(TaskType::OpenXR(OpenXrTask::EnvironmentChanged));
 }
 
 fn to_path(path_str: &str, instance: &xr::Instance) -> Option<xr::Path> {

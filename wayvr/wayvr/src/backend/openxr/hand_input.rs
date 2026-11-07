@@ -290,6 +290,100 @@ impl FingerPinches {
     }
 }
 
+/// [`ClapDetector`]: palms this close have met, in m between the palm joints
+const CLAP_DISTANCE: f32 = 0.08;
+/// [`ClapDetector`]: hands have to close at least this fast, in m/s, so bringing them together
+/// slowly isn't a clap
+const CLAP_SPEED: f32 = 0.6;
+/// [`ClapDetector`]: how long a fast approach counts toward a clap, in s; the tracking of hands
+/// that overlap often lags the moment they meet
+const CLAP_APPROACH_SECS: f32 = 0.2;
+/// [`ClapDetector`]: the palms' normals have to be at least this opposed, -1 facing each other
+const CLAP_FACING: f32 = -0.5;
+/// [`ClapDetector`]: hands this far apart may clap again, in m
+const CLAP_REARM_DISTANCE: f32 = 0.2;
+
+/// Where a hand's palm is and which way it faces
+#[derive(Clone, Copy)]
+pub(super) struct Palm {
+    position: Vec3,
+    /// Out of the palm, away from the back of the hand
+    normal: Vec3,
+}
+
+impl Palm {
+    /// None without a valid palm joint
+    pub(super) fn new(joints: &xr::HandJointLocations) -> Option<Self> {
+        let palm = &joints[xr::HandJoint::PALM];
+        let valid =
+            xr::SpaceLocationFlags::POSITION_VALID | xr::SpaceLocationFlags::ORIENTATION_VALID;
+        if !palm.location_flags.contains(valid) {
+            return None;
+        }
+        let (p, o) = (palm.pose.position, palm.pose.orientation);
+        let rotation = Quat::from_xyzw(o.x, o.y, o.z, o.w);
+        Some(Self {
+            position: Vec3::new(p.x, p.y, p.z),
+            // XR_EXT_hand_tracking: +Y points out of the back of the hand
+            normal: rotation * Vec3::NEG_Y,
+        })
+    }
+}
+
+/// A hand as a clap sees it: None for a hand that isn't the input, isn't tracked, or isn't open
+pub(super) type ClapHand = Option<Palm>;
+
+/// Whether an index finger is out, see [`index_bend`]: a fist or a pointing hand doesn't clap
+pub(super) fn is_open(bend: Option<f32>) -> bool {
+    bend.is_some_and(|bend| bend > INDEX_EXTENDED)
+}
+
+/// A clap of two open hands: the palms face each other, close fast and meet. One clap counts
+/// once, the hands have to part before the next.
+#[derive(Default)]
+pub(super) struct ClapDetector {
+    last_distance: Option<f32>,
+    /// Time left in which the last fast approach counts
+    approach_secs: f32,
+    clapped: bool,
+}
+
+impl ClapDetector {
+    pub(super) fn update(&mut self, hands: [ClapHand; 2], dt: f32) -> bool {
+        let [Some(left), Some(right)] = hands else {
+            // a lost hand, as hands that overlap often are, keeps the approach for a moment
+            self.last_distance = None;
+            self.approach_secs = (self.approach_secs - dt).max(0.0);
+            return false;
+        };
+        let distance = left.position.distance(right.position);
+        if distance > CLAP_REARM_DISTANCE {
+            self.clapped = false;
+        }
+
+        let speed = self
+            .last_distance
+            .map_or(0.0, |last| (last - distance) / dt);
+        self.last_distance = Some(distance);
+        self.approach_secs = if speed >= CLAP_SPEED {
+            CLAP_APPROACH_SECS
+        } else {
+            (self.approach_secs - dt).max(0.0)
+        };
+
+        let to_right = (right.position - left.position).normalize_or_zero();
+        let facing = left.normal.dot(right.normal) <= CLAP_FACING
+            && left.normal.dot(to_right) > 0.0
+            && right.normal.dot(-to_right) > 0.0;
+        let clap = !self.clapped && self.approach_secs > 0.0 && distance <= CLAP_DISTANCE && facing;
+        if clap {
+            self.clapped = true;
+            self.approach_secs = 0.0;
+        }
+        clap
+    }
+}
+
 /// Decides whether a hand's `grasp_ext` value counts. Runtimes can report a high value for a hand
 /// that points, whose other fingers are curled, and a grab would start on the first such frame.
 pub(super) struct GraspGate {
@@ -584,6 +678,101 @@ mod tests {
             pinch(&mut pinches, tips(0.005, 0.01), INDEX_OUT, 1.0),
             (false, true)
         );
+    }
+
+    /// Open palms facing each other, `gap` m apart on the x axis
+    fn palms(gap: f32) -> [ClapHand; 2] {
+        [
+            Some(Palm {
+                position: Vec3::new(-gap / 2.0, 1.2, -0.4),
+                normal: Vec3::X,
+            }),
+            Some(Palm {
+                position: Vec3::new(gap / 2.0, 1.2, -0.4),
+                normal: Vec3::NEG_X,
+            }),
+        ]
+    }
+
+    /// Brings the palms from `from` to `to` m apart at `speed` m/s, true if any frame clapped
+    fn close(clap: &mut ClapDetector, from: f32, to: f32, speed: f32) -> bool {
+        let frames = ((from - to) / speed / DT).ceil() as usize;
+        let mut clapped = false;
+        for i in 0..=frames {
+            let gap = (from - i as f32 * speed * DT).max(to);
+            clapped |= clap.update(palms(gap), DT);
+        }
+        clapped
+    }
+
+    #[test]
+    fn a_clap_counts_once() {
+        let mut clap = ClapDetector::default();
+        assert!(close(&mut clap, 0.4, 0.04, 1.5));
+        // held together
+        for _ in 0..50 {
+            assert!(!clap.update(palms(0.04), DT));
+        }
+    }
+
+    #[test]
+    fn hands_part_before_the_next_clap() {
+        let mut clap = ClapDetector::default();
+        assert!(close(&mut clap, 0.4, 0.04, 1.5));
+        assert!(!close(&mut clap, 0.15, 0.04, 1.5));
+        clap.update(palms(0.3), DT);
+        assert!(close(&mut clap, 0.3, 0.04, 1.5));
+    }
+
+    #[test]
+    fn slowly_joined_hands_do_not_clap() {
+        assert!(!close(&mut ClapDetector::default(), 0.4, 0.04, 0.2));
+    }
+
+    #[test]
+    fn a_clap_survives_lost_tracking_at_contact() {
+        let mut clap = ClapDetector::default();
+        assert!(!close(&mut clap, 0.4, 0.1, 1.5));
+        clap.update([None, None], DT);
+        clap.update([None, None], DT);
+        assert!(clap.update(palms(0.05), DT));
+    }
+
+    #[test]
+    fn palms_facing_away_do_not_clap() {
+        let mut clap = ClapDetector::default();
+        let mut clapped = false;
+        for i in 0..20 {
+            let mut hands = palms((0.4 - i as f32 * 0.02).max(0.04));
+            for hand in hands.iter_mut().flatten() {
+                hand.normal = -hand.normal;
+            }
+            clapped |= clap.update(hands, DT);
+        }
+        assert!(!clapped);
+    }
+
+    #[test]
+    fn palms_facing_down_do_not_clap() {
+        let mut clap = ClapDetector::default();
+        let mut clapped = false;
+        for i in 0..20 {
+            let mut hands = palms((0.4 - i as f32 * 0.02).max(0.04));
+            for hand in hands.iter_mut().flatten() {
+                hand.normal = Vec3::NEG_Y;
+            }
+            clapped |= clap.update(hands, DT);
+        }
+        assert!(!clapped);
+    }
+
+    #[test]
+    fn one_hand_does_not_clap() {
+        let mut clap = ClapDetector::default();
+        let [left, _] = palms(0.04);
+        for _ in 0..20 {
+            assert!(!clap.update([left, None], DT));
+        }
     }
 
     #[test]
