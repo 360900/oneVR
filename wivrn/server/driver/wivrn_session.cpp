@@ -489,9 +489,23 @@ bool wivrn_session::connected()
 	return connection->is_active();
 }
 
+// oneVR: the dashboard alone, like the lobby, gets the lowest rate from 72 Hz up (under it
+// panels flicker), which saves the headset's battery. Rates are sorted, the highest if none
+static float dashboard_refresh_rate(const std::vector<float> & rates, float minimum)
+{
+	const float floor = std::max(71.5f, minimum); // a runtime may report 71.99
+	for (auto rate: rates)
+		if (rate >= floor)
+			return rate;
+	return rates.back();
+}
+
 float wivrn_session::default_fps()
 {
 	auto s = settings.lock();
+	// oneVR: the refresh rate adjuster raises it once a game runs
+	if (not app_pacers.running().game and headset_info.available_refresh_rates.size() > 1)
+		return dashboard_refresh_rate(headset_info.available_refresh_rates, s->minimum_refresh_rate) / s->fps_divider;
 	if (s->preferred_refresh_rate)
 		return s->preferred_refresh_rate / s->fps_divider;
 	return headset_info.available_refresh_rates.back();
@@ -519,8 +533,11 @@ void wivrn_session::operator()(const from_headset::settings_changed & settings)
 	if (settings.bitrate_bps != 0)
 		compositor.set_bitrate(settings.bitrate_bps);
 
-	if (settings.preferred_refresh_rate != 0)
+	// oneVR: with the dashboard alone, the headset gets the dashboard's rate back from the worker
+	// thread, and the compositor follows the headset's refresh_rate_changed
+	if (settings.preferred_refresh_rate != 0 and app_pacers.running().game)
 		compositor.set_framerate(settings.preferred_refresh_rate / settings.fps_divider);
+	onevr_refresh_check = true;
 
 	if (not settings.mirror_gamepad and uinput_handler)
 		uinput_handler->destroy_gamepad();
@@ -1048,10 +1065,11 @@ struct refresh_rate_adjuster
 		return true;
 	}
 
-	void adjust(wivrn_connection & cnx)
+	// current: the headset's refresh rate
+	void adjust(wivrn_connection & cnx, float current)
 	{
 		auto locked = settings.lock();
-		if (locked->preferred_refresh_rate != 0 or info.available_refresh_rates.size() < 2)
+		if (info.available_refresh_rates.size() < 2)
 			return;
 
 		// Maximum refresh rate the application can reach
@@ -1059,22 +1077,42 @@ struct refresh_rate_adjuster
 		// Get the highest rate reachable by the application
 		// If none can be reached, set it to the maximum
 		auto requested = info.available_refresh_rates.back();
-		for (auto rate: info.available_refresh_rates)
+		// oneVR: the dashboard alone gets its own rate, also when a rate was picked for games
+		if (not pacers.running().game)
+			requested = dashboard_refresh_rate(info.available_refresh_rates, locked->minimum_refresh_rate);
+		else if (locked->preferred_refresh_rate != 0)
+			requested = locked->preferred_refresh_rate;
+		else
 		{
-			if (rate > locked->minimum_refresh_rate and rate < app_rate * (rate == last ? 1. : 0.9))
-				requested = rate;
+			for (auto rate: info.available_refresh_rates)
+			{
+				if (rate > locked->minimum_refresh_rate and rate < app_rate * (rate == last ? 1. : 0.9))
+					requested = rate;
+			}
 		}
-		if (requested != last)
+		// oneVR: against the headset's rate, which a setting change on the headset may have moved
+		if (requested != current)
 		{
 			U_LOG_I("requesting refresh rate: %.0f (app rate %.1f)", requested, app_rate);
 			cnx.send_control(to_headset::refresh_rate_change{.hz = requested});
-			last = requested;
 		}
+		last = requested;
 	}
 
 	void reset()
 	{
 		last = 0;
+	}
+
+	// oneVR: true when a game started or quit since the last call, also on the first call
+	std::optional<bool> game;
+	bool game_changed()
+	{
+		const bool running = pacers.running().game;
+		if (game == running)
+			return false;
+		game = running;
+		return true;
 	}
 };
 
@@ -1137,7 +1175,8 @@ void wivrn_session::run_worker(std::stop_token stop)
 			        }));
 			auto now = std::chrono::steady_clock::now();
 			offset_est.request_sample(now, *connection);
-			const bool do_refresh = refresh.advance(now);
+			// oneVR: a game starting or quitting changes the rate at once, not within 10 s
+			const bool do_refresh = refresh.advance(now) | refresh.game_changed() | onevr_refresh_check.exchange(false);
 			const bool do_control = control.advance(now);
 			if (do_refresh or do_control)
 			{
@@ -1149,7 +1188,11 @@ void wivrn_session::run_worker(std::stop_token stop)
 							compositor.request_display_refresh_rate(0);
 					}
 					if (compositor.get_requested_refresh_rate() == 0)
-						refresh.adjust(*connection);
+					{
+						// adjust() locks the settings too
+						const float current = compositor.get_framerate() * settings.lock()->fps_divider;
+						refresh.adjust(*connection, current);
+					}
 				}
 				if (do_control)
 					control.resolve(compositor.get_frame_duration(), tracking_latency);

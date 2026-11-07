@@ -116,6 +116,8 @@ class wivrn_session : public xrt_system_devices
 	std::atomic<XrDuration> tracking_latency; // production to reception time
 	// oneVR: the headset renders the stream, not in its system menu or taken off
 	std::atomic<bool> onevr_headset_shown = true;
+	// oneVR: the worker thread checks the refresh rate at once, see refresh_rate_adjuster
+	std::atomic<bool> onevr_refresh_check = false;
 
 	std::unique_ptr<audio_device> audio_handle;
 
