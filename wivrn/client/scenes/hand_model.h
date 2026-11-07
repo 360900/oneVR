@@ -26,15 +26,24 @@
 
 namespace hand_model
 {
+// oneVR: how a hand is shaded
+enum class look
+{
+	translucent, // light, with a bright rim, see hand.frag
+	glass,       // oneDesign dark glass with a crisp outline, see hand_glass.frag
+};
+
 void add_hand(scene & scene,
               XrHandEXT hand,
               const std::filesystem::path & gltf_path,
-              uint32_t layer_mask);
+              uint32_t layer_mask,
+              look style = look::translucent);
 
 void add_hand(scene & scene,
               XrHandEXT hand,
               const xr::hand_tracker::mesh_data & mesh,
-              uint32_t layer_mask);
+              uint32_t layer_mask,
+              look style = look::translucent);
 
 void apply(entt::registry & scene,
            const xr::hand_tracker::joint_array * left_hand,

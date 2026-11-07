@@ -112,16 +112,26 @@ static const vk::VertexInputAttributeDescription & find_hand_mesh_fb_attribute(c
 	throw std::runtime_error("Missing hand mesh FB vertex attribute");
 }
 
-// oneVR: a translucent hand with a bright rim instead of a grey solid one, see hand.frag
-static std::shared_ptr<renderer::material> create_hand_material(scene & scene, XrHandEXT hand)
+// oneVR: a translucent or glass hand instead of a grey solid one, see hand_model::look
+static std::shared_ptr<renderer::material> create_hand_material(scene & scene, XrHandEXT hand, hand_model::look style)
 {
-	return scene.create_material([hand](renderer::material & material) {
-		material.staging.base_color_factor = {0.62f, 0.74f, 0.84f, 0.9f};  // fill, alpha scales the whole hand
-		material.staging.base_emissive_factor = {0.9f, 0.97f, 1.0f, 1.0f}; // rim
+	return scene.create_material([hand, style](renderer::material & material) {
+		if (style == hand_model::look::glass)
+		{
+			// oneDesign's dark float surface over its black luminosity layer, in linear light
+			material.staging.base_color_factor = {0.018f, 0.019f, 0.022f, 0.12f}; // fill, alpha darkens the room
+			material.staging.base_emissive_factor = {0.94f, 0.96f, 1.0f, 0.95f};  // outline
+			material.fragment_shader = "hand_glass.frag";
+		}
+		else
+		{
+			material.staging.base_color_factor = {0.62f, 0.74f, 0.84f, 0.9f};  // fill, alpha scales the whole hand
+			material.staging.base_emissive_factor = {0.9f, 0.97f, 1.0f, 1.0f}; // rim
+			material.fragment_shader = "hand.frag";
+		}
 		material.staging.metallic_factor = 0.0f;
 		material.staging.roughness_factor = 1.0f;
 		material.name = hand == XR_HAND_LEFT_EXT ? "left-hand-material" : "right-hand-material";
-		material.fragment_shader = "hand.frag";
 		material.double_sided = false;
 		material.blend_enable = true;
 		// depth_write_enable stays true: the lobby composites the hands' layer with
@@ -249,14 +259,15 @@ static const std::array<std::pair<XrHandJointEXT, std::string_view>, XR_HAND_JOI
 void hand_model::add_hand(scene & scene,
                           XrHandEXT hand,
                           const std::filesystem::path & gltf_path,
-                          uint32_t layer_mask)
+                          uint32_t layer_mask,
+                          look style)
 {
 	auto && [entity, node] = scene.add_gltf(gltf_path, layer_mask);
 
 	node.name = gltf_path.stem();
 
-	// every mesh under the hand root gets the translucent material
-	auto material = create_hand_material(scene, hand);
+	// every mesh under the hand root gets the hand's material
+	auto material = create_hand_material(scene, hand, style);
 	for (auto && [e, n]: scene.world.view<components::node>().each())
 	{
 		if (not n.mesh)
@@ -283,9 +294,10 @@ void hand_model::add_hand(scene & scene,
 void hand_model::add_hand(scene & scene,
                           XrHandEXT hand,
                           const xr::hand_tracker::mesh_data & mesh,
-                          uint32_t layer_mask)
+                          uint32_t layer_mask,
+                          look style)
 {
-	auto material = create_hand_material(scene, hand);
+	auto material = create_hand_material(scene, hand, style);
 
 	entt::entity entity = scene.world.create();
 	auto & node = scene.world.emplace<components::node>(entity);
