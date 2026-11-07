@@ -319,6 +319,10 @@ pub struct InteractionState {
     pub mode: PointerMode,
     pub grabbed: Option<GrabData>,
     pub clicked_id: Option<OverlayID>,
+    /// oneVR: the button `clicked_id` was pressed with, which a release has to match
+    pub clicked_mode: PointerMode,
+    /// oneVR: the click still held was already released by [`release_click`]
+    pub click_released: bool,
     pub hovered_id: Option<OverlayID>,
     pub should_block_input: bool,
     pub should_block_poses: bool,
@@ -331,6 +335,8 @@ impl Default for InteractionState {
             mode: PointerMode::Left,
             grabbed: None,
             clicked_id: None,
+            clicked_mode: PointerMode::Left,
+            click_released: false,
             hovered_id: None,
             should_block_input: false,
             should_block_poses: false,
@@ -546,11 +552,19 @@ where
         pointer.interaction.should_block_input = false;
         pointer.interaction.should_block_poses = false;
         pointer.interaction.kbd_block_activated = false;
+        // oneVR: a click let go of while untracked
+        if !pointer.now.click {
+            release_click(idx, overlays, app);
+        }
         return (None, pending_haptics); // no hit
     }
 
     // already grabbing, ignore everything else
     if let Some(grab_data) = pointer.interaction.grabbed {
+        // oneVR: a grab ends the click it started with, as a hand's fist that pinched on the way;
+        // the release would never reach the panel, which kept the button down
+        release_click(idx, overlays, app);
+        let pointer = &mut app.input_state.pointers[idx];
         if let Some(grabbed) = overlays.mut_by_id(grab_data.grabbed_id) {
             handle_grabbed(idx, grabbed, app);
         } else {
@@ -687,6 +701,8 @@ where
     let pointer = &mut app.input_state.pointers[hit.pointer];
     if pointer.now.click && !pointer.before.click {
         pointer.interaction.clicked_id = Some(hit.overlay);
+        pointer.interaction.clicked_mode = hit.mode;
+        pointer.interaction.click_released = false;
         if hovered.config.category == OverlayCategory::Keyboard {
             pointer.interaction.kbd_block_activated = true;
         }
@@ -702,12 +718,34 @@ where
             if let Some(clicked) = overlays.mut_by_id(clicked_id) {
                 clicked.config.backend.on_pointer(app, &hit, false);
             }
-        } else {
+        } else if !std::mem::take(&mut pointer.interaction.click_released) {
             hovered.config.backend.on_pointer(app, &hit, false);
         }
     }
 
     (Some((hit, raw_hit)), haptics.or(pending_haptics))
+}
+
+/// oneVR: sends the release of the pointer's click, if one is down, to the overlay it pressed
+fn release_click<O>(idx: usize, overlays: &mut OverlayWindowManager<O>, app: &mut AppState)
+where
+    O: Default,
+{
+    let interaction = &mut app.input_state.pointers[idx].interaction;
+    let Some(clicked_id) = interaction.clicked_id.take() else {
+        return;
+    };
+    interaction.click_released = true;
+    let hit = PointerHit {
+        pointer: idx,
+        overlay: clicked_id,
+        mode: interaction.clicked_mode,
+        ..Default::default()
+    };
+    if let Some(clicked) = overlays.mut_by_id(clicked_id) {
+        log::debug!("Hand {idx}: released the click on {}", clicked.config.name);
+        clicked.config.backend.on_pointer(app, &hit, false);
+    }
 }
 
 fn handle_no_hit<O>(

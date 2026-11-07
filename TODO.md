@@ -120,10 +120,6 @@ Known bugs and limits:
 - A headset the running session refuses on reconnect (codec, bit depth, audio or headset
   features changed) gets a new session, and the game closes with only a server log line.
   The server could send the reason as a HeadsetMessage once the new dashboard is linked.
-- WayVR (upstream): a click released while the pointer is untracked or grabbing never
-  reaches the clicked panel, as interact_hand (backend/input.rs) returns early. A screen
-  keeps the desktop mouse button down until the next click, and a VR keyboard key swallows
-  its next press. Sending the release to `interaction.clicked_id` there would fix it.
 - WayVR (upstream): a screen whose saved settings (stereo, mouse transform, size) all go
   back to their defaults comes back with the old ones after a restart: persist_layout
   (windowing/manager.rs) skips it and never clears its entry. Clearing must skip
