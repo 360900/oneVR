@@ -1309,6 +1309,7 @@ mod tests {
     /// Launches start the app's binary with its arguments; the app launched for a MIME type gets
     /// the item too, or an event when it's this process.
     #[test]
+    #[cfg_attr(miri, ignore)] // Miri can't spawn processes.
     fn launches() {
         let (dir, apps) = fixture("launches");
         let script = dir.join("launched.sh");
