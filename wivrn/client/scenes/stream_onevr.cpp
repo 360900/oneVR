@@ -669,6 +669,8 @@ bool scenes::stream::onevr_locate_hands(XrTime predicted_display_time)
 		left = onevr_left_hand->locate(world_space, predicted_display_time).joints;
 		right = onevr_right_hand->locate(world_space, predicted_display_time).joints;
 	}
+	left = onevr_left_smoother.update(left, predicted_display_time);
+	right = onevr_right_smoother.update(right, predicted_display_time);
 	hand_model::apply(world, left ? &*left : nullptr, right ? &*right : nullptr);
 	return left or right;
 }
