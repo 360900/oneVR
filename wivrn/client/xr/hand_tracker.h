@@ -42,6 +42,9 @@ public:
 	{
 		std::optional<joint_array> joints;
 		std::optional<XrHandTrackingDataSourceEXT> data_source;
+		// oneVR: whether the runtime trusts the joints: XR_FB_hand_tracking_aim's valid bit, Meta's
+		// high confidence, or else every joint tracked
+		bool confident = false;
 	};
 
 	struct mesh_data
@@ -61,6 +64,7 @@ private:
 	PFN_xrLocateHandJointsEXT xrLocateHandJointsEXT{};
 	PFN_xrGetHandMeshFB xrGetHandMeshFB{};
 	bool use_data_source = false;
+	bool use_aim = false; // oneVR
 	std::optional<mesh_data> cached_hand_mesh_fb;
 	bool hand_mesh_fb_fetched = false;
 	XrHandEXT hand_;

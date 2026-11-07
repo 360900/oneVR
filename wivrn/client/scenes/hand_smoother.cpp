@@ -1,5 +1,5 @@
 /*
- * oneVR: hands that glide between the tracker's samples
+ * oneVR: hands that glide between the tracker's samples, and hide while it doesn't trust them
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/vec3.hpp>
+#include <spdlog/spdlog.h>
 
 namespace
 {
@@ -32,6 +33,9 @@ constexpr XrTime max_interval = 50'000'000;
 // tracker's interval is only right over many of them.
 constexpr float frame_weight = 0.2;
 constexpr float sample_weight = 0.02;
+// hand_confidence: how long a hand must be trusted to show, and distrusted to hide
+constexpr XrTime show_after = 100'000'000;
+constexpr XrTime hide_after = 150'000'000;
 // A wrist that moved this far between samples was found again elsewhere and isn't glided to, in m
 constexpr float jump = 0.2;
 
@@ -138,4 +142,28 @@ std::optional<hand_smoother::joints> hand_smoother::update(const std::optional<j
 	if (t >= 1 and t <= 1)
 		return to;
 	return mix(*from, *to, std::max(t, 0.f));
+}
+
+std::optional<hand_confidence::joints> hand_confidence::update(const std::optional<joints> & located, bool confident, XrTime time, const char * name)
+{
+	const bool good = located and confident;
+	if (good == shown)
+		changing_since.reset();
+	else
+	{
+		if (not changing_since or time < *changing_since)
+			changing_since = time;
+		if (time - *changing_since >= (shown ? hide_after : show_after))
+		{
+			shown = good;
+			changing_since.reset();
+			spdlog::info("{} hand {}", name, shown ? "trusted, shown" : "not trusted, hidden");
+		}
+	}
+
+	if (not shown)
+		trusted.reset();
+	else if (good)
+		trusted = located;
+	return trusted;
 }

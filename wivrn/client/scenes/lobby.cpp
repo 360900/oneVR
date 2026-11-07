@@ -1032,21 +1032,27 @@ void scenes::lobby::render(const XrFrameState & frame_state)
 	{
 		auto windows = imgui_ctx->windows();
 
-		auto left = left_hand->locate(world_space, frame_state.predictedDisplayTime).joints;
+		const XrTime time = frame_state.predictedDisplayTime;
+		auto located_left = left_hand->locate(world_space, time);
+		auto left = onevr_left_confidence.update(located_left.joints, located_left.confident, time, "left");
 		if (left)
 		{
 			stick_finger_to_gui(*left, windows);
 			hide_left_controller = true;
 		}
 
-		auto right = right_hand->locate(world_space, frame_state.predictedDisplayTime).joints;
+		auto located_right = right_hand->locate(world_space, time);
+		auto right = onevr_right_confidence.update(located_right.joints, located_right.confident, time, "right");
 		if (right)
 		{
 			stick_finger_to_gui(*right, windows);
 			hide_right_controller = true;
 		}
 
-		hand_model::apply(world, left ? &*left : nullptr, right ? &*right : nullptr);
+		// drawn smoothed; touching the panels uses where the hands are
+		auto drawn_left = onevr_left_smoother.update(left, time);
+		auto drawn_right = onevr_right_smoother.update(right, time);
+		hand_model::apply(world, drawn_left ? &*drawn_left : nullptr, drawn_right ? &*drawn_right : nullptr);
 
 		if (not new_gui_position and head_position and left)
 			new_gui_position = check_recenter_gesture(xr::spaces::palm_left, *left, *head_position);

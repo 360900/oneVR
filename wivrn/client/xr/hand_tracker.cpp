@@ -37,6 +37,8 @@ xr::hand_tracker::hand_tracker(instance & inst, session & session, const XrHandT
 	if (inst.has_extension(XR_FB_HAND_TRACKING_MESH_EXTENSION_NAME))
 		xrGetHandMeshFB = inst.get_proc<PFN_xrGetHandMeshFB>("xrGetHandMeshFB");
 
+	use_aim = inst.has_extension(XR_FB_HAND_TRACKING_AIM_EXTENSION_NAME); // oneVR
+
 	if (not sources.empty() and inst.has_extension(XR_EXT_HAND_TRACKING_DATA_SOURCE_EXTENSION_NAME))
 	{
 		use_data_source = true;
@@ -101,6 +103,14 @@ xr::hand_tracker::located_hand xr::hand_tracker::locate(XrSpace space, XrTime ti
 	if (use_data_source)
 		locations.next = &data_source_state;
 
+	// oneVR: its valid bit is the hand's confidence
+	XrHandTrackingAimStateFB aim_state{
+	        .type = XR_TYPE_HAND_TRACKING_AIM_STATE_FB,
+	        .next = locations.next,
+	};
+	if (use_aim)
+		locations.next = &aim_state;
+
 	CHECK_XR(xrLocateHandJointsEXT(id, &info, &locations));
 
 	located_hand res{};
@@ -119,6 +129,13 @@ xr::hand_tracker::located_hand xr::hand_tracker::locate(XrSpace space, XrTime ti
 			}
 			joints[i] = {joints_pos[i], joints_vel[i]};
 		}
+	}
+
+	if (res.joints)
+	{
+		constexpr XrSpaceLocationFlags tracked = XR_SPACE_LOCATION_POSITION_TRACKED_BIT | XR_SPACE_LOCATION_ORIENTATION_TRACKED_BIT;
+		res.confident = use_aim ? (aim_state.status & XR_HAND_TRACKING_AIM_VALID_BIT_FB) != 0
+		                        : std::ranges::all_of(joints_pos, [](const auto & joint) { return (joint.locationFlags & tracked) == tracked; });
 	}
 
 	if (use_data_source)

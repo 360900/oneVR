@@ -206,6 +206,10 @@ static from_headset::hand_tracking locate_hands(
 		res.hand = tracker.hand() == XR_HAND_LEFT_EXT
 		                   ? hand_id::left_controller
 		                   : hand_id::right_controller;
+	// oneVR: joints the runtime doesn't trust jump around, the PC gets none, see hand_confidence;
+	// those from a held controller don't come from the cameras
+	else if (not located.confident)
+		located.joints.reset();
 
 	if (located.joints)
 	{

@@ -176,6 +176,8 @@ private:
 	// oneVR: hands drawn over the stream, render thread only; the tracking thread has its own trackers
 	std::optional<xr::hand_tracker> onevr_left_hand;
 	std::optional<xr::hand_tracker> onevr_right_hand;
+	hand_confidence onevr_left_confidence;
+	hand_confidence onevr_right_confidence;
 	hand_smoother onevr_left_smoother;
 	hand_smoother onevr_right_smoother;
 	std::atomic<bool> onevr_hands_requested = true; // until the server says otherwise

@@ -24,6 +24,7 @@
 #include "file_picker.h"
 #include "libcurl.h"
 #include "scene.h"
+#include "scenes/hand_smoother.h"
 #include "scenes/lobby_keyboard.h"
 #include "utils/mapped_file.h"
 #include "utils/thread_safe.h"
@@ -81,6 +82,11 @@ class lobby : public scene_impl<lobby>
 
 	std::optional<xr::hand_tracker> left_hand;
 	std::optional<xr::hand_tracker> right_hand;
+	// oneVR: hands are hidden while not trusted, and drawn between the tracker's samples
+	hand_confidence onevr_left_confidence;
+	hand_confidence onevr_right_confidence;
+	hand_smoother onevr_left_smoother;
+	hand_smoother onevr_right_smoother;
 
 	xr::face_tracker face_tracker;
 

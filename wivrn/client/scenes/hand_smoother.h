@@ -1,5 +1,5 @@
 /*
- * oneVR: hands that glide between the tracker's samples
+ * oneVR: hands that glide between the tracker's samples, and hide while it doesn't trust them
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,4 +46,20 @@ private:
 	XrTime frame_interval = default_interval;
 
 	static constexpr XrTime default_interval = 20'000'000;
+};
+
+// A hand the runtime doesn't trust jumps around, so it is hidden: shown after it was trusted for a
+// while, and while trust drops, held where it was last trusted until it hides
+class hand_confidence
+{
+public:
+	using joints = xr::hand_tracker::joint_array;
+
+	// The joints to use at time, nullopt while the hand is hidden. `name` is for the log
+	std::optional<joints> update(const std::optional<joints> & located, bool confident, XrTime time, const char * name);
+
+private:
+	std::optional<joints> trusted;
+	bool shown = false;
+	std::optional<XrTime> changing_since;
 };
