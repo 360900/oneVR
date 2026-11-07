@@ -164,7 +164,6 @@ Features not yet built:
   maintainer found bandwidth estimates unreliable.
 
 Research first:
-- Spacewarp on the headset from depth and pose, or optical flow on decoded frames.
 - Oculus SDK games: ReviveXR in the Proton prefix over wineopenxr. Try one game.
 - OpenXR 1.1 and quad views: track upstream Monado.
 - Other headsets: Pico needs testing; others need hardware or testers.

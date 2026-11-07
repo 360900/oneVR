@@ -92,5 +92,20 @@ public:
 	        float sharpness,
 	        int destination);
 
+	// oneVR: draws what the last defoveate() drew, in the same command buffer, into other
+	// framebuffers made with render_pass(), each view stretched over the whole extent. No
+	// sharpening, scale or bias
+	void redraw(
+	        vk::raii::CommandBuffer & command_buffer,
+	        const std::array<wivrn::to_headset::foveation_parameter, 2> & foveation,
+	        const std::array<input, 2> & inputs,
+	        const std::array<vk::Framebuffer, 2> & framebuffers,
+	        vk::Extent2D extent);
+
+	vk::RenderPass render_pass() const
+	{
+		return *renderpass;
+	}
+
 	static XrExtent2Di defoveated_size(const wivrn::to_headset::foveation_parameter &);
 };

@@ -445,6 +445,61 @@ void stream_defoveator::defoveate(vk::raii::CommandBuffer & command_buffer,
 	}
 }
 
+void stream_defoveator::redraw(vk::raii::CommandBuffer & command_buffer,
+                               const std::array<wivrn::to_headset::foveation_parameter, 2> & foveation,
+                               const std::array<input, 2> & inputs,
+                               const std::array<vk::Framebuffer, 2> & targets,
+                               vk::Extent2D extent)
+{
+	assert(buffer);
+
+	command_buffer.setScissor(0, vk::Rect2D{.extent = extent});
+	command_buffer.setViewport(
+	        0,
+	        vk::Viewport{
+	                .width = float(extent.width),
+	                .height = float(extent.height),
+	                .minDepth = 0,
+	                .maxDepth = 1,
+	        });
+
+	for (size_t view = 0; view < view_count; ++view)
+	{
+		const auto & input = inputs[view];
+		// defoveate() made it and wrote its descriptors: writing them again would invalidate
+		// the command buffer it is bound in
+		auto & pipeline = ensure_pipeline(view, input.sampler_rgb, input.sampler_a);
+
+		vert_pc pc{
+		        .rgb_rect = glm::ivec4(input.rect_rgb.offset.x,
+		                               input.rect_rgb.offset.y,
+		                               input.rect_rgb.extent.width,
+		                               input.rect_rgb.extent.height),
+		        .a_rect = glm::ivec4(input.rect_a.offset.x,
+		                             input.rect_a.offset.y,
+		                             input.rect_a.extent.width,
+		                             input.rect_a.extent.height),
+		        .scale = {1, 1, 1, 1},
+		        .bias = {0, 0, 0, 0},
+		        .sharpness = 0,
+		};
+
+		command_buffer.beginRenderPass(
+		        vk::RenderPassBeginInfo{
+		                .renderPass = *renderpass,
+		                .framebuffer = targets[view],
+		                .renderArea = {.extent = extent},
+		        },
+		        vk::SubpassContents::eInline);
+		command_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline.pipeline);
+		command_buffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, *pipeline.layout, 0, pipeline.ds, {});
+		command_buffer.pushConstants<vert_pc>(*pipeline.layout, vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment, 0, pc);
+		command_buffer.bindVertexBuffers(0, vk::Buffer(buffer), vertices_size * view);
+		command_buffer.draw(required_vertices(foveation[view]), 1, 0, 0);
+		command_buffer.endRenderPass();
+	}
+}
+
 static uint16_t count_pixels(const std::vector<uint16_t> & param)
 {
 	uint16_t res = 0;

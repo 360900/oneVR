@@ -1115,6 +1115,26 @@ void scenes::stream::render(const XrFrameState & frame_state)
 		                      application::get_config().sharpness,
 		                      image_index);
 
+		// oneVR: while the stream arrives at half rate, the runtime synthesises every other frame
+		// from motion vectors. Not over the dimmed stream behind the settings, nor with alpha
+		const bool synthesise = spacewarp and application::get_config().fps_divider == 2 and not use_alpha and dimming == 0 and
+		                        std::ranges::all_of(std::span(current_blit_handles).first(view_count), [](const auto & h) { return bool(h); });
+		if (synthesise)
+		{
+			std::array<stream_spacewarp::frame, view_count> frames;
+			for (size_t i = 0; i < view_count; ++i)
+			{
+				frames[i] = {
+				        .display_time = current_blit_handles[i]->view_info.display_time,
+				        .pose = pose[i],
+				        .fov = fov[i],
+				};
+			}
+			spacewarp->record(command_buffer, foveation, images, frames, frame_state.predictedDisplayTime);
+		}
+		else if (spacewarp)
+			spacewarp->reset();
+
 #if WIVRN_USE_V4L2
 		// the blit handles keep CAPTURE buffers alive until this cmd buffer's fence has completed
 		inplace_vector<vk::ImageMemoryBarrier, decoder_count> foreign_release_barriers;
@@ -1183,6 +1203,8 @@ void scenes::stream::render(const XrFrameState & frame_state)
 		renderdoc_end(*vk_instance);
 #endif
 		swapchain.release();
+		if (synthesise)
+			spacewarp->release();
 
 		// oneVR: see-through fades the opaque stream over passthrough
 		float see_through = 0;
@@ -1230,6 +1252,13 @@ void scenes::stream::render(const XrFrameState & frame_state)
 		        passthrough ? XR_COMPOSITION_LAYER_BLEND_TEXTURE_SOURCE_ALPHA_BIT : 0,
 		        application::space(xr::spaces::world),
 		        layer_view);
+		if (synthesise)
+		{
+			if (spacewarp->get_api() == stream_spacewarp::api::frame_synthesis)
+				set_frame_synthesis(spacewarp->frame_synthesis_views());
+			else
+				set_space_warp(spacewarp->space_warp_views());
+		}
 		if (see_through > 0)
 		{
 			// premultiplied: the black layer already dimmed the room to see_through, so the stream
@@ -1432,12 +1461,28 @@ void scenes::stream::setup_reprojection_swapchain(uint32_t swapchain_width, uint
 	spdlog::info("Initializing reprojector");
 	vk::Extent2D extent = {(uint32_t)swapchain.width(), (uint32_t)swapchain.height()};
 
+	// oneVR: it draws with the defoveator's render pass
+	spacewarp.reset();
+
 	defoveator.emplace(
 	        device,
 	        physical_device,
 	        swapchain.images(),
 	        extent,
 	        swapchain.format());
+
+	// oneVR: optical flow for the headset's frame synthesis, while the stream runs at half rate
+	if (stream_spacewarp::supported(instance) != stream_spacewarp::api::none)
+	{
+		try
+		{
+			spacewarp.emplace(device, instance, system, session, viewconfig, *defoveator, swapchain.format());
+		}
+		catch (std::exception & e)
+		{
+			spdlog::warn("Space warp unavailable: {}", e.what());
+		}
+	}
 }
 
 void scenes::stream::ensure_swapchain(bool cropped, uint32_t width, uint32_t height)

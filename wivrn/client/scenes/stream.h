@@ -30,6 +30,7 @@
 #include "scenes/hand_smoother.h"
 #include "scenes/input_profile.h"
 #include "stream_defoveator.h"
+#include "stream_spacewarp.h"
 #include "utils/thread_safe.h"
 #include "wifi_lock.h"
 #include "wivrn_client.h"
@@ -134,6 +135,8 @@ private:
 	std::array<accumulator_images, decoder_count> decoders; // Locked by decoder_mutex
 
 	std::optional<stream_defoveator> defoveator;
+	// oneVR: after the defoveator it draws with, so it goes first; empty without the extension
+	std::optional<stream_spacewarp> spacewarp;
 
 	vk::raii::Fence fence = nullptr;
 	vk::raii::CommandBuffer command_buffer = nullptr;
