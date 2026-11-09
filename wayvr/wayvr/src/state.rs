@@ -82,7 +82,7 @@ pub struct AppState {
     pub osc_sender: Option<OscSender>,
 
     pub wvr_server: Option<WvrServerState>,
-    pub _desktop_session: Option<XdgDesktopSession>,
+    pub desktop_session: Option<XdgDesktopSession>,
 
     #[cfg(feature = "whisper")]
     pub whisper_sst: Option<WhisperStt>,
@@ -250,7 +250,7 @@ impl AppState {
             osc_sender,
 
             wvr_server,
-            _desktop_session: dbus_session,
+            desktop_session: dbus_session,
             #[cfg(feature = "whisper")]
             whisper_sst: None,
 
@@ -274,7 +274,8 @@ impl AppState {
 
     pub fn late_init(&mut self) {
         crate::onevr::start(self);
-        self.notifications.run_dbus(&mut self.dbus);
+        self.notifications
+            .run_dbus(&mut self.dbus, self.desktop_session.is_some());
         self.notifications.run_udp();
 
         #[cfg(feature = "openxr")]

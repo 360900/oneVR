@@ -74,8 +74,20 @@ impl NotificationManager {
         }
     }
 
-    pub fn run_dbus(&mut self, dbus: &mut DbusConnector) {
+    /// `desktop_session`: WayVR is the desktop (`--session`), so it serves notifications even when
+    /// a daemon could be started on demand
+    pub fn run_dbus(&mut self, dbus: &mut DbusConnector, desktop_session: bool) {
         match dbus.session_connection() {
+            // oneVR: a daemon the bus starts on demand (mako, dunst, swaync) couldn't start while
+            // WayVR owns the name, and the desktop would show no notifications; listen instead
+            Ok(connection)
+                if !desktop_session
+                    && name_activatable(&connection, "org.freedesktop.Notifications") =>
+            {
+                log::info!(
+                    "A notification daemon can be started on demand; not serving D-Bus notifications."
+                );
+            }
             Ok(connection) => {
                 match connection.request_name("org.freedesktop.Notifications", false, false, true) {
                     Ok(RequestNameReply::PrimaryOwner | RequestNameReply::AlreadyOwner) => {
@@ -411,4 +423,16 @@ struct XsoMessage {
     useBase64Icon: Option<bool>,
     sourceApp: Option<String>,
     alwaysShow: Option<bool>,
+}
+
+/// oneVR: whether the bus can start a service that owns `name`
+fn name_activatable(connection: &Connection, name: &str) -> bool {
+    let proxy = connection.with_proxy(
+        "org.freedesktop.DBus",
+        "/org/freedesktop/DBus",
+        Duration::from_millis(700),
+    );
+    let result: Result<(Vec<String>,), dbus::Error> =
+        proxy.method_call("org.freedesktop.DBus", "ListActivatableNames", ());
+    result.is_ok_and(|(names,)| names.iter().any(|n| n == name))
 }
