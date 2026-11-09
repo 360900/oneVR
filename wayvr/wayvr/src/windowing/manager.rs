@@ -111,7 +111,7 @@ where
         if headless {
             app.screens.clear();
             app.feats.desktop_backend = DesktopBackend::Headless;
-            log::info!("Running in headless mode; keyboard will be en-US");
+            log::info!("Running in headless mode; keyboard layout is read from config.");
         } else {
             // oneVR: all screens in one set, side by side (see `arrange_pending`).
             // this is the default and would be overwritten by

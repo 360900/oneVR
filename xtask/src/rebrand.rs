@@ -127,8 +127,8 @@ const RULES: &[Rule] = &[
     // WayVR: notifications, CLI help, names shown by other software
     rule(
         "wayvr/wayvr/src/main.rs",
-        "WayVR may have issues",
-        "oneVR may have issues",
+        "for when you want WayVR to be your main desktop",
+        "for when you want the oneVR desktop to be your main desktop",
     ),
     rule(
         "wayvr/wayvr/src/main.rs",
@@ -169,6 +169,11 @@ const RULES: &[Rule] = &[
         "wayvr/wayvr/src/subsystem/dbus/mod.rs",
         "\"WayVR\",",
         "\"oneVR\",",
+    ),
+    rule(
+        "wayvr/wayvr/src/subsystem/notifications.rs",
+        "\"WayVR\".to_string(),",
+        "\"oneVR\".to_string(),",
     ),
     // Not IGNORE_PREFIX ("WayVR";), which must match the uinput device names
     rule(

@@ -13,6 +13,7 @@
     clippy::needless_pass_by_ref_mut,
     clippy::needless_pass_by_value,
     clippy::option_if_let_else,
+    clippy::significant_drop_tightening,
     clippy::struct_excessive_bools,
     clippy::suboptimal_flops,
     clippy::too_many_lines,
@@ -82,13 +83,9 @@ struct Args {
     #[arg(long)]
     wait: bool,
 
-    /// Uninstall SteamVR manifest and exit
+    /// Do not use SteamVR manifest
     #[arg(long)]
-    uninstall: bool,
-
-    /// Install SteamVR manifest (not recommended; oneVR may have issues when auto-started by SteamVR!)
-    #[arg(long)]
-    install: bool,
+    skip_manifest: bool,
 
     /// Replace running oneVR desktop instance
     #[arg(long)]
@@ -101,6 +98,10 @@ struct Args {
     /// Disable desktop access altogether.
     #[arg(long)]
     headless: bool,
+
+    /// Start a XDG desktop session, for when you want the oneVR desktop to be your main desktop. Implies --headless.
+    #[arg(long)]
+    session: bool,
 
     /// Do not auto-start registered apps
     #[arg(long)]
@@ -121,7 +122,7 @@ fn load_config() -> GeneralConfig {
     load_general_config()
 }
 
-fn init_run_params(no_audio: bool) -> backend::RunParams {
+fn init_run_params(no_audio: bool, session: bool) -> backend::RunParams {
     let assets = Box::new(gui::asset::GuiAsset {});
     let config = load_config();
     let lang_provider = WayVRLangProvider::from_config(&config);
@@ -141,6 +142,7 @@ fn init_run_params(no_audio: bool) -> backend::RunParams {
         wgui_globals,
         config,
         no_audio,
+        session,
     }
 }
 
@@ -176,7 +178,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     log::info!("It is {}.", chrono::Local::now().format("%c"));
 
     #[cfg(feature = "openvr")]
-    if args.uninstall {
+    if args.skip_manifest {
         crate::backend::openvr::openvr_uninstall();
         return Ok(());
     }
@@ -215,7 +217,7 @@ fn auto_run(args: &Args, out_backend: &mut Option<XrBackend>) {
         if !args_get_openvr(args) {
             use crate::backend::{BackendError, openxr::openxr_run};
             tried_xr = true;
-            match openxr_run(args, init_run_params(args.no_audio)) {
+            match openxr_run(args, init_run_params(args.no_audio, args.session)) {
                 Ok(()) => {
                     out_backend.replace(XrBackend::OpenXR);
                     return;
@@ -233,7 +235,7 @@ fn auto_run(args: &Args, out_backend: &mut Option<XrBackend>) {
         if !args_get_openxr(args) {
             use crate::backend::{BackendError, openvr::openvr_run};
             tried_vr = true;
-            match openvr_run(args, init_run_params(args.no_audio)) {
+            match openvr_run(args, init_run_params(args.no_audio, args.session)) {
                 Ok(()) => {
                     out_backend.replace(XrBackend::OpenVR);
                     return;
@@ -269,7 +271,7 @@ fn auto_run(args: &Args, out_backend: &mut Option<XrBackend>) {
         _ => "NOTIFICATION.INVALID_ARGS",
     };
 
-    let run_params = init_run_params(args.no_audio);
+    let run_params = init_run_params(args.no_audio, args.session);
 
     let instructions_str = run_params.wgui_globals.i18n().translate(instructions_key);
 
@@ -280,7 +282,7 @@ fn auto_run(args: &Args, out_backend: &mut Option<XrBackend>) {
 
     let instructions = format!("{instructions_title}\n{instructions_str}");
 
-    let _ = DbusConnector::notify_send("oneVR", &instructions, 1, 30000, 0, false);
+    let _ = DbusConnector::default().notify_send("oneVR", &instructions, 1, 30000, 0, false);
 
     #[cfg(not(any(feature = "openvr", feature = "openxr")))]
     compile_error!("No VR support! Enable either openvr or openxr features!");
@@ -320,11 +322,14 @@ fn restart_args(args: &Args, backend: Option<XrBackend>) -> Vec<&'static str> {
     if args.headless {
         flags.push("--headless");
     }
+    if args.session {
+        flags.push("--session");
+    }
+    if args.skip_manifest {
+        flags.push("--skip-manifest");
+    }
     if args.no_autostart {
         flags.push("--no-autostart");
-    }
-    if args.install {
-        flags.push("--install");
     }
     if args.no_audio {
         flags.push("--no-audio");
