@@ -49,9 +49,9 @@ use crate::{
 	views::{dialog_box, game_cover},
 };
 
-/// WayVR's entries, wayvr.desktop and wayvr-headless.desktop, listed as VR apps when WayVR is
-/// installed system-wide. oneVR's dashboard is WayVR, and a second one exits at once.
-const HIDDEN_APPS: &[&str] = &["wayvr", "wayvr-headless"];
+/// WayVR's entries, wayvr.desktop and wayvr-session.desktop (wayvr-headless.desktop in older
+/// versions and the AppImage), listed as VR apps when WayVR is installed system-wide. oneVR's dashboard is WayVR, and a second one exits at once.
+const HIDDEN_APPS: &[&str] = &["wayvr", "wayvr-session", "wayvr-headless"];
 /// Steam tools that ship no toolmanifest.vdf: the Steamworks redistributables, Proton's BattlEye
 /// and EasyAntiCheat runtimes, and SteamVR, which oneVR replaces
 const STEAM_TOOLS: &[&str] = &["228980", "1007", "1161040", "1826330", "250820"];
@@ -1217,6 +1217,7 @@ mod tests {
 			entry("Non-Steam", "steam steam://rungameid/12884901888033554432"),
 			entry("wayvr", "wayvr"),
 			entry("wayvr-headless", "wayvr --headless"),
+			entry("wayvr-session", "wayvr --session"),
 			entry("io.github.onevr", "onevr"),
 			entry("io.github.onevr-dev", "onevr"),
 			entry("org.gnome.Calculator", "gnome-calculator"),
