@@ -35,6 +35,8 @@ The prefix is fixed at build time. The links put `onevr` in `~/.local/bin` and o
 
 The headset APK is the `onevr-apk-release` artifact of [CI](https://github.com/360900/oneVR/actions/workflows/ci.yml).
 
+The Steam Frame takes the `onevr-frame` artifact instead: extract it on the headset, add `onevr-frame/bin/onevr` to Steam as a non-Steam game and start it from the Library. It streams H.264 and 8-bit H.265.
+
 # Usage
 
 Run `onevr` (or oneVR from the app menu) to start the server in the background and open oneVR's window, with pairing and the headset and server settings; closing it leaves the server and a tray icon, and stopping the server from anywhere closes both. Open oneVR on the headset and pick this PC; the first time, enter the PIN the PC shows. Once connected, the settings are in the dashboard in VR too. OpenVR games use the bundled xrizer.
@@ -57,7 +59,7 @@ cargo xtask run
 
 This builds into `target/stage`, installs there and starts its `onevr`. Build options such as `--i686` go first, arguments after `--` go to `onevr`.
 
-`cargo xtask apk --debug` builds an installable headset APK and needs the Android SDK and NDK. Upstream changes are merged as described in [CHANGES.md](CHANGES.md), followed by `cargo xtask rebrand`.
+`cargo xtask apk --debug` builds an installable headset APK and needs the Android SDK and NDK. `cargo xtask frame` builds the Steam Frame's app and needs an arm64 host. Upstream changes are merged as described in [CHANGES.md](CHANGES.md), followed by `cargo xtask rebrand`.
 
 # License
 

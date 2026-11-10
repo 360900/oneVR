@@ -187,3 +187,47 @@ jobs:
         with:
           name: onevr-apk-${{ matrix.type }}
           path: target/dist/*.apk
+
+  # The Steam Frame runs SteamOS on arm64: its app is WiVRn's Linux client,
+  # built like WiVRn's own Steam Frame job, in the Steam Runtime's SDK.
+  frame:
+    name: Steam Frame
+    runs-on: ubuntu-24.04-arm
+    container: registry.gitlab.steamos.cloud/steamrt/steamrt4/sdk/arm64:4.0.20260805.254769
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      # As in the Linux job.
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - uses: actions/cache@v5
+        with:
+          key: frame-fetch-${{ hashFiles('wivrn/CMakeLists.txt') }}
+          path: |
+            target/frame-fetch/*-subbuild/*-populate-prefix/src/*.tar.*
+            target/frame-fetch/*-subbuild/*-populate-prefix/src/*.zip
+            target/frame-fetch/*.tar.*
+            target/frame-fetch/*.zip
+            target/frame-fetch/*.tgz
+          restore-keys: frame-fetch-
+      # Same as WiVRn's own Steam Frame job.
+      - name: Install dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y librsvg2-bin npm
+          wget -q https://github.com/KhronosGroup/KTX-Software/releases/download/v4.4.2/KTX-Software-4.4.2-Linux-arm64.deb
+          sudo dpkg --install KTX-Software-4.4.2-Linux-arm64.deb
+          rm KTX-Software-4.4.2-Linux-arm64.deb
+          npm install --global @gltf-transform/cli@4.1.1
+      # The SDK has no rustup, which reads the toolchain from rust-toolchain.toml.
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          "$HOME/.cargo/bin/rustup" toolchain install
+      - name: Build
+        run: cargo xtask frame
+      - uses: actions/upload-artifact@v7
+        with:
+          name: onevr-frame
+          path: target/dist/*.tar.gz

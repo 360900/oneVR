@@ -28,6 +28,9 @@ commands:
   run [BUILD_ARGS...] [-- ONEVR_ARGS...]
         build into target/stage, install there and start its onevr, for testing
         from the tree; BUILD_ARGS as for build, without --prefix
+  frame
+        build the headset app for the Steam Frame into target/dist (needs an
+        arm64 host, such as Valve's steamrt4 arm64 SDK container)
   client
         build WiVRn's desktop headset client into target/client-stage, for testing
         the server without a headset
@@ -63,6 +66,7 @@ fn main() -> ExitCode {
         Some("install") => install(rest),
         Some("dist") => dist(rest),
         Some("apk") => apk(rest),
+        Some("frame") => frame(rest),
         Some("client") => client(rest),
         Some("run") => run_staged(rest),
         Some("rebrand") => rebrand::run(rest),
@@ -451,7 +455,20 @@ fn dist(args: &[String]) -> Result {
     let tarball = dist.join(format!("onevr-{}-x86_64.tar.gz", version()?));
     // Extracted into / as root, tar sets the owner and mode of every directory
     // in the archive, existing ones too. So pack only the prefix, not / or
-    // /opt, owned by root and with modes that don't depend on the builder.
+    // /opt.
+    pack(
+        &stage,
+        Path::new(&prefix).strip_prefix("/").unwrap(),
+        &tarball,
+    )?;
+    remove_dir(&stage)?;
+    println!("{}", tarball.display());
+    Ok(())
+}
+
+/// Packs `member` of `stage` into `tarball`, owned by root and with modes that
+/// don't depend on the builder.
+fn pack(stage: &Path, member: &Path, tarball: &Path) -> Result {
     let mut cmd = Command::new("tar");
     cmd.args([
         "--owner=0",
@@ -461,14 +478,11 @@ fn dist(args: &[String]) -> Result {
         "--sort=name",
     ])
     .arg("-C")
-    .arg(&stage)
+    .arg(stage)
     .arg("-czf")
-    .arg(&tarball)
-    .arg(Path::new(&prefix).strip_prefix("/").unwrap());
-    run(cmd)?;
-    remove_dir(&stage)?;
-    println!("{}", tarball.display());
-    Ok(())
+    .arg(tarball)
+    .arg(member);
+    run(cmd)
 }
 
 fn apk(args: &[String]) -> Result {
@@ -544,6 +558,63 @@ fn apk(args: &[String]) -> Result {
     if !found {
         return Err(format!("no APK in {}", out.display()));
     }
+    Ok(())
+}
+
+/// The Steam Frame runs SteamOS on arm64, so its headset app is WiVRn's Linux
+/// client, built with WiVRn's `frame` preset, and not an APK. It finds its
+/// files next to its binary and runs from any folder.
+fn frame(args: &[String]) -> Result {
+    if let Some(arg) = args.first() {
+        return Err(format!("frame: unknown argument {arg}\n\n{USAGE}"));
+    }
+    // Before the long build: the Frame runs nothing else.
+    if env::consts::ARCH != "aarch64" {
+        return Err(format!(
+            "frame: the Steam Frame needs an arm64 build and this host is {}; build on an arm64 host, such as Valve's steamrt4 arm64 SDK container",
+            env::consts::ARCH
+        ));
+    }
+    let ver = version()?;
+    let dir = target().join("wivrn-frame");
+    let mut cmd = Command::new("cmake");
+    cmd.arg("-S")
+        .arg(root().join("wivrn"))
+        .arg("-B")
+        .arg(&dir)
+        .args(["--preset", "frame"])
+        // as for the APK
+        .arg("-DWIVRN_CSS=images/wivrn-release.css")
+        .arg(format!(
+            "-DFETCHCONTENT_BASE_DIR={}",
+            target().join("frame-fetch").display()
+        ))
+        .arg(format!("-DGIT_DESC={ver}"))
+        .arg(format!("-DGIT_COMMIT={}", git(&["rev-parse", "HEAD"])?));
+    run(cmd)?;
+    let mut cmd = Command::new("cmake");
+    cmd.arg("--build").arg(&dir);
+    run(cmd)?;
+
+    let dist = target().join("dist");
+    let stage = dist.join("frame-root");
+    let app = Path::new("onevr-frame");
+    remove_dir(&stage)?;
+    let mut cmd = Command::new("cmake");
+    cmd.arg("--install")
+        .arg(&dir)
+        .arg("--prefix")
+        .arg(stage.join(app));
+    run(cmd)?;
+    // Steam names a non-Steam game after its binary.
+    let bin = stage.join(app).join("bin");
+    fs::rename(bin.join("wivrn"), bin.join("onevr"))
+        .map_err(|e| format!("renaming {}: {e}", bin.join("wivrn").display()))?;
+
+    let tarball = dist.join(format!("onevr-frame-{ver}-aarch64.tar.gz"));
+    pack(&stage, app, &tarball)?;
+    remove_dir(&stage)?;
+    println!("{}", tarball.display());
     Ok(())
 }
 
