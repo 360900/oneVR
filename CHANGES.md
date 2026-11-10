@@ -30,7 +30,7 @@ oneVR's Monado patches are `wivrn/patches/monado/onevr-NNNN-*.patch`, which sort
 
 | Component | Change | Files |
 |-----------|--------|-------|
-| wivrn | app id `io.github.onevr` | `build.gradle` |
+| wivrn | app id `com.weldiva.onevr` | `build.gradle` |
 | wivrn, wayvr | oneVR name in user-visible strings and translations, oneVR logo | applied by `cargo xtask rebrand`, see `xtask/src/rebrand.rs` |
 | wayvr | oneVR assets (`onevr-assets/`) looked up before upstream ones; language files rebranded on load, oneVR's own strings added under `oneVR` and shown in English until translated; the desktop notification when no VR runtime is found says to start oneVR and connect the headset | `Cargo.toml`, `dash-frontend/src/assets.rs`, `wayvr/src/{gui/asset.rs,main.rs}`, new `onevr-common` crate |
 | wivrn | headset settings, statistics and session restarts for the oneVR dashboard: new packets and D-Bus API ([docs/dbus.md](docs/dbus.md)); the headset also applies changes while off the head or behind another app, and holds permission prompts until the app shows again | `common/wivrn_packets.h`, `dbus/io.github.wivrn.Server.xml`, `server/{CMakeLists.txt,main.cpp,wivrn_ipc.h,accept_connection.cpp}`, `server/driver/{wivrn_connection.cpp,wivrn_session.h}`, `client/{application.cpp,configuration.h,configuration.cpp,scene.h}`, `client/scenes/{stream.h,stream.cpp,stream_network.cpp,lobby.cpp,lobby.h,lobby_onevr.cpp}`; new `common/onevr_packets.h`, `server/onevr_*`, `server/driver/wivrn_session_onevr.cpp`, `client/scenes/stream_onevr.cpp` |

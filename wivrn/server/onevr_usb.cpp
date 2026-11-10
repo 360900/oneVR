@@ -45,7 +45,7 @@ constexpr auto refresh_interval = 10s;
 // ends well, so an am start that keeps failing backs off too
 constexpr steady_clock::duration first_backoff = 10s;
 constexpr steady_clock::duration max_backoff = 60s;
-constexpr const char * packages[] = {"io.github.onevr", "io.github.onevr.debug"};
+constexpr const char * packages[] = {"com.weldiva.onevr", "com.weldiva.onevr.debug"};
 
 struct device
 {
@@ -247,7 +247,7 @@ void reverse(const std::string & serial, unsigned gen, bool start, const std::st
 
 void find_app(const std::string & serial, unsigned gen, bool start)
 {
-	adb({"-s", serial, "shell", "pm", "list", "packages", "io.github.onevr"}, [serial, gen, start](auto output, auto error) {
+	adb({"-s", serial, "shell", "pm", "list", "packages", "com.weldiva.onevr"}, [serial, gen, start](auto output, auto error) {
 		auto d = current(serial, gen);
 		if (not d)
 			return;

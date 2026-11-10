@@ -20,7 +20,7 @@ const SESSION_END_TIMEOUT: Duration = Duration::from_secs(15);
 /// How long the pairing question waits for an answer as a notification
 const CONFIRM_TIMEOUT: Duration = Duration::from_secs(60);
 /// The app's package names, the release build first
-const PACKAGES: [&str; 2] = ["io.github.onevr", "io.github.onevr.debug"];
+const PACKAGES: [&str; 2] = ["com.weldiva.onevr", "com.weldiva.onevr.debug"];
 
 pub fn pair() -> Result<(), String> {
     // from the app menu, the window asks and shows the PIN
@@ -331,7 +331,7 @@ fn app_package(adb: &Path, serial: &str) -> Result<Option<&'static str>, String>
             "pm",
             "list",
             "packages",
-            "io.github.onevr",
+            "com.weldiva.onevr",
         ])
         .output()
         .map_err(|e| format!("running adb: {e}"))?;

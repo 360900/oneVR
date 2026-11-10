@@ -145,7 +145,7 @@ Known bugs and limits:
 - CI debug APKs get a new signing key each run, so one can't update another, until the repo
   secret APK_DEBUG_KEYSTORE_BASE64 holds a debug keystore in base64. With the local one
   (`base64 -w0 ~/.android/debug.keystore`), local and CI debug builds update each other.
-  After setting it, uninstall io.github.onevr.debug once.
+  After setting it, uninstall com.weldiva.onevr.debug once.
 
 Features not yet built:
 - Starting bitrate from a UDP burst during the handshake.
