@@ -38,6 +38,13 @@ public:
 	incorrect_pin();
 };
 
+// oneVR: the main loop asked to stop or restart the session while a headset was connecting to it
+class session_stop_requested : public std::runtime_error
+{
+public:
+	session_stop_requested();
+};
+
 class wivrn_connection
 {
 public:
@@ -58,7 +65,8 @@ private:
 	from_headset::headset_info_packet info_packet;
 	std::string public_key; // oneVR: the headset's, without PEM armor
 
-	void init(std::stop_token stop_token, std::function<void()> tick = []() {});
+	// in_session: the handshake of a headset coming back to a running session
+	void init(std::stop_token stop_token, std::function<void()> tick = []() {}, bool in_session = false);
 
 public:
 	wivrn_connection(std::stop_token stop_token, encryption_state state, std::string pin, TCP && tcp);

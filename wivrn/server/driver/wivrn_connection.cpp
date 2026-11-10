@@ -104,7 +104,10 @@ wivrn::wivrn_connection::wivrn_connection(std::stop_token stop_token, encryption
 	init(stop_token);
 }
 
-void wivrn::wivrn_connection::init(std::stop_token stop_token, std::function<void()> tick)
+wivrn::session_stop_requested::session_stop_requested() :
+        std::runtime_error("Session stop requested") {}
+
+void wivrn::wivrn_connection::init(std::stop_token stop_token, std::function<void()> tick, bool in_session)
 {
 	active = false;
 
@@ -191,6 +194,10 @@ void wivrn::wivrn_connection::init(std::stop_token stop_token, std::function<voi
 			if (fds[2].revents & POLLIN)
 			{
 				auto packet = receive_from_main();
+				// oneVR: StopSession and RestartSession also end a session whose headset is in the
+				// middle of coming back; they were dropped here, and D-Bus had answered them
+				if (packet and in_session and (std::holds_alternative<to_monado::stop>(*packet) or std::holds_alternative<to_monado::restart_session>(*packet)))
+					throw session_stop_requested();
 				if (packet)
 					std::visit([](auto && x) { handle_event_from_main_loop(x); }, *packet);
 			}
@@ -332,7 +339,7 @@ void wivrn::wivrn_connection::reset(std::stop_token stop, TCP && tcp, std::funct
 		stream = decltype(stream)();
 
 	control = std::move(tcp);
-	init(stop, tick);
+	init(stop, tick, true);
 }
 
 void wivrn::wivrn_connection::shutdown()

@@ -1411,6 +1411,13 @@ void wivrn_session::reconnect(std::stop_token stop)
 			reconnect_deadline = 0;
 			break;
 		}
+		catch (session_stop_requested &)
+		{
+			U_LOG_I("Received stop or restart request while a headset connects, stopping");
+			connection->shutdown();
+			request_stop();
+			return;
+		}
 		catch (std::exception & e)
 		{
 			U_LOG_W("Exception while connecting headset: %s", e.what());
