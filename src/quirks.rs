@@ -80,8 +80,10 @@ fn for_exe(exe: &str) -> Quirks {
             no_generic_trackers: true,
             ..Default::default()
         },
-        // Half-Life 2: VR Mod (and episodes) computes throws from hand velocity
-        "hl2.exe" => Quirks {
+        // These read hand velocity for throws and flicks: Half-Life 2: VR Mod (and episodes),
+        // Half-Life: Alyx (upstream issue 281; `hlvr` is its Linux build), H3VR's revolver and
+        // break action flicks (362) and Waltz of the Wizard (372).
+        "hl2.exe" | "hlvr.exe" | "hlvr" | "h3vr.exe" | "waltzofthewizard.exe" => Quirks {
             synthesized_velocity: true,
             ..Default::default()
         },
@@ -131,7 +133,9 @@ mod tests {
         assert!(for_exe("OuterWilds.exe").linear_unorm);
         assert!(for_exe("Outer Wilds.exe").linear_unorm);
         assert!(for_exe("SUPERHOTVR.exe").no_generic_trackers);
-        assert!(for_exe("hl2.exe").synthesized_velocity);
+        for exe in ["hl2.exe", "hlvr.exe", "hlvr", "h3vr.exe", "WaltzOfTheWizard.exe"] {
+            assert!(for_exe(exe).synthesized_velocity, "{exe}");
+        }
         let none = for_exe("BladeAndSorcery.exe");
         assert!(!none.linear_unorm && !none.no_generic_trackers && !none.synthesized_velocity);
     }
