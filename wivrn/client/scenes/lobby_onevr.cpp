@@ -80,9 +80,10 @@ void scenes::lobby::onevr_update_holding()
 	{
 		try
 		{
-			// no profile is a hand nothing tracks, or one tracked without a profile for hands
+			// no profile is a hand nothing tracks, or one tracked without a profile for hands;
+			// path_to_string() names the null path
 			auto profile = session.get_current_interaction_profile(paths[i]);
-			onevr_holding_controller[i] = not profile.empty() and profile != "/interaction_profiles/ext/hand_interaction_ext";
+			onevr_holding_controller[i] = not profile.empty() and profile != "XR_NULL_PATH" and profile != "/interaction_profiles/ext/hand_interaction_ext";
 			spdlog::info("{} holds a controller: {} ({})", paths[i], *onevr_holding_controller[i], profile);
 		}
 		catch (std::exception &)

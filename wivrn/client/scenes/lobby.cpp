@@ -410,8 +410,8 @@ void scenes::lobby::update_server_list()
 		auto protocol = service.txt.find("protocol");
 		if (protocol == service.txt.end())
 			compatible = false;
-
-		if (protocol->second != protocol_string)
+		// oneVR: a service without the key is none to read it from
+		else if (protocol->second != protocol_string)
 			compatible = false;
 
 		auto server = servers.find(cookie);
