@@ -49,14 +49,15 @@ pub const MAX_OVERLAY_SETS: usize = 6;
 pub const GLOBAL_SET: &str = "global";
 
 /// oneVR: for an overlay shown after the head left a layout that stays visible: it comes along, at
-/// its place in the layout, and the rest stays
-const fn bring_along(state: &mut OverlayWindowState) {
+/// its place in the layout and at the layout's size, the anchor's scale, and the rest stays
+fn bring_along(state: &mut OverlayWindowState, anchor: &Affine3A) {
     if matches!(
         state.positioning,
         Positioning::Anchored | Positioning::Floating
     ) && let Some(saved) = state.saved_transform
     {
-        state.pending = PendingPlacement::Seat(saved);
+        let size = Affine3A::from_scale(Vec3::splat(scalar_scale(anchor)));
+        state.pending = PendingPlacement::Seat(size * saved);
     }
 }
 
@@ -289,7 +290,7 @@ where
                     let o = &mut self.overlays[id];
                     log::debug!("{}: toggle on", o.config.name);
                     if left {
-                        bring_along(&mut state);
+                        bring_along(&mut state, &app.anchor);
                     }
                     let fresh = !matches!(state.pending, PendingPlacement::Seat(_))
                         && state.saved_transform.is_none();
@@ -1331,7 +1332,7 @@ impl<T> OverlayWindowManager<T> {
                     let mut state = state;
                     placed_anew |= !matches!(state.pending, PendingPlacement::None);
                     if left {
-                        bring_along(&mut state);
+                        bring_along(&mut state, &app.anchor);
                     }
                     let o = &mut self.overlays[oid];
                     o.config.active_state = Some(state);
@@ -1347,7 +1348,7 @@ impl<T> OverlayWindowManager<T> {
             let mut state = state;
             placed_anew |= !matches!(state.pending, PendingPlacement::None);
             if left {
-                bring_along(&mut state);
+                bring_along(&mut state, &app.anchor);
             }
             let o = &mut self.overlays[oid];
             o.config.active_state = Some(state);

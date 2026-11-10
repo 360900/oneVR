@@ -49,6 +49,10 @@ impl PoseFilter {
             self.last = Some((position, rotation));
             return pose;
         };
+        // no time passed: the speeds would be NaN and stay it until a reset
+        if !(secs > 0.0) || !pose.is_finite() {
+            return Affine3A::from_rotation_translation(last_rotation, last_position);
+        }
 
         let speed_step = low_pass(SPEED_CUTOFF, secs);
         self.position_speed +=
