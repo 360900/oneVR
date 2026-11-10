@@ -163,10 +163,10 @@ void systemd_units_manager::on_job_removed(
 		                         G_CALLBACK(on_unit_result),
 		                         self);
 
-		        bool changed = self->units.empty();
-
+		        // oneVR: every new unit, not only the first: one whose job ends after the session did
+		        // has to be stopped too, or update_fsm waits for it and never listens again
 		        self->units.emplace(std::move(unit));
-		        if (changed and self->state_changed_cb)
+		        if (self->state_changed_cb)
 			        self->state_changed_cb();
 	        },
 	        self);
