@@ -133,7 +133,13 @@ mod tests {
         assert!(for_exe("OuterWilds.exe").linear_unorm);
         assert!(for_exe("Outer Wilds.exe").linear_unorm);
         assert!(for_exe("SUPERHOTVR.exe").no_generic_trackers);
-        for exe in ["hl2.exe", "hlvr.exe", "hlvr", "h3vr.exe", "WaltzOfTheWizard.exe"] {
+        for exe in [
+            "hl2.exe",
+            "hlvr.exe",
+            "hlvr",
+            "h3vr.exe",
+            "WaltzOfTheWizard.exe",
+        ] {
             assert!(for_exe(exe).synthesized_velocity, "{exe}");
         }
         let none = for_exe("BladeAndSorcery.exe");

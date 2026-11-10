@@ -99,7 +99,7 @@ The app list (`IVRApplications`) holds the apps whose manifests were added by th
 
 `XRIZER_HMD_PRESENT` - `1` or `0` answers games asking whether a headset is connected before starting VR, instead of briefly connecting to the runtime to find out.
 
-`XRIZER_RECENTER_STANDING` - `1` makes the runtime's recenter (e.g. holding the Quest system button) recenter standing games too, not just seated ones. Off by default, since on a room-scale setup the standing origin is the calibrated play area.
+`XRIZER_RECENTER_STANDING` - `0` keeps standing games on the play area as it was set up (OpenXR's STAGE). By default they start where the runtime's recentered origin is, on the floor (OpenXR's LOCAL_FLOOR), and the runtime's recenter (e.g. holding the Quest system button) recenters them too, not just seated ones.
 
 `XRIZER_KILL_ON_QUIT` - `0` keeps a game running when it doesn't quit after the runtime asks it to (e.g. WiVRn's stop button). By default, like SteamVR, it's killed 5 seconds later, or 30 if it acknowledges the quit.
 
