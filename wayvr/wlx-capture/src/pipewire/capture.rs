@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::thread::JoinHandle;
 
@@ -17,7 +18,7 @@ use pw::spa;
 
 use pw::Error;
 use pw::properties::properties;
-use pw::stream::{Stream, StreamFlags};
+use pw::stream::{Stream, StreamFlags, StreamState};
 use spa::buffer::DataType;
 use spa::param::ParamType;
 use spa::param::video::VideoFormat;
@@ -67,6 +68,8 @@ where
     node_id: u32,
     /// oneVR: the only frame size offered
     size: Option<(u32, u32)>,
+    /// oneVR: the stream failed or lost its node
+    ended: Arc<AtomicBool>,
     handle: Option<JoinHandle<Result<(), Error>>>,
 }
 
@@ -80,6 +83,7 @@ where
             data: None,
             node_id,
             size: None,
+            ended: Arc::default(),
             handle: None,
         }
     }
@@ -127,6 +131,7 @@ where
             let name = self.name.clone();
             let node_id = self.node_id;
             let size = self.size;
+            let ended = self.ended.clone();
             let formats = dmabuf_formats.to_vec();
 
             move || {
@@ -134,6 +139,7 @@ where
                     name,
                     node_id,
                     size,
+                    ended,
                     formats,
                     tx_frame,
                     rx_ctrl,
@@ -182,6 +188,9 @@ where
         }
     }
     fn request_new_frame(&mut self) {}
+    fn is_closed(&mut self) -> bool {
+        self.ended.load(Ordering::Relaxed)
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -189,6 +198,7 @@ fn main_loop<U, R>(
     name: Arc<str>,
     node_id: u32,
     size: Option<(u32, u32)>,
+    ended: Arc<AtomicBool>,
     dmabuf_formats: Vec<DrmFormat>,
     sender: mpsc::SyncSender<R>,
     receiver: pw::channel::Receiver<PwChangeRequest>,
@@ -228,6 +238,13 @@ where
             let name = name.clone();
             move |_, _, old, new| {
                 log::info!("{}: stream state changed: {:?} -> {:?}", name, old, new);
+                // oneVR: an error, or the node went away under a stream that ran
+                let ran = matches!(old, StreamState::Paused | StreamState::Streaming);
+                if matches!(new, StreamState::Error(_))
+                    || (ran && matches!(new, StreamState::Unconnected))
+                {
+                    ended.store(true, Ordering::Relaxed);
+                }
             }
         })
         .param_changed({

@@ -681,6 +681,27 @@ impl VirtualMonitorBackend {
             // expected while the desktop refuses, as GNOME does while locked
             log::info!("{}: {error:#}, trying again in {delay}s", self.name);
         }
+        self.retry_later();
+    }
+
+    /// The compositor closed the stream and took its output along: the monitor would show its
+    /// last frame for good. Has the output added again, like a restored monitor that failed.
+    fn reopen(&mut self, app: &mut AppState) {
+        log::warn!(
+            "{}: the compositor closed the virtual monitor, adding it again",
+            self.name
+        );
+        // the capture ends before a new output is asked for, and the next look finds that one
+        self.screen = None;
+        self.output = None;
+        crate::onevr::forget_virtual_monitor_output(app, &self.name);
+        // it worked before, so a refusal now is one to wait out, as GNOME's while locked
+        self.restore = true;
+        self.retry_later();
+    }
+
+    /// Tries again after a wait that doubles each time
+    fn retry_later(&mut self) {
         self.retry_at = Some(Instant::now() + self.retry_delay);
         let max = match self.method {
             Method::Kde | Method::Mutter => RETRY_DELAY_MAX_STREAM,
@@ -828,10 +849,15 @@ impl OverlayBackend for VirtualMonitorBackend {
             return Ok(ShouldRender::Unable);
         }
         self.follow_layout(app);
-        match self.screen.as_mut() {
-            Some(screen) => screen.should_render(app),
-            None => Ok(ShouldRender::Unable),
+        let Some(screen) = self.screen.as_mut() else {
+            return Ok(ShouldRender::Unable);
+        };
+        let should = screen.should_render(app)?;
+        if screen.is_closed() {
+            self.reopen(app);
+            return Ok(ShouldRender::Unable);
         }
+        Ok(should)
     }
     fn render(&mut self, app: &mut AppState, rdr: &mut RenderResources) -> anyhow::Result<()> {
         match self.screen.as_mut() {

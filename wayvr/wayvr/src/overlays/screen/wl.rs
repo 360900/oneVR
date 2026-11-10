@@ -1,6 +1,7 @@
 use glam::{DVec2, vec2};
 use wgui::{i18n::Translation, log::LogErr};
 use wlx_capture::{
+    WlxCapture,
     ext_image_copy_capture::ExtImageCopyCapture,
     frame::Transform,
     kde_screencast::KdeScreencastCapture,
@@ -13,7 +14,12 @@ use wlx_common::{astr_containers::AStrMapExt, config::CaptureMethod, overlays::T
 use crate::{
     backend::task::TaskType,
     overlays::{
-        screen::{backend::CaptureType, create_screen_from_backend, pw::ScreenCastBackend},
+        screen::{
+            backend::{CaptureType, Reopen},
+            capture::{WlxCaptureIn, WlxCaptureOut},
+            create_screen_from_backend,
+            pw::ScreenCastBackend,
+        },
         toast::Toast,
     },
     state::{AppState, ScreenMeta},
@@ -52,12 +58,14 @@ impl ScreenBackend {
             app,
             MutterScreencastCapture::new(output.name.clone(), &output.name, true)?
         );
-        Some(Self::new_raw(
+        let mut backend = Self::new_raw(
             output.name.clone(),
             app.feats.xr_backend,
             CaptureType::PipeWire,
             capture,
-        ))
+        );
+        backend.reopen = Some(Reopen::Mutter);
+        Some(backend)
     }
 
     /// oneVR: KWin's own screencast, a PipeWire stream of the output without the portal's picker
@@ -65,12 +73,37 @@ impl ScreenBackend {
         let client = Box::new(WlxClient::new()?);
         // the macro names the capture in each of its branches, the frame type differs
         let capture = new_wlx_capture!(app, KdeScreencastCapture::new(client, output.id, true)?);
-        Some(Self::new_raw(
+        let mut backend = Self::new_raw(
             output.name.clone(),
             app.feats.xr_backend,
             CaptureType::PipeWire,
             capture,
-        ))
+        );
+        backend.reopen = Some(Reopen::Kde);
+        Some(backend)
+    }
+
+    /// oneVR: a new stream of this screen's output, None while the compositor refuses or the
+    /// output is gone
+    pub(super) fn reopened(
+        &self,
+        reopen: Reopen,
+        app: &AppState,
+    ) -> Option<Box<dyn WlxCapture<WlxCaptureIn, WlxCaptureOut>>> {
+        let name = self.name.clone();
+        Some(match reopen {
+            Reopen::Kde => {
+                let client = Box::new(WlxClient::new()?);
+                let id = client.outputs.values().find(|o| o.name == name)?.id;
+                new_wlx_capture!(app, KdeScreencastCapture::new(client, id, true)?)
+            }
+            Reopen::Mutter => {
+                new_wlx_capture!(
+                    app,
+                    MutterScreencastCapture::new(name.clone(), &name, true)?
+                )
+            }
+        })
     }
 }
 

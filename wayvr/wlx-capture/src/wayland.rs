@@ -473,7 +473,8 @@ impl Dispatch<ZwlrExportDmabufManagerV1, ()> for WlxClient {
     }
 }
 
-/// oneVR: the answer to a KDE screencast request: the PipeWire node, or why there is none
+/// oneVR: the answer to a KDE screencast request: the PipeWire node, or why there is none,
+/// which a stream that closes becomes too
 pub type KdeStreamResult = Arc<Mutex<Option<Result<u32, String>>>>;
 
 impl Dispatch<ZkdeScreencastUnstableV1, ()> for WlxClient {
@@ -507,7 +508,8 @@ impl Dispatch<ZkdeScreencastStreamUnstableV1, KdeStreamResult> for WlxClient {
             zkde_screencast_stream_unstable_v1::Event::Failed { error } => {
                 *result = Some(Err(error));
             }
-            zkde_screencast_stream_unstable_v1::Event::Closed if result.is_none() => {
+            // also after it was created: the stream gives no more frames
+            zkde_screencast_stream_unstable_v1::Event::Closed => {
                 *result = Some(Err("closed by the compositor".into()));
             }
             _ => {}

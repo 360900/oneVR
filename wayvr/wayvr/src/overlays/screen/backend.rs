@@ -1,6 +1,6 @@
 use std::{
     sync::{Arc, LazyLock, atomic::AtomicU64},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use glam::{Affine2, DVec2, Vec2, vec2};
@@ -46,8 +46,23 @@ pub(super) enum CaptureType {
     Xshm,
 }
 
+/// oneVR: a compositor's own screencast of an output, which can be asked for again once the
+/// compositor closed it
+#[cfg_attr(not(feature = "wayland"), allow(dead_code))]
+#[derive(Clone, Copy)]
+pub(super) enum Reopen {
+    Kde,
+    Mutter,
+}
+
+/// oneVR: the wait before asking for a closed stream again, doubled after each refusal: the
+/// compositor may need a moment, as while PipeWire restarts, and an output that is gone is
+/// refused until WayVR drops its screen
+const REOPEN_DELAY: Duration = Duration::from_secs(1);
+const REOPEN_DELAY_MAX: Duration = Duration::from_secs(30);
+
 pub struct ScreenBackend {
-    name: Arc<str>,
+    pub(super) name: Arc<str>,
     capture_type: CaptureType,
     capture: Box<dyn WlxCapture<WlxCaptureIn, WlxCaptureOut>>,
     pipeline: Option<ScreenPipeline>,
@@ -62,6 +77,12 @@ pub struct ScreenBackend {
     pub(super) logical_size: Vec2,
     mouse_transform_override: MouseTransform,
     just_resumed: bool,
+    /// oneVR: how to get the capture again, None if only whoever made the screen can
+    pub(super) reopen: Option<Reopen>,
+    /// oneVR: the compositor closed the capture's stream, the screen shows its last frame
+    closed: bool,
+    reopen_at: Instant,
+    reopen_delay: Duration,
 }
 
 impl ScreenBackend {
@@ -87,6 +108,56 @@ impl ScreenBackend {
             logical_size: Vec2::ZERO,
             mouse_transform_override: MouseTransform::Default,
             just_resumed: false,
+            reopen: None,
+            closed: false,
+            reopen_at: Instant::now(),
+            reopen_delay: REOPEN_DELAY,
+        }
+    }
+
+    /// oneVR: only Wayland compositors have a screencast to ask for again
+    #[cfg(not(feature = "wayland"))]
+    #[allow(clippy::unused_self)]
+    fn reopened(
+        &self,
+        _reopen: Reopen,
+        _app: &AppState,
+    ) -> Option<Box<dyn WlxCapture<WlxCaptureIn, WlxCaptureOut>>> {
+        None
+    }
+
+    /// oneVR: the compositor closed the stream and this screen can't ask for another
+    #[cfg_attr(not(feature = "wayland"), allow(dead_code))]
+    pub(super) const fn is_closed(&self) -> bool {
+        self.closed && self.reopen.is_none()
+    }
+
+    /// oneVR: a screen whose stream closed would show its last frame for good. Asks the
+    /// compositor for a new stream, which the next frame sets up like the first one.
+    fn follow_closed(&mut self, app: &AppState) {
+        if !self.closed {
+            if !self.capture.is_ready() || !self.capture.is_closed() {
+                return;
+            }
+            self.closed = true;
+            self.reopen_at = Instant::now() + REOPEN_DELAY;
+            self.reopen_delay = REOPEN_DELAY;
+            log::warn!("{}: the compositor closed the capture's stream", self.name);
+        }
+        let Some(reopen) = self.reopen else {
+            return;
+        };
+        let now = Instant::now();
+        if now < self.reopen_at {
+            return;
+        }
+        if let Some(capture) = self.reopened(reopen, app) {
+            log::info!("{}: capturing again", self.name);
+            self.capture = capture;
+            self.closed = false;
+        } else {
+            self.reopen_delay = (self.reopen_delay * 2).min(REOPEN_DELAY_MAX);
+            self.reopen_at = now + self.reopen_delay;
         }
     }
 
@@ -150,6 +221,7 @@ impl OverlayBackend for ScreenBackend {
         Ok(())
     }
     fn should_render(&mut self, app: &mut AppState) -> anyhow::Result<ShouldRender> {
+        self.follow_closed(app);
         if !self.capture.is_ready() {
             let supports_dmabuf =
                 app.gfx.capabilities().external_memory_dma_buf && self.capture.supports_dmbuf();

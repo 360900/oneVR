@@ -43,4 +43,9 @@ pub trait WlxCapture<U, R> {
     fn pause(&mut self);
     fn resume(&mut self);
     fn request_new_frame(&mut self);
+    /// oneVR: the source ended the capture and gives no more frames, as a compositor's stream
+    /// that closed. Asked once a frame, doesn't block.
+    fn is_closed(&mut self) -> bool {
+        false
+    }
 }

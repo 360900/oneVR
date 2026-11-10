@@ -1086,6 +1086,9 @@ where
     fn resume(&mut self) {
         self.inner.resume();
     }
+    fn is_closed(&mut self) -> bool {
+        self.inner.is_closed()
+    }
     fn receive(&mut self) -> Option<WlxCaptureOut> {
         let frame = self.inner.receive()?;
         match frame {

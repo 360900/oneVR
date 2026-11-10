@@ -4,7 +4,10 @@
 
 use std::{
     any::Any,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -70,6 +73,8 @@ pub struct MutterSession {
     /// the session lives as long as this connection
     conn: Connection,
     session: Path<'static>,
+    /// the compositor ended the session
+    closed: Arc<AtomicBool>,
 }
 
 impl MutterSession {
@@ -179,6 +184,20 @@ impl MutterSession {
         };
         let _ = conn.remove_match(token);
 
+        // stays for the session's life, `is_closed` reads it
+        let closed: Arc<AtomicBool> = Arc::default();
+        let rule = MatchRule::new_signal(SESSION, "Closed").with_path(session.clone());
+        let added = conn.add_match(rule, {
+            let closed = closed.clone();
+            move |(): (), _: &Connection, _: &Message| {
+                closed.store(true, Ordering::Relaxed);
+                true
+            }
+        });
+        if let Err(e) = added {
+            log::warn!("{name}: Mutter screencast: no word when the session closes: {e}");
+        }
+
         log::info!("{name}: Mutter screencast: PipeWire node {node}");
         Some(Self {
             name,
@@ -186,7 +205,21 @@ impl MutterSession {
             size,
             conn,
             session,
+            closed,
         })
+    }
+
+    /// The compositor ended the session, as it does when the monitor goes or the screen
+    /// locks, or the bus connection is lost
+    fn is_closed(&self) -> bool {
+        if let Err(e) = self.conn.process(Duration::ZERO) {
+            log::warn!(
+                "{}: Mutter screencast: the session bus failed: {e}",
+                self.name
+            );
+            return true;
+        }
+        self.closed.load(Ordering::Relaxed)
     }
 }
 
@@ -199,6 +232,10 @@ fn has_owner(conn: &Connection) -> bool {
 
 impl Drop for MutterSession {
     fn drop(&mut self) {
+        // a closed session is gone already
+        if self.closed.load(Ordering::Relaxed) {
+            return;
+        }
         let session = self.conn.with_proxy(BUS, self.session.clone(), TIMEOUT);
         let _: Result<(), _> = session.method_call(SESSION, "Stop", ());
     }
@@ -234,5 +271,9 @@ where
     }
     fn request_new_frame(&mut self) {
         <PipewireCapture<R> as WlxCapture<U, R>>::request_new_frame(&mut self.inner);
+    }
+    fn is_closed(&mut self) -> bool {
+        self.session.is_closed()
+            || <PipewireCapture<R> as WlxCapture<U, R>>::is_closed(&mut self.inner)
     }
 }

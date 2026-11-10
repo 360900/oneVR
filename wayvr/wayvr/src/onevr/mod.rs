@@ -285,6 +285,19 @@ pub fn set_virtual_monitor_output(app: &mut AppState, name: &str, output: Arc<st
     app.onevr.layout_gen += 1;
 }
 
+/// The compositor removed the monitor's output, so the next one it adds isn't taken for another's
+pub fn forget_virtual_monitor_output(app: &mut AppState, name: &str) {
+    if let Some(m) = app
+        .onevr
+        .virtual_monitors
+        .iter_mut()
+        .find(|m| &*m.name == name)
+    {
+        m.output = None;
+    }
+    app.onevr.layout_gen += 1;
+}
+
 /// Changes when outputs were added or removed. wlroots and Hyprland then place the
 /// auto-placed outputs again, oneVR's among them.
 pub const fn layout_gen(app: &AppState) -> u64 {

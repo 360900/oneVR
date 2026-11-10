@@ -59,6 +59,8 @@ pub struct KdeStream {
     name: Arc<str>,
     node: u32,
     stream: ZkdeScreencastStreamUnstableV1,
+    /// turns into an error once the compositor closes the stream
+    result: KdeStreamResult,
     /// keeps the connection, and with it the stream, alive
     client: Box<WlxClient>,
 }
@@ -143,6 +145,7 @@ impl KdeStream {
                     name,
                     node,
                     stream,
+                    result: result.clone(),
                     client,
                 })
             }
@@ -153,6 +156,23 @@ impl KdeStream {
                 None
             }
         }
+    }
+}
+
+impl KdeStream {
+    /// The compositor closed the stream, as it does when the output goes or PipeWire restarts,
+    /// or the connection to it is lost
+    fn is_closed(&mut self) -> bool {
+        if let Err(e) = self.client.try_dispatch_pending() {
+            log::warn!(
+                "{}: KDE screencast: the Wayland connection failed: {e}",
+                self.name
+            );
+            return true;
+        }
+        self.result
+            .lock()
+            .is_ok_and(|result| matches!(*result, Some(Err(_))))
     }
 }
 
@@ -209,5 +229,9 @@ where
     }
     fn request_new_frame(&mut self) {
         <PipewireCapture<R> as WlxCapture<U, R>>::request_new_frame(&mut self.inner);
+    }
+    fn is_closed(&mut self) -> bool {
+        self.stream.is_closed()
+            || <PipewireCapture<R> as WlxCapture<U, R>>::is_closed(&mut self.inner)
     }
 }
