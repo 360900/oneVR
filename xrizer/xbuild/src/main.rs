@@ -28,6 +28,9 @@ enum Message {
     Unknown,
 }
 
+/// The crash dialog's executable, see the library's `show_crash_dialog`.
+const CRASH_DIALOG: &str = "xrizer-crash-dialog";
+
 fn main() {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
     let mut cmd = Command::new(cargo)
@@ -47,6 +50,7 @@ fn main() {
     let mut stdout = BufReader::new(stdout);
 
     let mut lib_path: Option<String> = None;
+    let mut crash_dialog_path: Option<String> = None;
     let mut platform_dir: Option<String> = None;
     let mut vrclient_name: Option<String> = None;
     let mut line = String::new();
@@ -58,6 +62,10 @@ fn main() {
         match msg {
             Message::CompilerArtifact(a) => {
                 let target = a.target;
+                if target.name == CRASH_DIALOG && target.crate_types.contains(&"bin".into()) {
+                    crash_dialog_path = a.filenames.into_iter().next();
+                    continue;
+                }
                 if !(target.name == "xrizer_edge" && target.crate_types.contains(&"cdylib".into()))
                 {
                     continue;
@@ -110,8 +118,16 @@ fn main() {
             .extension()
             .expect("build shared library should have an extension"),
     );
-    if let Err(e) = link_vrclient(&lib_path, &vrclient_path) {
+    if let Err(e) = link_build(&lib_path, &vrclient_path) {
         eprintln!("Failed to create vrclient symlink {vrclient_path:?}: {e}");
+        std::process::exit(1);
+    }
+
+    // The library starts the crash dialog from its own directory.
+    let crash_dialog_path = PathBuf::from(crash_dialog_path.expect("crash dialog path missing"));
+    let crash_dialog_link = platform_path.join(CRASH_DIALOG);
+    if let Err(e) = link_build(&crash_dialog_path, &crash_dialog_link) {
+        eprintln!("Failed to create crash dialog symlink {crash_dialog_link:?}: {e}");
         std::process::exit(1);
     }
 
@@ -151,13 +167,13 @@ fn main() {
     }
 }
 
-/// Points `vrclient_path` at `lib_path`, replacing a link to anything else
+/// Points `link_path` at `build_path`, replacing a link to anything else
 /// (e.g. a library from before a crate rename) so games don't silently load a
 /// stale build. Fails rather than delete anything that isn't a symlink.
-fn link_vrclient(lib_path: &Path, vrclient_path: &Path) -> std::io::Result<()> {
-    match std::fs::read_link(vrclient_path) {
-        Ok(target) if target == lib_path => return Ok(()),
-        Ok(_) => std::fs::remove_file(vrclient_path)?,
+fn link_build(build_path: &Path, link_path: &Path) -> std::io::Result<()> {
+    match std::fs::read_link(link_path) {
+        Ok(target) if target == build_path => return Ok(()),
+        Ok(_) => std::fs::remove_file(link_path)?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
         Err(e) if e.kind() == std::io::ErrorKind::InvalidInput => {
             return Err(std::io::Error::new(
@@ -167,7 +183,7 @@ fn link_vrclient(lib_path: &Path, vrclient_path: &Path) -> std::io::Result<()> {
         }
         Err(e) => return Err(e),
     }
-    std::os::unix::fs::symlink(lib_path, vrclient_path)
+    std::os::unix::fs::symlink(build_path, link_path)
 }
 
 impl DeJson for Message {
@@ -200,7 +216,7 @@ impl DeJson for Message {
 
 #[cfg(test)]
 mod tests {
-    use super::link_vrclient;
+    use super::link_build;
     use std::path::PathBuf;
 
     fn test_dir(name: &str) -> PathBuf {
@@ -220,17 +236,17 @@ mod tests {
         std::fs::write(&old_lib, "old").unwrap();
         std::fs::write(&new_lib, "new").unwrap();
 
-        link_vrclient(&old_lib, &vrclient).unwrap();
-        link_vrclient(&new_lib, &vrclient).unwrap();
+        link_build(&old_lib, &vrclient).unwrap();
+        link_build(&new_lib, &vrclient).unwrap();
         assert_eq!(std::fs::read_link(&vrclient).unwrap(), new_lib);
         // unchanged link is kept
-        link_vrclient(&new_lib, &vrclient).unwrap();
+        link_build(&new_lib, &vrclient).unwrap();
         assert_eq!(std::fs::read_link(&vrclient).unwrap(), new_lib);
 
         // dangling link, e.g. after the checkout moved
         std::fs::remove_file(&vrclient).unwrap();
         std::os::unix::fs::symlink(dir.join("gone.so"), &vrclient).unwrap();
-        link_vrclient(&new_lib, &vrclient).unwrap();
+        link_build(&new_lib, &vrclient).unwrap();
         assert_eq!(std::fs::read_link(&vrclient).unwrap(), new_lib);
 
         std::fs::remove_dir_all(&dir).unwrap();
@@ -245,7 +261,7 @@ mod tests {
         std::fs::write(&lib, "lib").unwrap();
         std::fs::write(&vrclient, "copied").unwrap();
 
-        let err = link_vrclient(&lib, &vrclient).unwrap_err();
+        let err = link_build(&lib, &vrclient).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
         assert_eq!(std::fs::read_to_string(&vrclient).unwrap(), "copied");
 

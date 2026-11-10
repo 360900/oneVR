@@ -1754,9 +1754,22 @@ pub fn handle_sources(
                 };
 
                 if let Some(pull) = pull {
-                    let _ = pull
-                        .try_bind_with_component(path, context, validate_path)
-                        .inspect_err(|e| e.report(context));
+                    let pull_path = path.with_component(DynComponent::Value);
+                    let finger_curl = path.subpath.finger().is_some()
+                        && validate_path(pull_path).is_some_and(|fallback| {
+                            context.add_finger_curl_binding(
+                                &pull.output,
+                                pull_path,
+                                fallback,
+                                action_set_name,
+                                action_set,
+                            )
+                        });
+                    if !finger_curl {
+                        let _ = pull
+                            .try_bind_with_component(path, context, validate_path)
+                            .inspect_err(|e| e.report(context));
+                    }
                 }
 
                 if let Some(click) = click {

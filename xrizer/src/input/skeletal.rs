@@ -277,47 +277,55 @@ impl<C: openxr_data::Compositor> Input<C> {
         summary_data: &mut vr::VRSkeletalSummaryData_t,
         hand: Hand,
     ) {
-        let devices = session_data.input_data.devices.read().unwrap();
-
-        let Some(controller) = devices.get_controller(hand) else {
+        let Some(curls) = self.tracked_finger_curls(session_data, hand) else {
             self.get_estimated_bone_summary(session_data, summary_type, summary_data, hand);
             return;
         };
+
+        // FIXME: calculate splay
+        summary_data.flFingerSplay.fill(0.2);
+        summary_data.flFingerCurl = curls;
+
+        log::trace!(
+            "skeletal summary for {hand:?} (hand tracking): curls {:?}",
+            summary_data.flFingerCurl
+        );
+    }
+
+    /// The curl of each finger of the hand, thumb first, if the runtime tracks its fingers rather
+    /// than deriving them from the controller's inputs.
+    pub(super) fn tracked_finger_curls(
+        &self,
+        session_data: &SessionData,
+        hand: Hand,
+    ) -> Option<[f32; 5]> {
+        let devices = session_data.input_data.devices.read().unwrap();
+        let controller = devices.get_controller(hand)?;
 
         // The curls only depend on the joints relative to each other, so the tracking space
         // works for a hand without a grip space.
         let (raw, _) = joint_space(session_data, controller, hand);
         let base = raw.as_deref().unwrap_or(session_data.tracking_space());
-        let Some(HandSkeleton { joints, .. }) = controller
+        let HandSkeleton { joints, .. } = controller
             .get_hand_skeleton(&self.openxr, base)
-            .filter(|skeleton| !controller.skeleton_follows_inputs(skeleton.data_source))
-        else {
-            self.get_estimated_bone_summary(session_data, summary_type, summary_data, hand);
-            return;
-        };
+            .filter(|skeleton| !controller.skeleton_follows_inputs(skeleton.data_source))?;
+        let force_estimated_thumb = controller
+            .profile_data
+            .as_ref()
+            .is_some_and(|p| p.force_estimated_thumb);
+        drop(devices);
 
         let joints: Box<[_]> = joints
             .into_iter()
             .map(|joint_location| {
                 let position = joint_location.pose.position;
-                let orientation = joint_location.pose.orientation;
-                (
-                    Vec3::from_array([position.x, position.y, position.z]),
-                    Quat::from_xyzw(orientation.x, orientation.y, orientation.z, orientation.w),
-                )
+                Vec3::from_array([position.x, position.y, position.z])
             })
             .collect();
 
-        // FIXME: calculate splay
-        summary_data.flFingerSplay.fill(0.2);
-
-        for (i, out_curl) in summary_data.flFingerCurl.iter_mut().enumerate() {
-            if i == 0
-                && controller
-                    .profile_data
-                    .as_ref()
-                    .is_some_and(|p| p.force_estimated_thumb)
-            {
+        let mut curls = [0.0; 5];
+        for (i, out_curl) in curls.iter_mut().enumerate() {
+            if i == 0 && force_estimated_thumb {
                 *out_curl = self.get_finger_state(session_data, hand).thumb;
                 continue;
             }
@@ -352,9 +360,9 @@ impl<C: openxr_data::Compositor> Input<C> {
             };
 
             // Vector pointing from the knuckle to the metacarpal
-            let proximal_metacarpal_delta = metacarpal.0 - proximal.0;
+            let proximal_metacarpal_delta = metacarpal - proximal;
             // Vector pointing from the knuckle to the tip of the finger
-            let tip_proximal_delta = tip.0 - proximal.0;
+            let tip_proximal_delta = tip - proximal;
 
             // The dotproduct will give us the angle between the two vectors
             let dot = proximal_metacarpal_delta.dot(tip_proximal_delta);
@@ -381,11 +389,7 @@ impl<C: openxr_data::Compositor> Input<C> {
             const MAX_CURL: f32 = 0.8;
             *out_curl = (curl / MAX_CURL).clamp(0.0, 1.0);
         }
-
-        log::trace!(
-            "skeletal summary for {hand:?} (hand tracking): curls {:?}",
-            summary_data.flFingerCurl
-        );
+        Some(curls)
     }
 
     pub(super) fn get_estimated_bones(
@@ -1957,5 +1961,122 @@ mod tests {
         check_estimated_bones::<Pico4>(&mut f, &skeletons);
         check_estimated_bones::<PicoNeo3>(&mut f, &skeletons);
         check_estimated_bones::<ViveFocus3>(&mut f, &skeletons);
+    }
+
+    /// The Index's finger curl inputs (`/input/finger/*`) read the tracked fingers while the
+    /// runtime tracks them, and the trigger and grip values otherwise.
+    #[test]
+    fn finger_curl_actions_follow_tracked_fingers() {
+        use crate::input::profiles::knuckles::Knuckles;
+        use xr::HandTrackingDataSourceEXT as Source;
+        fakexr::set_hand_tracking_supported(true);
+        let mut f = Fixture::new();
+        let set = f.get_action_set_handle(c"/actions/hands");
+        let fingers = [
+            c"/actions/hands/in/indexcurl",
+            c"/actions/hands/in/middlecurl",
+            c"/actions/hands/in/ringcurl",
+            c"/actions/hands/in/pinkycurl",
+        ]
+        .map(|name| f.get_action_handle(name));
+        f.load_actions(c"actions_fingers.json");
+        // fakexr can't locate in the stage space.
+        f.input
+            .openxr
+            .set_tracking_space(vr::ETrackingUniverseOrigin::Seated);
+
+        for hand in [Hand::Left, Hand::Right] {
+            let side = match hand {
+                Hand::Left => "left",
+                Hand::Right => "right",
+            };
+            let input = |name: &str| {
+                let name = std::ffi::CString::new(format!(
+                    "/user/hand/{side}/input/{name}/value-/actions/hands"
+                ))
+                .unwrap();
+                f.get_action::<f32>(f.get_action_handle(&name))
+            };
+            let (trigger, grip) = (input("trigger"), input("squeeze"));
+            let restrict = f.get_input_source_handle(
+                &std::ffi::CString::new(format!("/user/hand/{side}")).unwrap(),
+            );
+            let origins = ["index", "middle", "ring", "pinky"].map(|finger| {
+                f.get_input_source_handle(
+                    &std::ffi::CString::new(format!("/user/hand/{side}/input/finger/{finger}"))
+                        .unwrap(),
+                )
+            });
+            f.set_interaction_profile::<Knuckles>(user_path(hand));
+            let set_value = |action, value| {
+                fakexr::set_action_state(action, fakexr::ActionState::Float(value), user_path(hand))
+            };
+            set_value(trigger, 0.25);
+            set_value(grip, 0.75);
+            let sync = |f: &mut Fixture| {
+                f.input.frame_start_update();
+                f.sync(vr::VRActiveActionSet_t {
+                    ulActionSet: set,
+                    ..Default::default()
+                });
+            };
+            let curls = |f: &Fixture| {
+                fingers.map(|action| {
+                    let mut state = vr::InputAnalogActionData_t::default();
+                    assert_eq!(
+                        f.input.GetAnalogActionData(
+                            action,
+                            &mut state,
+                            std::mem::size_of_val(&state) as u32,
+                            restrict,
+                        ),
+                        vr::EVRInputError::None
+                    );
+                    assert!(state.bActive, "{hand:?}");
+                    (state.x, state.activeOrigin)
+                })
+            };
+            let values = |curls: [(f32, vr::VRInputValueHandle_t); 4]| curls.map(|(x, _)| x);
+
+            // No tracked fingers.
+            sync(&mut f);
+            let untracked = curls(&f);
+            assert_eq!(values(untracked), [0.25, 0.75, 0.75, 0.75], "{hand:?}");
+            assert_eq!(untracked.map(|(_, origin)| origin), origins, "{hand:?}");
+
+            // Each finger's own curl, even with the trigger and grip released.
+            set_value(trigger, 0.0);
+            set_value(grip, 0.0);
+            fakexr::set_hand_tracked(f.raw_session(), user_path(hand), Some(Source::CONTROLLER));
+            let (open, fist) = match hand {
+                Hand::Left => (&generated::left_hand::OPENHAND, &generated::left_hand::FIST),
+                Hand::Right => (
+                    &generated::right_hand::OPENHAND,
+                    &generated::right_hand::FIST,
+                ),
+            };
+            place_joints::<Knuckles>(&f, hand, fist);
+            sync(&mut f);
+            let fist_curls = curls(&f);
+            assert!(
+                values(fist_curls).iter().all(|curl| *curl > 0.8),
+                "{hand:?}: {fist_curls:?}"
+            );
+            assert_eq!(fist_curls.map(|(_, origin)| origin), origins, "{hand:?}");
+            place_joints::<Knuckles>(&f, hand, open);
+            sync(&mut f);
+            let open_curls = values(curls(&f));
+            assert!(
+                open_curls.iter().all(|curl| *curl < 0.2),
+                "{hand:?}: {open_curls:?}"
+            );
+
+            // The trigger and grip again once the fingers aren't tracked.
+            fakexr::set_hand_tracked(f.raw_session(), user_path(hand), None);
+            fakexr::set_hand_joints(f.raw_session(), user_path(hand), None);
+            set_value(trigger, 0.5);
+            sync(&mut f);
+            assert_eq!(values(curls(&f)), [0.5, 0.0, 0.0, 0.0], "{hand:?}");
+        }
     }
 }

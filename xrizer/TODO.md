@@ -16,6 +16,7 @@ Effort: S under a day, M a few days, L a week or more. "WiVRn" notes describe wh
    - PSVR2 Sense: `XR_MNDX_psvr2_interaction` is a preview in Monado main only, WiVRn builds without it; works as Touch today
    - Cosmos registered device type, serials and render model names unverified; Focus 3 tracking system may be `vive_eyes` like the Cosmos; `vive_tracker_*` default bindings still ignored (trackers: 21)
    - gamepad has no tracked device or binding variant; untested on a headset
+   - Frame: model numbers and serials are guesses (upstream PR 464 reports `Roy_Left`/`Roy_Right`, found in no SteamVR file); its 30° wrist rotation isn't taken: SteamVR 2.12 changed the wrist to match the OpenXR spec, which the skeleton follows, and one report calls the new one 30° off; needs a Frame test
 3. Frame timing (S)
    - `XR_META_performance_metrics` unused (no Linux runtime has it)
 4. Haptics (S)
@@ -27,6 +28,10 @@ Effort: S under a day, M a few days, L a week or more. "WiVRn" notes describe wh
 6. Color space (S)
    - Outer Wilds (NomaiVR) quirk rests on one report (#441), needs a headset check
    - D3D11 `R16G16B16A16_TYPELESS` arrives through Proton as UNORM, wrong if rendered as float
+
+7. Controller velocity (S-M)
+   - linear velocity from position deltas only for the games in `quirks.rs` (#281, #362, #372); why WiVRn's is low is unknown, so other games need `XRIZER_SYNTHESIZED_VELOCITY=1`
+   - angular velocity is the runtime's; H3VR's flicks reportedly need an odd axis (#362)
 
 ## 2. Fake success and crash insurance
 
@@ -63,6 +68,7 @@ Effort: S under a day, M a few days, L a week or more. "WiVRn" notes describe wh
     - `SetOverlayFromFile`, `GetOverlayTexture`, `GetOverlayImageData`, IVROverlayView
     - overlays past the runtime's layer limit are dropped (SteamVR allows 128)
 17. Notifications and message boxes are never drawn (M)
+    - `ShowActionOrigins` and `ShowBindingsForActionSet` succeed without showing the binding hints (#331)
     - option: WayVR toasts over WayVR IPC
 
 ## 4. Accuracy and polish
@@ -118,6 +124,7 @@ Effort: S under a day, M a few days, L a week or more. "WiVRn" notes describe wh
     - `GetMirrorTextureGL`, `GetMirrorTextureD3D11` unimplemented
 28. Chaperone (S)
     - calibration state always OK; unknown play area becomes 1x1 m (an error state would stop games on runtimes without bounds)
+    - the seated zero starts as the runtime's LOCAL, so a game that never resets it sits where the user last recentered (#405); SteamVR keeps the user's seated zero the same way
     - `AreBoundsVisible` only knows what the app forced; `GetBoundsColor` ignores the fade distance; ChaperoneSetup writes ignored, the runtime owns its bounds
 29. Settings (S)
     - the user's `steamvr.vrsettings` values (e.g. `supersampleScale`) aren't read, only bindings choices are

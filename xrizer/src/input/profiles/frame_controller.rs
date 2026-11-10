@@ -191,48 +191,66 @@ impl InteractionProfile for FrameController {
                 c.into::<Left<DpadLeft, Touch>, _>(),
                 c.into::<Left<DpadDown, Touch>, _>(),
                 c.into::<Left<DpadRight, Touch>, _>(),
+                c.into::<Left<View, Touch>, _>(),
                 c.into::<Right<A, Touch>, _>(),
                 c.into::<Right<B, Touch>, _>(),
                 c.into::<Right<X, Touch>, _>(),
                 c.into::<Right<Y, Touch>, _>(),
+                c.into::<Right<Menu, Touch>, _>(),
             ]
             .concat(),
-            index_touch: c.leftright::<Trigger, Touch, _, _>(),
-            index_curl: c.leftright::<Trigger, Value, _, _>(),
+            // The index finger rests on the bumper or the trigger, and is as bent pressing
+            // the bumper as pulling the trigger.
+            index_touch: [
+                c.leftright::<Bumper, Touch, _, _>(),
+                c.leftright::<Trigger, Touch, _, _>(),
+            ]
+            .concat(),
+            index_curl: [
+                c.leftright::<Bumper, Click, _, _>(),
+                c.leftright::<Trigger, Value, _, _>(),
+            ]
+            .concat(),
             rest_curl: c.leftright::<Squeeze, Value, _, _>(),
         }
     }
 
     fn offset_grip_pose(hand: Hand) -> Mat4 {
-        match hand {
-            Hand::Left => Mat4::from_rotation_translation(
-                Quat::from_euler(
-                    EulerRot::ZYX,
-                    0.303_f32.to_radians(),
-                    -2.071_f32.to_radians(),
-                    15.392_f32.to_radians(),
-                ),
-                Vec3::new(0.0, -0.015, 0.13),
-            )
-            .inverse(),
-            Hand::Right => Mat4::from_rotation_translation(
-                Quat::from_euler(
-                    EulerRot::ZYX,
-                    -0.303_f32.to_radians(),
-                    2.071_f32.to_radians(),
-                    15.392_f32.to_radians(),
-                ),
-                Vec3::new(0.0, -0.015, 0.13),
-            )
-            .inverse(),
-        }
+        super::offset_grip_pose_from_pose_type::<FrameController>(hand, BoundPoseType::Grip)
     }
 
-    // TODO: Source the real pose transformations (tip, base, ...) from the
-    // Steam Frame controller driver JSON; until then all pose types report the
-    // raw pose.
-    fn pose_transformation(_pose: BoundPoseType) -> Option<PoseTransformations> {
-        None
+    /// From `SteamVR/drivers/frame_controller/resources/rendermodels/frame_controller_*/*.json`
+    fn pose_transformation(pose: BoundPoseType) -> Option<PoseTransformations> {
+        // `rotate_xyz` and the left hand's `origin`; the right hand's mirror them.
+        let (rotate_xyz, origin): ([f32; 3], [f32; 3]) = match pose {
+            // Not present in the render models
+            BoundPoseType::Raw
+            | BoundPoseType::Gdc2015
+            | BoundPoseType::OpenxrPinch
+            | BoundPoseType::OpenxrPoke => return None,
+            BoundPoseType::Tip | BoundPoseType::OpenxrAim => {
+                ([-40.0, 0.0, 0.0], [0.012694, -0.02522, 0.020687])
+            }
+            BoundPoseType::Base => ([-0.4, 180.0, 0.0], [-0.0024, -0.0024, 0.1531]),
+            BoundPoseType::Handgrip | BoundPoseType::Grip | BoundPoseType::OpenxrGrip => {
+                ([2.8091, 0.0, 0.0], [-0.003117, -0.004277, 0.099501])
+            }
+            BoundPoseType::OpenxrHandmodel => {
+                ([-39.4, 0.0, 0.0], [-0.01125, -0.00182941, 0.1019482])
+            }
+        };
+        let [x, y, z] = rotate_xyz.map(f32::to_radians);
+        let [ox, oy, oz] = origin;
+        let hand = |side: f32| {
+            Mat4::from_rotation_translation(
+                Quat::from_euler(EulerRot::ZYX, side * z, side * y, x),
+                Vec3::new(side * ox, oy, oz),
+            )
+        };
+        Some(PoseTransformations {
+            left_hand: hand(1.0),
+            right_hand: hand(-1.0),
+        })
     }
 }
 
@@ -241,6 +259,45 @@ mod tests {
     use super::{FrameController, InteractionProfile};
     use crate::input::tests::Fixture;
     use openxr as xr;
+
+    /// The values of SteamVR's render model files, the right hand mirroring the left.
+    #[test]
+    fn pose_components() {
+        use crate::input::BoundPoseType;
+        use crate::openxr_data::Hand;
+        use glam::{Mat4, Vec3};
+
+        let of = |pose| FrameController::pose_transformation(pose).unwrap();
+        let grip = of(BoundPoseType::Grip);
+        let (_, rotation, translation) = grip.left_hand.to_scale_rotation_translation();
+        assert!(translation.abs_diff_eq(Vec3::new(-0.003117, -0.004277, 0.099501), 1e-6));
+        let (axis, angle) = rotation.to_axis_angle();
+        assert!(axis.abs_diff_eq(Vec3::X, 1e-4) && (angle.to_degrees() - 2.8091).abs() < 1e-3);
+        let (_, _, translation) = grip.right_hand.to_scale_rotation_translation();
+        assert!(translation.abs_diff_eq(Vec3::new(0.003117, -0.004277, 0.099501), 1e-6));
+        for pose in [BoundPoseType::Handgrip, BoundPoseType::OpenxrGrip] {
+            assert_eq!(of(pose).left_hand, grip.left_hand);
+        }
+        assert_eq!(
+            of(BoundPoseType::Tip).right_hand,
+            of(BoundPoseType::OpenxrAim).right_hand
+        );
+        // The base points back along the handle, the same way on both hands.
+        let base = of(BoundPoseType::Base);
+        let forward = |m: Mat4| m.transform_vector3(Vec3::NEG_Z);
+        assert!(forward(base.left_hand).z > 0.99 && forward(base.right_hand).z > 0.99);
+        assert!(forward(base.left_hand).abs_diff_eq(forward(base.right_hand), 1e-5));
+
+        assert!(FrameController::pose_transformation(BoundPoseType::Raw).is_none());
+        for hand in [Hand::Left, Hand::Right] {
+            let offset = FrameController::offset_grip_pose(hand);
+            let grip = match hand {
+                Hand::Left => grip.left_hand,
+                Hand::Right => grip.right_hand,
+            };
+            assert!((offset * grip).abs_diff_eq(Mat4::IDENTITY, 1e-5));
+        }
+    }
 
     #[test]
     fn verify_bindings() {

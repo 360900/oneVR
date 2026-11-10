@@ -107,6 +107,8 @@ pub struct OpenXrData<C: Compositor> {
     pending_recenter: parking_lot::Mutex<Option<xr::Time>>,
     /// Set when the runtime moved STAGE and the app's standing zero pose is still in place.
     stage_moved: AtomicBool,
+    /// Set until the standing zero has been put where LOCAL is, see [Self::align_standing].
+    standing_unaligned: AtomicBool,
     /// Held while WaitGetPoses or [Self::pump] run the per-frame update.
     frame_updates: parking_lot::Mutex<FrameUpdates>,
 
@@ -447,6 +449,7 @@ impl<C: Compositor> OpenXrData<C> {
             input_focus_captured: false.into(),
             pending_recenter: parking_lot::Mutex::new(None),
             stage_moved: false.into(),
+            standing_unaligned: (*RECENTER_STANDING).into(),
             frame_updates: Default::default(),
             input: injector.inject(),
             compositor: injector.inject(),
@@ -520,6 +523,7 @@ impl<C: Compositor> OpenXrData<C> {
         self.update_standby();
         if self.stage_moved.swap(false, Ordering::Relaxed) {
             // The runtime moved the stage, which replaces any standing zero pose the app set.
+            self.standing_unaligned.store(false, Ordering::Relaxed);
             self.move_origin(
                 &mut self.session_data.0.write(),
                 vr::ETrackingUniverseOrigin::Standing,
@@ -531,6 +535,7 @@ impl<C: Compositor> OpenXrData<C> {
             );
         }
         self.apply_pending_recenter(*RECENTER_STANDING);
+        self.align_standing();
     }
 
     fn poll_events_impl(&self, session_data: &SessionData) -> Option<xr::SessionState> {
@@ -845,6 +850,7 @@ impl<C: Compositor> OpenXrData<C> {
         let mut origins = vec![vr::ETrackingUniverseOrigin::Seated];
         if recenter_standing {
             origins.push(vr::ETrackingUniverseOrigin::Standing);
+            self.standing_unaligned.store(false, Ordering::Relaxed);
         }
         let mut session = self.session_data.0.write();
         for origin in origins {
@@ -866,6 +872,37 @@ impl<C: Compositor> OpenXrData<C> {
         self.push_event(vr::EVREventType::SeatedZeroPoseReset, data);
         if recenter_standing {
             self.push_event(vr::EVREventType::StandingZeroPoseReset, Default::default());
+        }
+    }
+
+    /// Starts the standing universe where the runtime's LOCAL is, on the floor: what OpenXR calls
+    /// LOCAL_FLOOR. STAGE is wherever the play area was set up, which on a standalone headset
+    /// has little to do with where the user last recentered, and SteamVR's standing universe
+    /// follows the headset's recenter there. On a room setup the two usually coincide. Tried
+    /// until the runtime can relate the two spaces, unless the app or the runtime set the
+    /// standing zero first.
+    fn align_standing(&self) {
+        if !self.standing_unaligned.load(Ordering::Relaxed) {
+            return;
+        }
+        let time = self.get_display_time();
+        if time.as_nanos() <= 0 {
+            return;
+        }
+        // Not worth waiting for: the next poll tries again.
+        let Some(mut session) = self.session_data.0.try_write() else {
+            return;
+        };
+        let Some(Some(zero)) = self.check("xrLocateSpace", session.local_floor_pose(time)) else {
+            return;
+        };
+        // Checked again under the lock: a reset by the app meanwhile wins.
+        if !self.standing_unaligned.swap(false, Ordering::Relaxed) {
+            return;
+        }
+        if zero != xr::Posef::IDENTITY {
+            info!("Standing universe starts at the runtime's LOCAL: {zero:?}");
+            self.move_origin(&mut session, vr::ETrackingUniverseOrigin::Standing, zero);
         }
     }
 
@@ -1124,6 +1161,9 @@ impl<C: Compositor> OpenXrData<C> {
             }
         }
         let mut session = self.session_data.0.write();
+        if origin == vr::ETrackingUniverseOrigin::Standing {
+            self.standing_unaligned.store(false, Ordering::Relaxed);
+        }
         let zero = session.head_zero_pose(origin, self.get_display_time());
         match self.check("xrLocateSpace", zero).flatten() {
             Some(zero) => self.move_origin(&mut session, origin, zero),
@@ -1332,11 +1372,12 @@ pub(crate) fn scale_eye_size((width, height): (u32, u32), scale: f32) -> (u32, u
 /// How long the headset is off before standby, SteamVR's `turnOffScreensTimeout` default.
 const STANDBY_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Opt-in: a runtime recenter (e.g. a long press of the Quest system button) also recenters the
-/// standing universe, like SteamVR does for Quest headsets through Virtual Desktop. Off by
-/// default, because on a calibrated room setup the stage is the play area and shouldn't move.
+/// The standing universe follows the runtime's LOCAL like OpenXR's LOCAL_FLOOR: it starts there
+/// (see [OpenXrData::align_standing]), and a runtime recenter (e.g. a long press of the Quest
+/// system button) recenters it too, like SteamVR does for Quest headsets. `0` keeps it on STAGE,
+/// the play area as it was set up.
 static RECENTER_STANDING: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
-    crate::quirks::env_override("XRIZER_RECENTER_STANDING").unwrap_or(false)
+    crate::quirks::env_override("XRIZER_RECENTER_STANDING").unwrap_or(true)
 });
 
 fn supports_user_presence(instance: &xr::Instance, system_id: xr::SystemId) -> bool {
@@ -1821,33 +1862,25 @@ impl SessionData {
         ) {
             return Ok(None);
         }
-        let xr::Posef {
-            mut position,
-            orientation,
-        } = location.pose;
-
-        // Only set the rotation around the y axis
-        let (twist, _) = swing_twist_decomposition(
-            Quat::from_xyzw(orientation.x, orientation.y, orientation.z, orientation.w),
-            Vec3::Y,
-        )
-        .unwrap_or_else(|| {
-            warn!("Couldn't decompose rotation - using identity");
-            (Quat::IDENTITY, Quat::IDENTITY)
-        });
-        if origin == vr::ETrackingUniverseOrigin::Standing {
-            position.y = 0.0;
-        }
-
-        Ok(Some(xr::Posef {
-            position,
-            orientation: xr::Quaternionf {
-                x: twist.x,
-                y: twist.y,
-                z: twist.z,
-                w: twist.w,
-            },
+        Ok(Some(if origin == vr::ETrackingUniverseOrigin::Standing {
+            floor_pose(location.pose)
+        } else {
+            upright_pose(location.pose)
         }))
+    }
+
+    /// Where the runtime's LOCAL is in STAGE, put on the floor and upright. `None` if the runtime
+    /// can't relate the two.
+    fn local_floor_pose(&self, time: xr::Time) -> xr::Result<Option<xr::Posef>> {
+        let location = self
+            .local_space_reference
+            .locate(&self.stage_space_reference, time)?;
+        Ok(location
+            .location_flags
+            .contains(
+                xr::SpaceLocationFlags::POSITION_VALID | xr::SpaceLocationFlags::ORIENTATION_VALID,
+            )
+            .then(|| floor_pose(location.pose)))
     }
 
     /// Moves `origin`'s zero to `offset`, a pose in its reference space.
@@ -1957,6 +1990,35 @@ impl From<Hand> for xr::HandEXT {
             Hand::Right => xr::HandEXT::RIGHT,
         }
     }
+}
+
+/// `pose` with only its rotation around the y axis kept.
+fn upright_pose(pose: xr::Posef) -> xr::Posef {
+    let orientation = pose.orientation;
+    let (twist, _) = swing_twist_decomposition(
+        Quat::from_xyzw(orientation.x, orientation.y, orientation.z, orientation.w),
+        Vec3::Y,
+    )
+    .unwrap_or_else(|| {
+        warn!("Couldn't decompose rotation - using identity");
+        (Quat::IDENTITY, Quat::IDENTITY)
+    });
+    xr::Posef {
+        position: pose.position,
+        orientation: xr::Quaternionf {
+            x: twist.x,
+            y: twist.y,
+            z: twist.z,
+            w: twist.w,
+        },
+    }
+}
+
+/// [upright_pose], on the floor.
+fn floor_pose(pose: xr::Posef) -> xr::Posef {
+    let mut pose = upright_pose(pose);
+    pose.position.y = 0.0;
+    pose
 }
 
 /// Taken from: https://github.com/bitshifter/glam-rs/issues/536
@@ -2433,14 +2495,98 @@ mod tests {
             head_pose(&data, Origin::Seated),
             pitch_only(pitch, [0.0, 0.0, 0.0]),
         );
-        assert_pose_eq(head_pose(&data, Origin::Standing), moved);
+        // The recenter comes after the stage's move, and puts the standing zero under the head.
+        assert_pose_eq(
+            head_pose(&data, Origin::Standing),
+            pitch_only(pitch, [0.0, 1.2, 0.0]),
+        );
 
         drop(data);
         drop(comp);
     }
 
-    /// XRIZER_RECENTER_STANDING: a runtime recenter also moves the standing zero under the head,
-    /// keeping it on the floor.
+    /// The standing universe starts where the runtime's LOCAL is, on the floor, rather than at
+    /// STAGE's origin, unless the app set its zero first.
+    #[test]
+    fn standing_starts_at_local_floor() {
+        use openvr::ETrackingUniverseOrigin as Origin;
+        crate::init_logging();
+        // STAGE's origin as seen from LOCAL: the floor is 1.5 m below, the play area's centre
+        // elsewhere and turned.
+        let yaw = glam::Quat::from_rotation_y(std::f32::consts::FRAC_PI_2);
+        let stage = xr::Posef {
+            position: xr::Vector3f {
+                x: 1.0,
+                y: -1.5,
+                z: 2.0,
+            },
+            orientation: xr::Quaternionf {
+                x: yaw.x,
+                y: yaw.y,
+                z: yaw.z,
+                w: yaw.w,
+            },
+        };
+        let floor = xr::Posef {
+            position: xr::Vector3f {
+                x: 0.0,
+                y: -1.5,
+                z: 0.0,
+            },
+            orientation: xr::Quaternionf::IDENTITY,
+        };
+
+        let data = OpenXrData::<FakeCompositor>::new(
+            &Injector::default(),
+            openvr::EVRApplicationType::Other,
+        )
+        .unwrap();
+        let session = data.session_data.get().session.as_raw();
+        fakexr::set_reference_space_pose(session, xr::ReferenceSpaceType::STAGE, stage);
+        assert_pose_eq(
+            data.locate_origin(Origin::Standing, Origin::Seated)
+                .unwrap(),
+            stage,
+        );
+        data.poll_events();
+        assert_pose_eq(
+            data.locate_origin(Origin::Standing, Origin::Seated)
+                .unwrap(),
+            floor,
+        );
+        // Only once: a later stage move isn't undone.
+        data.stage_moved.store(true, Ordering::Relaxed);
+        data.poll_events();
+        assert_pose_eq(
+            data.locate_origin(Origin::Standing, Origin::Seated)
+                .unwrap(),
+            stage,
+        );
+        drop(data);
+
+        let data = OpenXrData::<FakeCompositor>::new(
+            &Injector::default(),
+            openvr::EVRApplicationType::Other,
+        )
+        .unwrap();
+        let session = data.session_data.get().session.as_raw();
+        fakexr::set_reference_space_pose(session, xr::ReferenceSpaceType::STAGE, stage);
+        let (head, _) = standing_head();
+        fakexr::set_reference_space_pose(session, xr::ReferenceSpaceType::VIEW, head);
+        data.reset_tracking_space(Origin::Standing);
+        let reset = data
+            .locate_origin(Origin::Standing, Origin::Seated)
+            .unwrap();
+        data.poll_events();
+        assert_pose_eq(
+            data.locate_origin(Origin::Standing, Origin::Seated)
+                .unwrap(),
+            reset,
+        );
+    }
+
+    /// A runtime recenter also moves the standing zero under the head, keeping it on the floor
+    /// (unless XRIZER_RECENTER_STANDING=0).
     #[test]
     fn runtime_recenter_can_move_standing_zero() {
         use openvr::ETrackingUniverseOrigin as Origin;

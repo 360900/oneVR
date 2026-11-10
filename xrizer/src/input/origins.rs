@@ -94,7 +94,11 @@ pub fn source_type(subpath: DynSubpath, analog: bool) -> &'static str {
         | DynSubpath::TriggerLeft
         | DynSubpath::TriggerRight
         | DynSubpath::PinchExt
-        | DynSubpath::GraspExt => "trigger",
+        | DynSubpath::GraspExt
+        | DynSubpath::FingerIndex
+        | DynSubpath::FingerMiddle
+        | DynSubpath::FingerRing
+        | DynSubpath::FingerPinky => "trigger",
         // An analog grip is a trigger (Index, Touch), a clicky one a button (Vive).
         DynSubpath::Squeeze if analog => "trigger",
         _ => "button",

@@ -3,21 +3,29 @@ use egui::{
 };
 use egui_miniquad::EguiMq;
 use miniquad::{EventHandler, GlContext, PassAction, RenderingBackend, conf::Conf};
-use std::backtrace::Backtrace;
+use std::path::PathBuf;
 use std::process::Command;
 use std::time::Instant;
 
-pub fn dialog(error: String, backtrace: Backtrace) {
+/// The dialog's width, and the height it grows to before its content scrolls, in points (window
+/// pixels, as egui's scale is the window's DPI scale).
+const WIDTH: f32 = 400.0;
+const MAX_HEIGHT: f32 = 600.0;
+
+/// Shows a crash dialog with `error`, its backtrace and the log file, until it's closed. Shared by
+/// the library and the `xrizer-crash-dialog` executable, so it uses nothing else of the crate.
+pub fn dialog(error: String, backtrace: String, log_file: Option<PathBuf>) {
     let r = std::panic::catch_unwind(|| {
         miniquad::start(
             Conf {
                 window_title: "xrizer-edge error".to_string(),
                 high_dpi: true,
-                window_width: 400,
-                window_height: 200,
+                window_width: WIDTH as i32,
+                // Fitted to the content once it's laid out, see Dialog::draw.
+                window_height: 120,
                 ..Default::default()
             },
-            || Box::new(Dialog::new(error, backtrace)),
+            || Box::new(Dialog::new(error, backtrace, log_file)),
         )
     });
     if let Err(e) = r {
@@ -69,8 +77,9 @@ fn copy_to_clipboard(text: &str) -> bool {
     false
 }
 
-fn ui(ctx: &egui::Context, info: &ErrorInfo) {
-    egui::TopBottomPanel::top("header").show(ctx, |ui| {
+/// Draws the dialog and returns the height its content needs.
+fn ui(ctx: &egui::Context, info: &ErrorInfo) -> f32 {
+    let header = egui::TopBottomPanel::top("header").show(ctx, |ui| {
         ui.centered_and_justified(|ui| {
             let mut job = LayoutJob::default();
 
@@ -87,9 +96,12 @@ fn ui(ctx: &egui::Context, info: &ErrorInfo) {
             ui.label(job);
         });
     });
-    egui::CentralPanel::default().show(ctx, |ui| {
+    let mut content = 0.0;
+    let frame = egui::Frame::central_panel(&ctx.style());
+    egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.vertical(|ui| {
+            content = ui
+                .vertical(|ui| {
                 ui.label("Error info:");
                 ui.code(&info.error);
                 let id = ui.next_auto_id();
@@ -133,7 +145,7 @@ fn ui(ctx: &egui::Context, info: &ErrorInfo) {
                             });
                         })
                         .body(|ui| {
-                            ui.code(format!("{}", info.backtrace));
+                            ui.code(&info.backtrace);
                         });
                 });
 
@@ -141,7 +153,7 @@ fn ui(ctx: &egui::Context, info: &ErrorInfo) {
                     if ui.button("OK").clicked() {
                         miniquad::window::order_quit();
                     }
-                    if let Some(log_file) = crate::log_file_path()
+                    if let Some(log_file) = &info.log_file
                         && ui.button("Open log file").clicked()
                     {
                         let _ = Command::new("xdg-open").arg(log_file).spawn();
@@ -151,23 +163,30 @@ fn ui(ctx: &egui::Context, info: &ErrorInfo) {
                     }
                 })
             })
+            .response
+            .rect
+            .height();
         })
     });
+    header.response.rect.height() + content + frame.inner_margin.sum().y
 }
 
 struct Dialog {
     egui_mq: EguiMq,
     mq: GlContext,
     info: ErrorInfo,
+    /// The window height last set, see [Dialog::draw].
+    height: f32,
 }
 
 struct ErrorInfo {
     error: String,
-    backtrace: Backtrace,
+    backtrace: String,
+    log_file: Option<PathBuf>,
 }
 
 impl Dialog {
-    fn new(error: String, backtrace: Backtrace) -> Self {
+    fn new(error: String, backtrace: String, log_file: Option<PathBuf>) -> Self {
         let mut mq = GlContext::new();
         let egui_mq = EguiMq::new(&mut mq);
         println!("{}", miniquad::window::dpi_scale());
@@ -177,7 +196,12 @@ impl Dialog {
         Self {
             egui_mq,
             mq,
-            info: ErrorInfo { error, backtrace },
+            info: ErrorInfo {
+                error,
+                backtrace,
+                log_file,
+            },
+            height: 0.0,
         }
     }
 }
@@ -189,11 +213,20 @@ impl EventHandler for Dialog {
             .begin_default_pass(PassAction::clear_color(0.0, 0.0, 0.0, 1.0));
         self.mq.end_render_pass();
 
+        let mut wanted = 0.0;
         self.egui_mq.run(&mut self.mq, |_, ctx| {
-            ui(ctx, &self.info);
+            wanted = ui(ctx, &self.info);
         });
         self.egui_mq.draw(&mut self.mq);
         self.mq.commit_frame();
+
+        // Fit the window to the content, which grows when the backtrace opens, so it never
+        // has empty space below the buttons. Longer content scrolls.
+        let wanted = wanted.ceil().min(MAX_HEIGHT);
+        if wanted != self.height {
+            self.height = wanted;
+            miniquad::window::set_window_size(WIDTH as u32, wanted as u32);
+        }
     }
 
     // boilerplate

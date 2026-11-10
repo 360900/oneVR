@@ -3155,6 +3155,13 @@ mod tests {
         let event = next_event(&system).expect("no event");
         assert_eq!(event.eventType, vr::EVREventType::SeatedZeroPoseReset.0);
         assert!(unsafe { event.data.seatedZeroPoseReset.bResetBySystemMenu });
+        // The standing zero follows, staying on the floor.
+        let event = next_event(&system).expect("no event");
+        assert_eq!(event.eventType, vr::EVREventType::StandingZeroPoseReset.0);
+        assert_eq!(
+            translation(system.GetSeatedZeroPoseToStandingAbsoluteTrackingPose()),
+            [0.0, -0.4, 0.0]
+        );
         assert!(next_event(&system).is_none());
 
         // A moved stage drops the app's standing zero pose.
@@ -3207,15 +3214,28 @@ mod tests {
             xr::ReferenceSpaceType::LOCAL,
             change_time,
         );
-        let seated = || translation(system.GetSeatedZeroPoseToStandingAbsoluteTrackingPose());
+        // Where the head is from the seated zero.
+        let head = || {
+            let data = xr.session_data.get();
+            let position = data
+                .view_space
+                .locate(
+                    data.get_space_for_origin(vr::ETrackingUniverseOrigin::Seated),
+                    xr.get_display_time(),
+                )
+                .unwrap()
+                .pose
+                .position;
+            [position.x, position.y, position.z]
+        };
 
         xr.poll_events();
-        assert_eq!(seated(), [0.0, 0.0, 0.0]);
+        assert_eq!(head(), [1.0, 0.0, 0.0]);
         assert!(next_event(&system).is_none());
 
         xr.set_display_time(change_time);
         xr.poll_events();
-        assert_eq!(seated(), [1.0, 0.0, 0.0]);
+        assert_eq!(head(), [0.0, 0.0, 0.0]);
         let event = next_event(&system).expect("no event");
         assert_eq!(event.eventType, vr::EVREventType::SeatedZeroPoseReset.0);
     }

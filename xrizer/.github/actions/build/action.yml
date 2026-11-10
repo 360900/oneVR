@@ -25,7 +25,7 @@ runs:
       run: |
         mkdir -p out/xrizer-edge
         cp -r -L target/release/bin out/xrizer-edge
-        cp -L target/i686-unknown-linux-gnu/release/bin/vrclient.so out/xrizer-edge/bin/
+        cp -L target/i686-unknown-linux-gnu/release/bin/vrclient.so target/i686-unknown-linux-gnu/release/bin/xrizer-crash-dialog out/xrizer-edge/bin/
     - name: Check version
       shell: sh
       # The version reaches the library through build-time env only, which has
@@ -34,3 +34,9 @@ runs:
         test -n "$XRIZER_VERSION"
         grep -qF "$XRIZER_VERSION" out/xrizer-edge/bin/linux64/vrclient.so
         grep -qF "$XRIZER_VERSION" out/xrizer-edge/bin/vrclient.so
+    - name: Check crash dialog
+      shell: sh
+      # Each library starts the crash dialog from its own directory.
+      run: |
+        test -x out/xrizer-edge/bin/linux64/xrizer-crash-dialog
+        test -x out/xrizer-edge/bin/xrizer-crash-dialog
