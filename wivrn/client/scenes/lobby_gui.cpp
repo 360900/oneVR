@@ -515,7 +515,12 @@ void scenes::lobby::gui_server_list()
 				if (data.service.txt.contains("onevr"))
 				{
 					sub += "\n" + fmt::format(_F("oneVR {} on the PC, {} on this headset"), server_version, wivrn::display_version());
+#ifdef __ANDROID__
 					c_tooltip = _("The PC and this headset run different oneVR versions.\nOn the PC, update oneVR, or run \"onevr install APK\" to install the matching headset app.");
+#else
+					// the Steam Frame's app is no APK, the PC can't install it
+					c_tooltip = _("The PC and this headset run different oneVR versions.\nUpdate oneVR on the PC, or install the matching oneVR app on this headset.");
+#endif
 				}
 				else
 				{
