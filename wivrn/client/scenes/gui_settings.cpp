@@ -31,6 +31,7 @@
 #include "render/imgui_impl.h"
 #include "render/ui_theme.h"
 #include "render/ui_widgets.h"
+#include "scenes/stream_spacewarp.h"
 #include "utils/i18n.h"
 #include "xr/instance.h"
 #include "xr/session.h"
@@ -286,7 +287,8 @@ void settings_video(const settings_context & ctx)
 		});
 	}
 
-	if (rates.size() > 1 && ctx.instance.has_extension(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME))
+	// oneVR: only where the runtime synthesises frames, half the rate alone only stutters
+	if (rates.size() > 1 && ctx.instance.has_extension(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME) && stream_spacewarp::supported(ctx.instance) != stream_spacewarp::api::none)
 	{
 		list.push_back({
 		        .id = "##spacewarp",

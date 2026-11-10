@@ -21,6 +21,7 @@
 
 #include "openxr/openxr.h"
 #include "scene.h"
+#include "scenes/stream_spacewarp.h"
 #include "spdlog/common.h"
 #include "spdlog/spdlog.h"
 #include "utils/class_from_member.h"
@@ -1511,6 +1512,10 @@ void application::initialize()
 	spaces[size_t(xr::spaces::world)] = xr_session.create_reference_space(XR_REFERENCE_SPACE_TYPE_STAGE);
 
 	config.emplace(xr_system_id, xr_session, application::get_config_path() / "client.json");
+	// oneVR: SpaceWarp is only offered where the runtime synthesises frames. One saved by an
+	// earlier version or under another runtime would stay on with no setting to turn it off.
+	if (stream_spacewarp::supported(xr_instance) == stream_spacewarp::api::none)
+		config->fps_divider = 1;
 	default_config.emplace(xr_system_id, xr_session);
 
 	xr_session.set_passthrough_boundary_enabled(config->passthrough_boundary_enabled);

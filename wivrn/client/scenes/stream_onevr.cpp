@@ -168,7 +168,8 @@ onevr::headset_capabilities scenes::stream::onevr_capabilities()
 	if (instance.has_extension(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME))
 		caps.refresh_rates = session.get_refresh_rates();
 	caps.refresh_rate_control = caps.refresh_rates.size() > 1;
-	caps.spacewarp = caps.refresh_rate_control;
+	// half the rate without the runtime's frame synthesis only stutters
+	caps.spacewarp = caps.refresh_rate_control and stream_spacewarp::supported(instance) != stream_spacewarp::api::none;
 
 	auto view = application::get_hmd_traits().override_view(system.view_configuration_views(viewconfig)[0]);
 	caps.eye_width = view.recommendedImageRectWidth;
