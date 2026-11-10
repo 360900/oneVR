@@ -10,12 +10,14 @@ Effort: S under a day, M a few days, L a week or more. "WiVRn" notes describe wh
    - radial: output names (`button_<n>`), layout and defaults guessed; needs vrclient disassembly
    - grab `drop_speed`/`downgrade_speed` read from SteamVR's tooltips, needs an Index test; pinch ignores `capsense_enable_threshold` and the trackpad force SteamVR adds
    - Index trackpad force (#208): Alyx's binding reads trackpad force at 0.38 (tested); if the wheel still opens on a light touch, the runtime reports force on touch, needs Monado's "Trackpad force" debug output
+   - Index finger paths (`/input/finger/*`, #318) follow the trigger and the grip, not each finger's curl from a tracked skeleton
    - right stick dead on Quest 2 + WiVRn (#321, WiVRn #874): not reproduced with Alyx and TWD bindings, needs a headset capture (xrizer input trace, `OXR_DEBUG_BINDINGS=1`, wivrn-server `XRT_LOG=debug`)
 2. Controller profiles (M)
    - Pico 4 tilt (#97): WiVRn reports the 4 and 4 Ultra as `pico4_controller` and SteamVR has no grip offset for the Ultra; needs the Ultra's OpenXR system name on WiVRn and a measured offset
    - PSVR2 Sense: `XR_MNDX_psvr2_interaction` is a preview in Monado main only, WiVRn builds without it; works as Touch today
    - Cosmos registered device type, serials and render model names unverified; Focus 3 tracking system may be `vive_eyes` like the Cosmos; `vive_tracker_*` default bindings still ignored (trackers: 21)
    - gamepad has no tracked device or binding variant; untested on a headset
+   - Frame: model numbers and serials are guesses (upstream PR 464 reports `Roy_Left`/`Roy_Right`); its wrist rotation workaround for SteamVR's OpenXR runtime isn't taken
 3. Frame timing (S)
    - `XR_META_performance_metrics` unused (no Linux runtime has it)
 4. Haptics (S)
@@ -27,6 +29,10 @@ Effort: S under a day, M a few days, L a week or more. "WiVRn" notes describe wh
 6. Color space (S)
    - Outer Wilds (NomaiVR) quirk rests on one report (#441), needs a headset check
    - D3D11 `R16G16B16A16_TYPELESS` arrives through Proton as UNORM, wrong if rendered as float
+
+7. Controller velocity (S-M)
+   - linear velocity from position deltas only for the games in `quirks.rs` (#281, #362, #372); why WiVRn's is low is unknown, so other games need `XRIZER_SYNTHESIZED_VELOCITY=1`
+   - angular velocity is the runtime's; H3VR's flicks reportedly need an odd axis (#362)
 
 ## 2. Fake success and crash insurance
 
@@ -63,6 +69,7 @@ Effort: S under a day, M a few days, L a week or more. "WiVRn" notes describe wh
     - `SetOverlayFromFile`, `GetOverlayTexture`, `GetOverlayImageData`, IVROverlayView
     - overlays past the runtime's layer limit are dropped (SteamVR allows 128)
 17. Notifications and message boxes are never drawn (M)
+    - `ShowActionOrigins` and `ShowBindingsForActionSet` succeed without showing the binding hints (#331)
     - option: WayVR toasts over WayVR IPC
 
 ## 4. Accuracy and polish
@@ -118,6 +125,7 @@ Effort: S under a day, M a few days, L a week or more. "WiVRn" notes describe wh
     - `GetMirrorTextureGL`, `GetMirrorTextureD3D11` unimplemented
 28. Chaperone (S)
     - calibration state always OK; unknown play area becomes 1x1 m (an error state would stop games on runtimes without bounds)
+    - the seated zero starts as the runtime's LOCAL, so a game that never resets it sits where the user last recentered (#405); SteamVR keeps the user's seated zero the same way
     - `AreBoundsVisible` only knows what the app forced; `GetBoundsColor` ignores the fade distance; ChaperoneSetup writes ignored, the runtime owns its bounds
 29. Settings (S)
     - the user's `steamvr.vrsettings` values (e.g. `supersampleScale`) aren't read, only bindings choices are
@@ -130,6 +138,9 @@ Effort: S under a day, M a few days, L a week or more. "WiVRn" notes describe wh
 32. Input paths and identity (S-M)
     - `/user/head` pose bindings, gamepad, treadmill, stylus dropped
     - games without an action manifest can't be shown another controller type
+
+33. Crash dialog (M)
+    - runs in the game's process and closes with it (#73); outliving it needs a helper binary
 
 ## Out of scope
 

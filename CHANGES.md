@@ -60,7 +60,7 @@ Status: `pending` | `merged` | `superseded-by-<n>` | `blocked` | `dropped` | `re
 | 193 | New interface versions | merged | overlay name/raw texture/thumbnail additions; newer 1.23.8 header; fixes #177 UEVR |
 | 229 | libmonado battery status | merged | closes #26; monado feature now enables libmonado; battery percentage/provides/charging properties; builds fine without system libmonado |
 | 69 | Skeletal Summary | dropped | superseded by merged 313 + 261 skeletal summary work |
-| 168 | Hitman | merged | C-unwind ABI on exported fns/vtables; GetPosesForFrame delegates to GetLastPoses; GetLastPosePredictionIDs; partially fixes #448 |
+| 168 | Hitman | merged | C-unwind ABI on exported fns/vtables; GetPosesForFrame delegates to GetLastPoses; GetLastPosePredictionIDs; fixes #448 |
 | 87 | IVRDebug stub and IVROverlay014 stub | merged | adapted; IVRDebug + IVRChaperoneSetup added, overlay 014 already covered by 193 |
 | 234 | Support all the BoundPoseTypes | superseded-by-382 | draft |
 | 337 | input profile path support | superseded-by-429 | draft |
@@ -84,6 +84,26 @@ Status: `pending` | `merged` | `superseded-by-<n>` | `blocked` | `dropped` | `re
 | 462 | compositor: name Vulkan extensions as a Wine app needs them | merged | opt-in, `XRIZER_WINE_APP=1` |
 | 461 | input: analog deltas, activeOrigin and scroll mode | dropped | deltas and origin already done; its `x`/`y` as position would undo `f93a845`, scroll deltas taken in `1646e25`, rate unchanged |
 | 457 | overlay: stop encoding sRGB twice on 2D panels | superseded-by-388 | fixes #456; `holds_gamma` decodes per texture |
+
+## Upstream sync (2026-11-10)
+
+| PR | Title | Status | Notes |
+|----|-------|--------|-------|
+| 463 | Upgrade Dependencies | merged | glam 0.34, lz4_flex 0.14, miniquad 0.4.11, bindgen 0.72; only these updated in the lockfile |
+| 464 | input: Frame controller support | merged | draft, supersedes 440 on top of 338; grip offset and bumper, view and menu touches ported by hand in `114f58b`, with the pose components of SteamVR's render models; its wrist rotation hack for SteamVR's OpenXR runtime and its model names not taken |
+
+## Upstream issues (2026-11-10)
+
+All open upstream issues checked against the fork. What needed a change:
+
+| Area | Change | Commits |
+|------|--------|---------|
+| velocity | linear velocity from position deltas for Half-Life: Alyx (#281), H3VR (#362) and Waltz of the Wizard (#372), like Half-Life 2: VR Mod | `6ddd98c` |
+| recentering | the standing universe starts at the runtime's LOCAL on the floor (OpenXR's LOCAL_FLOOR) and follows runtime recenters (#174, #319); `XRIZER_RECENTER_STANDING=0` keeps it on STAGE | `f2b0408` |
+| setup | Init without a runtime logs what to set up, for 32-bit games the 32-bit runtime; the 64-bit build logs a missing `bin/vrclient.so` (#450) | `b21b6cf` |
+| Steam Frame | grip, tip, base and hand model poses from SteamVR's render model files, replacing the Index's grip offset | `114f58b` |
+
+Checked with the games' own files, no change needed: The Forest's jump, drop and crouch (#250) are on its joystick bindings, its leftover trackpad sources are dropped by SteamVR too; Half-Life 2: VR Mod's jump and crouch on Touch (#213). Like SteamVR: grab mode has no click haptic unless the binding sets one (#420), and a game that never resets the seated zero sits where the user last recentered (#405).
 
 ## Fork fixes (not upstream PRs)
 
