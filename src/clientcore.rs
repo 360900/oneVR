@@ -148,6 +148,55 @@ fn init_error_code(
     }
 }
 
+/// What to set up when Init fails for want of a runtime, which the loader only reports as
+/// unavailable. A 64-bit runtime alone leaves 32-bit games without one.
+fn setup_hint(error: &InitError, is_32bit: bool) -> Option<&'static str> {
+    let InitError::EnumeratingExtensionsFailed(xr::sys::Result::ERROR_RUNTIME_UNAVAILABLE) = error
+    else {
+        return None;
+    };
+    Some(if is_32bit {
+        "The OpenXR loader found no runtime for this 32-bit game. It needs a 32-bit build of the \
+        runtime (e.g. lib32-wivrn-server, lib32-monado) as active_runtime.i686.json; the 64-bit \
+        one can't be loaded."
+    } else {
+        "The OpenXR loader found no runtime. Check that one is active (active_runtime.json) and, \
+        inside Steam's container, imported (PRESSURE_VESSEL_IMPORT_OPENXR_1_RUNTIMES=1)."
+    })
+}
+
+/// The path this library was loaded from.
+#[cfg_attr(any(test, not(target_pointer_width = "64")), allow(dead_code))]
+fn own_library() -> Option<std::path::PathBuf> {
+    use std::os::unix::ffi::OsStrExt;
+    let mut info = std::mem::MaybeUninit::<libc::Dl_info>::zeroed();
+    // SAFETY: dladdr only reads the address and fills `info` on success.
+    let found = unsafe { libc::dladdr(own_library as *const c_void, info.as_mut_ptr()) };
+    if found == 0 {
+        return None;
+    }
+    // SAFETY: filled by a successful dladdr.
+    let name = unsafe { info.assume_init() }.dli_fname;
+    if name.is_null() {
+        return None;
+    }
+    // SAFETY: a nul terminated path that lives as long as the library is loaded.
+    let name = unsafe { CStr::from_ptr(name) };
+    Some(std::ffi::OsStr::from_bytes(name.to_bytes()).into())
+}
+
+/// Where the 32-bit build belongs if the 64-bit `library` is installed as a runtime directory's
+/// `bin/linux64/vrclient.so` and there is none: OpenVR loads `bin/vrclient.so` in 32-bit games.
+#[cfg_attr(any(test, not(target_pointer_width = "64")), allow(dead_code))]
+fn missing_32bit_build(library: &std::path::Path) -> Option<std::path::PathBuf> {
+    let linux64 = library.parent()?;
+    if linux64.file_name()? != "linux64" {
+        return None;
+    }
+    let path = linux64.parent()?.join("vrclient.so");
+    (!path.exists()).then_some(path)
+}
+
 impl ClientCore {
     pub fn new(version: &CStr) -> Option<Arc<Self>> {
         crate::init_logging();
@@ -158,6 +207,18 @@ impl ClientCore {
         }
 
         info!("Creating ClientCore version {version:?}");
+        #[cfg(all(not(test), target_pointer_width = "64"))]
+        {
+            static CHECKED: std::sync::Once = std::sync::Once::new();
+            CHECKED.call_once(|| {
+                if let Some(path) = own_library().and_then(|lib| missing_32bit_build(&lib)) {
+                    info!(
+                        "No 32-bit xrizer at {}: 32-bit games won't start in VR with this install",
+                        path.display()
+                    );
+                }
+            });
+        }
         let ret = Arc::new(Self {
             base: OnceLock::new(),
             interface_store: Default::default(),
@@ -278,6 +339,9 @@ impl IVRClientCore003_Interface for ClientCore {
             }
             Err(e) => {
                 error!("Creating OpenXR data failed: {e:?}");
+                if let Some(hint) = setup_hint(&e, cfg!(target_pointer_width = "32")) {
+                    error!("{hint}");
+                }
                 init_error_code(&e, application_type)
             }
         }
@@ -549,6 +613,33 @@ mod tests {
             }
         };
     }
+    #[test]
+    fn setup_hints() {
+        let unavailable =
+            InitError::EnumeratingExtensionsFailed(xr::sys::Result::ERROR_RUNTIME_UNAVAILABLE);
+        assert!(setup_hint(&unavailable, true).unwrap().contains("32-bit"));
+        assert!(!setup_hint(&unavailable, false).unwrap().contains("32-bit"));
+        let other = InitError::EnumeratingExtensionsFailed(xr::sys::Result::ERROR_RUNTIME_FAILURE);
+        assert!(setup_hint(&other, true).is_none());
+    }
+
+    #[test]
+    fn missing_32bit_build_next_to_the_64bit_one() {
+        assert!(own_library().is_some());
+
+        let dir = std::env::temp_dir().join(format!("xrizer-32bit-{}", std::process::id()));
+        let linux64 = dir.join("bin/linux64");
+        std::fs::create_dir_all(&linux64).unwrap();
+        let lib = linux64.join("vrclient.so");
+        let lib32 = dir.join("bin/vrclient.so");
+        assert_eq!(missing_32bit_build(&lib), Some(lib32.clone()));
+        std::fs::write(&lib32, b"").unwrap();
+        assert_eq!(missing_32bit_build(&lib), None);
+        // Not installed as a runtime directory, e.g. run from the build tree.
+        assert_eq!(missing_32bit_build(&dir.join("libxrizer.so")), None);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     interface!(Interface1, c"one");
     interface!(Interface2(Injected<Interface1>), c"two");
     interface!(Interface3(Injected<Interface1>), c"three");
