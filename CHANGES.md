@@ -102,6 +102,8 @@ All open upstream issues checked against the fork. What needed a change:
 | recentering | the standing universe starts at the runtime's LOCAL on the floor (OpenXR's LOCAL_FLOOR) and follows runtime recenters (#174, #319); `XRIZER_RECENTER_STANDING=0` keeps it on STAGE | `f2b0408` |
 | setup | Init without a runtime logs what to set up, for 32-bit games the 32-bit runtime; the 64-bit build logs a missing `bin/vrclient.so` (#450) | `b21b6cf` |
 | Steam Frame | grip, tip, base and hand model poses from SteamVR's render model files, replacing the Index's grip offset | `114f58b` |
+| input | Index finger curls (`/input/finger/*`) read each finger from the hand skeleton while the runtime tracks the fingers, the trigger and grip otherwise (#318) | `9e9b858` |
+| crash dialog | runs in its own process (`xrizer-crash-dialog`, next to `vrclient.so`), so it stays open after the game exits; in the game's process if that's missing; window fits its content (#73) | `7b481f7` `7b42d12` |
 
 Checked with the games' own files, no change needed: The Forest's jump, drop and crouch (#250) are on its joystick bindings, its leftover trackpad sources are dropped by SteamVR too; Half-Life 2: VR Mod's jump and crouch on Touch (#213). Like SteamVR: grab mode has no click haptic unless the binding sets one (#420), and a game that never resets the seated zero sits where the user last recentered (#405).
 

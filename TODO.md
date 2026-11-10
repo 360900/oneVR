@@ -10,14 +10,13 @@ Effort: S under a day, M a few days, L a week or more. "WiVRn" notes describe wh
    - radial: output names (`button_<n>`), layout and defaults guessed; needs vrclient disassembly
    - grab `drop_speed`/`downgrade_speed` read from SteamVR's tooltips, needs an Index test; pinch ignores `capsense_enable_threshold` and the trackpad force SteamVR adds
    - Index trackpad force (#208): Alyx's binding reads trackpad force at 0.38 (tested); if the wheel still opens on a light touch, the runtime reports force on touch, needs Monado's "Trackpad force" debug output
-   - Index finger paths (`/input/finger/*`, #318) follow the trigger and the grip, not each finger's curl from a tracked skeleton
    - right stick dead on Quest 2 + WiVRn (#321, WiVRn #874): not reproduced with Alyx and TWD bindings, needs a headset capture (xrizer input trace, `OXR_DEBUG_BINDINGS=1`, wivrn-server `XRT_LOG=debug`)
 2. Controller profiles (M)
    - Pico 4 tilt (#97): WiVRn reports the 4 and 4 Ultra as `pico4_controller` and SteamVR has no grip offset for the Ultra; needs the Ultra's OpenXR system name on WiVRn and a measured offset
    - PSVR2 Sense: `XR_MNDX_psvr2_interaction` is a preview in Monado main only, WiVRn builds without it; works as Touch today
    - Cosmos registered device type, serials and render model names unverified; Focus 3 tracking system may be `vive_eyes` like the Cosmos; `vive_tracker_*` default bindings still ignored (trackers: 21)
    - gamepad has no tracked device or binding variant; untested on a headset
-   - Frame: model numbers and serials are guesses (upstream PR 464 reports `Roy_Left`/`Roy_Right`); its wrist rotation workaround for SteamVR's OpenXR runtime isn't taken
+   - Frame: model numbers and serials are guesses (upstream PR 464 reports `Roy_Left`/`Roy_Right`, found in no SteamVR file); its 30° wrist rotation isn't taken: SteamVR 2.12 changed the wrist to match the OpenXR spec, which the skeleton follows, and one report calls the new one 30° off; needs a Frame test
 3. Frame timing (S)
    - `XR_META_performance_metrics` unused (no Linux runtime has it)
 4. Haptics (S)
@@ -138,9 +137,6 @@ Effort: S under a day, M a few days, L a week or more. "WiVRn" notes describe wh
 32. Input paths and identity (S-M)
     - `/user/head` pose bindings, gamepad, treadmill, stylus dropped
     - games without an action manifest can't be shown another controller type
-
-33. Crash dialog (M)
-    - runs in the game's process and closes with it (#73); outliving it needs a helper binary
 
 ## Out of scope
 
