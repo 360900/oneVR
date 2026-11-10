@@ -1011,7 +1011,10 @@ void scene_renderer::render(
 
 		// If blending is disabled (std::get<0> == false), put the closest objects first
 		// If blending is enabled (std::get<0> == true), put the farthest objects first
-		return std::get<0>(a) ^ (std::get<1>(a) > std::get<1>(b));
+		// oneVR: never true both ways at the same distance, which a sort needs
+		if (std::get<0>(a))
+			return std::get<1>(a) < std::get<1>(b);
+		return std::get<1>(a) > std::get<1>(b);
 	});
 
 	scene_renderer::output_image & output = get_output_image_data(output_image_info{

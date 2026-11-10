@@ -287,7 +287,12 @@ void hand_model::add_hand(scene & scene,
 		for (auto p = n.parent; p != entt::null and not under_hand; p = scene.world.get<components::node>(p).parent)
 			under_hand = p == entity;
 		if (under_hand)
+		{
+			// its own copy: the glTF cache shares the mesh with every scene that adds the hand,
+			// and shading it again would double its primitives each time
+			n.mesh = std::make_shared<renderer::mesh>(*n.mesh);
 			shade_hand(scene, hand, *n.mesh);
+		}
 	}
 
 	for (auto [joint, name]: joints)

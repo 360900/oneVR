@@ -124,7 +124,7 @@ void main()
 	{
 		// oneVR: 8-bit video lands opaque pixels a little under 1, which shows the
 		// passthrough through dark content; nearly opaque counts as opaque
-		outColor.a = min((outColor.a - 0.02) / 0.88, 1.0);
+		outColor.a = clamp((outColor.a - 0.02) / 0.88, 1e-4, 1.0);
 		outColor.rgb /= outColor.a;
 		outColor = outColor * scale + bias;
 		outColor.rgb *= outColor.a;
