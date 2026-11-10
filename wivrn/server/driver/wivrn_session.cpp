@@ -528,15 +528,24 @@ void wivrn_session::operator()(from_headset::headset_info_packet &&)
 
 void wivrn_session::operator()(const from_headset::settings_changed & settings)
 {
-	*this->settings.lock() = settings;
+	// oneVR: the headset's refresh rate, which the compositor's rate is a fraction of
+	float headset_rate;
+	{
+		auto locked = this->settings.lock();
+		headset_rate = compositor.get_framerate() * locked->fps_divider;
+		*locked = settings;
+	}
 
 	if (settings.bitrate_bps != 0)
 		compositor.set_bitrate(settings.bitrate_bps);
 
 	// oneVR: with the dashboard alone, the headset gets the dashboard's rate back from the worker
-	// thread, and the compositor follows the headset's refresh_rate_changed
+	// thread, and the compositor follows the headset's refresh_rate_changed. No change comes
+	// back for a new divider at the same rate, so the compositor takes it here
 	if (settings.preferred_refresh_rate != 0 and app_pacers.running().game)
 		compositor.set_framerate(settings.preferred_refresh_rate / settings.fps_divider);
+	else if (settings.fps_divider != 0)
+		compositor.set_framerate(headset_rate / settings.fps_divider);
 	onevr_refresh_check = true;
 
 	if (not settings.mirror_gamepad and uinput_handler)
@@ -1182,11 +1191,9 @@ void wivrn_session::run_worker(std::stop_token stop)
 			{
 				if (do_refresh)
 				{
-					{
-						scoped_lock lock(xrt_system.sessions.mutex);
-						if (xrt_system.sessions.count == 0)
-							compositor.request_display_refresh_rate(0);
-					}
+					// oneVR: a game's own request ends with it, the dashboard is always a session
+					if (not app_pacers.running().game and compositor.get_requested_refresh_rate() != 0)
+						compositor.request_display_refresh_rate(0);
 					if (compositor.get_requested_refresh_rate() == 0)
 					{
 						// adjust() locks the settings too
