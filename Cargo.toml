@@ -11,6 +11,12 @@ readme = "README.md"
 [lib]
 crate-type = ["cdylib"]
 
+# The crash dialog, started by the library so it outlives the game.
+[[bin]]
+name = "xrizer-crash-dialog"
+path = "src/bin/xrizer-crash-dialog.rs"
+test = false
+
 [features]
 default = ["monado", "git-version"]
 static-openxr = ["openxr/static"]

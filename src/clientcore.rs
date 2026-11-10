@@ -165,26 +165,6 @@ fn setup_hint(error: &InitError, is_32bit: bool) -> Option<&'static str> {
     })
 }
 
-/// The path this library was loaded from.
-#[cfg_attr(any(test, not(target_pointer_width = "64")), allow(dead_code))]
-fn own_library() -> Option<std::path::PathBuf> {
-    use std::os::unix::ffi::OsStrExt;
-    let mut info = std::mem::MaybeUninit::<libc::Dl_info>::zeroed();
-    // SAFETY: dladdr only reads the address and fills `info` on success.
-    let found = unsafe { libc::dladdr(own_library as *const c_void, info.as_mut_ptr()) };
-    if found == 0 {
-        return None;
-    }
-    // SAFETY: filled by a successful dladdr.
-    let name = unsafe { info.assume_init() }.dli_fname;
-    if name.is_null() {
-        return None;
-    }
-    // SAFETY: a nul terminated path that lives as long as the library is loaded.
-    let name = unsafe { CStr::from_ptr(name) };
-    Some(std::ffi::OsStr::from_bytes(name.to_bytes()).into())
-}
-
 /// Where the 32-bit build belongs if the 64-bit `library` is installed as a runtime directory's
 /// `bin/linux64/vrclient.so` and there is none: OpenVR loads `bin/vrclient.so` in 32-bit games.
 #[cfg_attr(any(test, not(target_pointer_width = "64")), allow(dead_code))]
@@ -211,7 +191,7 @@ impl ClientCore {
         {
             static CHECKED: std::sync::Once = std::sync::Once::new();
             CHECKED.call_once(|| {
-                if let Some(path) = own_library().and_then(|lib| missing_32bit_build(&lib)) {
+                if let Some(path) = crate::own_library().and_then(|lib| missing_32bit_build(&lib)) {
                     info!(
                         "No 32-bit xrizer at {}: 32-bit games won't start in VR with this install",
                         path.display()
@@ -625,7 +605,7 @@ mod tests {
 
     #[test]
     fn missing_32bit_build_next_to_the_64bit_one() {
-        assert!(own_library().is_some());
+        assert!(crate::own_library().is_some());
 
         let dir = std::env::temp_dir().join(format!("xrizer-32bit-{}", std::process::id()));
         let linux64 = dir.join("bin/linux64");

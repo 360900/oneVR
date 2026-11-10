@@ -196,6 +196,77 @@ pub(crate) fn log_file_path() -> Option<&'static std::path::Path> {
 #[cfg(not(test))]
 static LOG_FILE: OnceLock<std::path::PathBuf> = OnceLock::new();
 
+/// The path this library was loaded from.
+#[cfg_attr(test, allow(dead_code))]
+pub(crate) fn own_library() -> Option<std::path::PathBuf> {
+    use std::os::unix::ffi::OsStrExt;
+    let mut info = std::mem::MaybeUninit::<libc::Dl_info>::zeroed();
+    // SAFETY: dladdr only reads the address and fills `info` on success.
+    let found = unsafe { libc::dladdr(own_library as *const std::ffi::c_void, info.as_mut_ptr()) };
+    if found == 0 {
+        return None;
+    }
+    // SAFETY: filled by a successful dladdr.
+    let name = unsafe { info.assume_init() }.dli_fname;
+    if name.is_null() {
+        return None;
+    }
+    // SAFETY: a nul terminated path that lives as long as the library is loaded.
+    let name = unsafe { std::ffi::CStr::from_ptr(name) };
+    Some(std::ffi::OsStr::from_bytes(name.to_bytes()).into())
+}
+
+/// The crash dialog's own executable, installed next to this library, which keeps the dialog
+/// open after the game exits.
+#[cfg(not(test))]
+const CRASH_DIALOG: &str = "xrizer-crash-dialog";
+
+/// Shows the crash dialog for a panic: in its own process if [CRASH_DIALOG] can be started, so
+/// it outlives the game, and in this one otherwise.
+#[cfg(not(test))]
+fn show_crash_dialog(error: String, backtrace: String) {
+    use std::io::Write;
+    use std::os::unix::process::CommandExt;
+    use std::process::{Command, Stdio};
+
+    let log_file = log_file_path();
+    let spawned = own_library()
+        .and_then(|library| Some(library.parent()?.join(CRASH_DIALOG)))
+        .and_then(|helper| {
+            let mut command = Command::new(&helper);
+            command.arg(&error);
+            if let Some(log_file) = log_file {
+                command.arg(log_file);
+            }
+            command
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                // Its own process group, so signals meant for the game's don't close it.
+                .process_group(0);
+            // SAFETY: close_range is async-signal-safe. The game's descriptors (sockets, the
+            // runtime's connection) aren't the dialog's to keep open.
+            unsafe {
+                command.pre_exec(|| {
+                    libc::syscall(libc::SYS_close_range, 3, u32::MAX, 0);
+                    Ok(())
+                });
+            }
+            command
+                .spawn()
+                .inspect_err(|e| log::warn!("Couldn't start {}: {e}", helper.display()))
+                .ok()
+        });
+    match spawned {
+        Some(mut child) => {
+            // The backtrace goes through stdin, as it can be longer than arguments may be.
+            if let Some(mut stdin) = child.stdin.take() {
+                let _ = stdin.write_all(backtrace.as_bytes());
+            }
+        }
+        None => error_dialog::dialog(error, backtrace, log_file.map(Into::into)),
+    }
+}
+
 /// Remove old per-process log files so the log directory doesn't accumulate
 /// one file per xrizer process forever. Files newer than the cutoff are kept,
 /// as they may belong to a concurrently running process.
@@ -294,7 +365,7 @@ fn init_logging() {
                 log::error!("{info}");
                 let backtrace = std::backtrace::Backtrace::force_capture();
                 log::error!("Backtrace: \n{backtrace}");
-                error_dialog::dialog(format!("{info}"), backtrace);
+                show_crash_dialog(format!("{info}"), backtrace.to_string());
                 std::process::abort();
             }));
         }
