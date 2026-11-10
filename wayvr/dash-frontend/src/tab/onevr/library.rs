@@ -560,21 +560,23 @@ impl<T: 'static> TabOneVrLibrary<T> {
 		// every client, so one whose session begins later isn't taken for this app's
 		let known = frontend.interface.monado_client_list(data, false);
 		let known = known.ok().map(|clients| clients.iter().map(|c| c.id).collect());
+		// before the start is noted: a Steam that can't be run leaves no badge, no start time and
+		// no title for the next session to take
+		if let StartWith::Steam(arguments) = &how
+			&& let Err(e) = steam_utils::launch_with_arguments(&id, arguments)
+		{
+			log::warn!("Could not start {name} with Steam: {e:?}");
+			toast_error(frontend, "ONEVR.LIBRARY.START_FAILED", name, &e);
+			return;
+		}
 		started::note_start(id.clone(), name, known, generation);
 		// the list is sorted with it on the next visit
 		self.library.mark_started(&id);
 		self.save_library();
-		match how {
-			StartWith::Server => frontend
+		if matches!(how, StartWith::Server) {
+			frontend
 				.tasks
-				.push(FrontendTask::OneVr(OneVrRequest::StartApplication(id))),
-			StartWith::Steam(arguments) => {
-				if let Err(e) = steam_utils::launch_with_arguments(&id, &arguments) {
-					log::warn!("Could not start {name} with Steam: {e:?}");
-					toast_error(frontend, "ONEVR.LIBRARY.START_FAILED", name, &e);
-					return;
-				}
-			}
+				.push(FrontendTask::OneVr(OneVrRequest::StartApplication(id)));
 		}
 		let text = frontend
 			.layout

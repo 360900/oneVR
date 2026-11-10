@@ -202,9 +202,15 @@ pub fn launch_with_arguments(app_id: &AppID, arguments: &str) -> anyhow::Result<
 	};
 	command
 		.args(["-applaunch", app_id])
-		.args(arguments.split_whitespace())
+		.args(split_arguments(arguments))
 		.spawn()?;
 	Ok(())
+}
+
+/// oneVR: a launch entry's arguments are a command line, where quotes keep an argument with
+/// spaces together; one with unbalanced quotes is split at its spaces
+fn split_arguments(arguments: &str) -> Vec<String> {
+	shell_words::split(arguments).unwrap_or_else(|_| arguments.split_whitespace().map(str::to_string).collect())
 }
 
 fn flatpak_root() -> PathBuf {
@@ -403,6 +409,18 @@ impl SteamUtils {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn launch_arguments_keep_quoted_spaces() {
+		assert_eq!(split_arguments(""), Vec::<String>::new());
+		assert_eq!(split_arguments("-vr  -novid"), ["-vr", "-novid"]);
+		assert_eq!(
+			split_arguments(r#"-config "My Settings.ini" -vr"#),
+			["-config", "My Settings.ini", "-vr"]
+		);
+		// unbalanced quotes
+		assert_eq!(split_arguments(r#"-name "Jane -vr"#), ["-name", "\"Jane", "-vr"]);
+	}
 
 	#[test]
 	fn uninstalled_games_have_no_manifest() {
