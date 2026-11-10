@@ -479,6 +479,76 @@ pub(super) fn scalar_constants_state(
         })
 }
 
+/// A trigger binding's pull on one of the Index's finger curls (`/input/finger/*`), which OpenXR
+/// has no input for. It reads the finger's curl from the hand skeleton while the runtime tracks
+/// the fingers, and otherwise the input the curl follows, see
+/// [crate::input::profiles::paths::DynSubpath::finger].
+pub(super) struct FingerCurlBinding {
+    /// Bound to just the input the curl follows without a tracked hand. Its activity is the
+    /// binding's.
+    pub fallback: xr::Action<f32>,
+    pub profile: xr::Path,
+    pub hand: xr::Path,
+    /// The finger's index in skeletal summaries.
+    pub finger: usize,
+    /// The handle of the finger's source path, e.g. `/user/hand/left/input/finger/index`.
+    pub origin: vr::VRInputValueHandle_t,
+}
+
+/// The value of an action's finger curl bindings on a hand: the largest one, like OpenXR
+/// combines the bindings of an action. `curls` gives the hand's tracked curls, if the runtime
+/// tracks its fingers, and is only called when a binding is for the hand.
+pub(super) fn finger_curls_state(
+    bindings: &[FingerCurlBinding],
+    session: &xr::Session<xr::AnyGraphics>,
+    hand: xr::Path,
+    profile: xr::Path,
+    curls: impl FnOnce() -> Option<[f32; 5]>,
+    update_time: &impl Fn(bool, xr::Time) -> f32,
+) -> Option<vr::InputAnalogActionData_t> {
+    let mut curls = Some(curls);
+    let mut tracked = None;
+    let mut best: Option<vr::InputAnalogActionData_t> = None;
+    for binding in bindings {
+        if binding.hand != hand || binding.profile != profile {
+            continue;
+        }
+        let fallback = binding
+            .fallback
+            .state(session, hand)
+            .unwrap_or_else(inactive_state);
+        if !fallback.is_active {
+            continue;
+        }
+        if let Some(curls) = curls.take() {
+            tracked = curls();
+        }
+        let state = match tracked {
+            // The skeleton moves continuously, so the curl counts as changed at each sync.
+            Some(curls) => vr::InputAnalogActionData_t {
+                bActive: true,
+                activeOrigin: binding.origin,
+                x: curls[binding.finger],
+                ..Default::default()
+            },
+            None => vr::InputAnalogActionData_t {
+                bActive: true,
+                activeOrigin: binding.origin,
+                x: fallback.current_state,
+                fUpdateTime: update_time(
+                    fallback.changed_since_last_sync,
+                    fallback.last_change_time,
+                ),
+                ..Default::default()
+            },
+        };
+        if best.is_none_or(|best| state.x > best.x) {
+            best = Some(state);
+        }
+    }
+    best
+}
+
 /// The squared length of an analog state.
 pub(super) fn analog_magnitude(state: &vr::InputAnalogActionData_t) -> f32 {
     state.x * state.x + state.y * state.y + state.z * state.z

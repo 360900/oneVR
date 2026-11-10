@@ -2,8 +2,8 @@ use super::actions::{ControllerType, LoadedActionDataMap, XrNames};
 use super::bindings::{ActionPath, DpadParameters, DpadSubMode};
 use crate::input::components::ComponentActionData;
 use crate::input::custom_bindings::{
-    BoolBindingData, BoolBindingType, DpadActions, HandSpeeds, ScalarConstantBinding,
-    Vector2ActionData, Vector2BindingData, Vector2Transform,
+    BoolBindingData, BoolBindingType, DpadActions, FingerCurlBinding, HandSpeeds,
+    ScalarConstantBinding, Vector2ActionData, Vector2BindingData, Vector2Transform,
 };
 use crate::input::devices::SubactionPaths;
 use crate::input::haptics::{BindingHaptic, BindingHapticData, BindingPress};
@@ -43,6 +43,8 @@ pub(super) struct BindingsLoadContext<'a> {
     /// The scalar_constant bindings of analog actions that aren't bound to their input directly,
     /// in every profile.
     pub scalar_constants: HashMap<String, Vec<ScalarConstantBinding>>,
+    /// The finger curl bindings of analog actions, in every profile.
+    pub finger_curls: HashMap<String, Vec<FingerCurlBinding>>,
     /// The identity of the controller that converted bindings were made for, per interaction
     /// profile that shows it (see [InteractionProfile::SIMULATE_CONVERTED]).
     pub simulated_properties: HashMap<xr::Path, &'static ProfileProperties>,
@@ -87,6 +89,7 @@ impl<'a> BindingsLoadContext<'a> {
             per_profile_binding_info: Default::default(),
             head_proximity: Default::default(),
             scalar_constants: Default::default(),
+            finger_curls: Default::default(),
             simulated_properties: Default::default(),
             emulated_profiles: Default::default(),
             binding_haptics: Default::default(),
@@ -168,6 +171,7 @@ impl BindingsLoadContext<'_> {
             input_paths_out,
             binding_info_out,
             scalar_constants: &mut self.scalar_constants,
+            finger_curls: &mut self.finger_curls,
             binding_haptics: &mut self.binding_haptics,
             hand_speeds: &self.hand_speeds,
             uses_hand_speeds: &mut self.uses_hand_speeds,
@@ -208,6 +212,7 @@ pub(super) struct BindingsProfileLoadContext<'a> {
     /// What GetActionBindingInfo reports for each action in the current profile.
     pub binding_info_out: &'a mut HashMap<String, Vec<BindingInfo>>,
     scalar_constants: &'a mut HashMap<String, Vec<ScalarConstantBinding>>,
+    finger_curls: &'a mut HashMap<String, Vec<FingerCurlBinding>>,
     binding_haptics: &'a mut Vec<(String, String, BindingHapticData)>,
     hand_speeds: &'a Arc<HandSpeeds>,
     uses_hand_speeds: &'a mut bool,
@@ -577,6 +582,48 @@ impl BindingsProfileLoadContext<'_> {
                 on,
                 off,
             });
+    }
+
+    /// Adds a finger curl binding for `output` if it's an analog action, which reads `finger`, a
+    /// path of a finger curl, or `fallback`, the input the curl follows. Returns whether it was
+    /// added; other actions get a direct binding of `fallback`.
+    pub fn add_finger_curl_binding(
+        &mut self,
+        output: &ActionPath,
+        finger: DynInputPath,
+        fallback: DynInputPath,
+        action_set_name: &str,
+        action_set: &xr::ActionSet,
+    ) -> bool {
+        let Some((index, _)) = finger.subpath.finger() else {
+            return false;
+        };
+        if !matches!(
+            self.actions.get(&output.path),
+            Some(ActionData::Vector1 { .. })
+        ) {
+            return false;
+        }
+        let Some(action) = self.input_action::<f32>(action_set_name, action_set, fallback) else {
+            return true;
+        };
+        trace!("suggesting {finger} ({fallback}) for {}", output.path);
+        if let Ok(input) = self.instance.string_to_path(&fallback.to_string()) {
+            self.push_input_path(&output.path, input);
+        }
+        let hand = self.device_path(finger.device);
+        let origin = self.origin(finger);
+        self.finger_curls
+            .entry(output.path.clone())
+            .or_default()
+            .push(FingerCurlBinding {
+                fallback: action,
+                profile: self.interaction_profile,
+                hand,
+                finger: index,
+                origin,
+            });
+        true
     }
 
     pub fn push_binding(&mut self, action: String, path: xr::Path) {

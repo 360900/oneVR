@@ -646,11 +646,12 @@ impl std::str::FromStr for DynInputPath {
             Some("back") if device == InputDevice::Gamepad => paths::DynSubpath::View,
             Some("start") if device == InputDevice::Gamepad => paths::DynSubpath::Menu,
             Some("guide") if device == InputDevice::Gamepad => paths::DynSubpath::System,
-            // Index finger curls have no OpenXR input. They follow the trigger and grip values,
-            // which finger curl is estimated from anyway.
+            // The Index's finger curls, see [paths::DynSubpath::finger].
             Some("finger") => match split.next() {
-                Some("index") => paths::DynSubpath::Trigger,
-                Some("middle" | "ring" | "pinky") => paths::DynSubpath::Squeeze,
+                Some("index") => paths::DynSubpath::FingerIndex,
+                Some("middle") => paths::DynSubpath::FingerMiddle,
+                Some("ring") => paths::DynSubpath::FingerRing,
+                Some("pinky") => paths::DynSubpath::FingerPinky,
                 other => return Err(format!("invalid finger {other:?}")),
             },
             // The Index's pinch gesture, which SteamVR derives from the trigger value, the index
@@ -802,6 +803,11 @@ pub mod paths {
         Thumbrest::<Touch>,
         PinchExt("pinch_ext")::<Value>,
         GraspExt("grasp_ext")::<Value>,
+        // The Index's finger curls, which no interaction profile has.
+        FingerIndex("finger/index")::<Value>,
+        FingerMiddle("finger/middle")::<Value>,
+        FingerRing("finger/ring")::<Value>,
+        FingerPinky("finger/pinky")::<Value>,
         // The gamepad's.
         ShoulderLeft::<Click>,
         ShoulderRight::<Click>,
@@ -843,6 +849,19 @@ pub mod paths {
                 "trigger_right" => Some(Self::TriggerRight),
                 "joystick_left" | "thumbstick_left" => Some(Self::ThumbstickLeft),
                 "joystick_right" | "thumbstick_right" => Some(Self::ThumbstickRight),
+                _ => None,
+            }
+        }
+
+        /// For the Index's finger curls (`/input/finger/*`), which OpenXR has no inputs for: the
+        /// finger's index in skeletal summaries (1 for the index finger to 4 for the pinky), and
+        /// the input it follows without a tracked hand, as the estimated skeleton's fingers do.
+        pub fn finger(self) -> Option<(usize, Self)> {
+            match self {
+                Self::FingerIndex => Some((1, Self::Trigger)),
+                Self::FingerMiddle => Some((2, Self::Squeeze)),
+                Self::FingerRing => Some((3, Self::Squeeze)),
+                Self::FingerPinky => Some((4, Self::Squeeze)),
                 _ => None,
             }
         }

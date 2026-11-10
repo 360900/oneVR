@@ -243,6 +243,7 @@ impl<C: openxr_data::Compositor> Input<C> {
             per_profile_binding_info,
             head_proximity,
             scalar_constants,
+            finger_curls,
             simulated_properties,
             emulated_profiles,
             binding_haptics,
@@ -358,6 +359,7 @@ impl<C: openxr_data::Compositor> Input<C> {
             .map(|(k, v)| (k, action_map_to_secondary(&mut act_guard, v)))
             .collect();
         let scalar_constants = action_map_to_secondary(&mut act_guard, scalar_constants);
+        let finger_curls = action_map_to_secondary(&mut act_guard, finger_curls);
 
         // An action belongs to the set its path starts with, e.g. /actions/main/in/hand_left.
         let skeleton_sets = actions
@@ -411,6 +413,7 @@ impl<C: openxr_data::Compositor> Input<C> {
             per_profile_binding_info,
             direct_origins: Default::default(),
             scalar_constants,
+            finger_curls,
             _info_action: info_action,
             info_set,
             haptic_action,
@@ -489,7 +492,13 @@ fn mirror_hands(value: &mut serde_json::Value, in_skeleton: bool) {
 }
 
 /// The path to bind for `path` on `P`: the path itself, or what the profile translates it to.
+/// Finger curls translate to the input they follow without a tracked hand, see
+/// [DynSubpath::finger].
 fn validate_path<P: InteractionProfile>(path: DynInputPath) -> Option<DynInputPath> {
+    let path = match path.subpath.finger() {
+        Some((_, subpath)) => DynInputPath { subpath, ..path },
+        None => path,
+    };
     let path = match path {
         DynInputPath {
             device: InputDevice::Hand(Hand::Left),

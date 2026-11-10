@@ -776,6 +776,11 @@ impl<C: openxr_data::Compositor> Input<C> {
             {
                 *slot = constant;
             }
+            if let Some(curl) = self.finger_curl_state(session_data, loaded, key, index, path)
+                && (!slot.bActive || curl.x.abs() > slot.x.abs())
+            {
+                *slot = curl;
+            }
         }
         // Like OpenXR, report the largest value when unrestricted. Left wins ties.
         next[3] = unrestricted_analog(&next[..3], |state, best| {
@@ -848,6 +853,36 @@ impl<C: openxr_data::Compositor> Input<C> {
             path,
             profile,
             device.data().as_ffi(),
+            &|changed, time| self.update_time(changed, time),
+        )
+    }
+
+    /// The value of an action's finger curl bindings on the device at `index` of
+    /// [Self::action_devices], if any is active.
+    fn finger_curl_state(
+        &self,
+        session_data: &SessionData,
+        loaded: &ManifestLoadedActions,
+        key: ActionKey,
+        index: usize,
+        path: xr::Path,
+    ) -> Option<vr::InputAnalogActionData_t> {
+        let bindings = loaded.finger_curls.get(key)?;
+        let hand = match index {
+            0 => Hand::Left,
+            1 => Hand::Right,
+            _ => return None,
+        };
+        let profile = session_data
+            .session
+            .current_interaction_profile(path)
+            .ok()?;
+        custom_bindings::finger_curls_state(
+            bindings,
+            &session_data.session,
+            path,
+            profile,
+            || self.tracked_finger_curls(session_data, hand),
             &|changed, time| self.update_time(changed, time),
         )
     }
@@ -4202,6 +4237,8 @@ struct ManifestLoadedActions {
     direct_origins: DirectOrigins,
     /// The scalar_constant bindings of analog actions that aren't bound to their input directly.
     scalar_constants: SecondaryMap<ActionKey, Vec<ScalarConstantBinding>>,
+    /// The finger curl bindings of analog actions.
+    finger_curls: SecondaryMap<ActionKey, Vec<custom_bindings::FingerCurlBinding>>,
     info_set: xr::ActionSet,
     _info_action: xr::Action<bool>,
     haptic_set: xr::ActionSet,
@@ -4310,8 +4347,19 @@ impl ManifestLoadedActions {
                     .flatten()
                     .filter(|constant| constant.profile == *profile)
                     .map(|constant| constant.origin);
+                let fingers = self
+                    .finger_curls
+                    .get(key)
+                    .into_iter()
+                    .flatten()
+                    .filter(|finger| finger.profile == *profile)
+                    .map(|finger| finger.origin);
                 // Each origin names its device, so one list serves every device.
-                let custom: Vec<_> = bools.chain(vector2s).chain(constants).collect();
+                let custom: Vec<_> = bools
+                    .chain(vector2s)
+                    .chain(constants)
+                    .chain(fingers)
+                    .collect();
 
                 let origin = |device| {
                     let on_device = || {

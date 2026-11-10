@@ -283,6 +283,11 @@ mod tests {
             Some(Trackpad)
         );
         assert_eq!(convert(B, Hand::Right, &knuckles, wmr), None);
+        // Finger curls stay, following the trigger and grip.
+        assert_eq!(
+            convert(FingerIndex, Hand::Right, &knuckles, wmr),
+            Some(FingerIndex)
+        );
         let vive = ControllerType::ViveController;
         assert_eq!(convert(Trackpad, Hand::Left, &vive, wmr), Some(Thumbstick));
     }

@@ -819,28 +819,41 @@ fn index_finger_curls() {
     let f = Fixture::new();
     f.load_actions(c"actions_fingers.json");
     let path = Knuckles::profile_path();
-    f.verify_bindings::<f32>(
-        path,
-        c"/actions/hands/in/indexcurl",
-        [
+    // Finger curls have no OpenXR input. Without tracked fingers they follow the trigger and grip
+    // values, read on their own (see finger_curl_actions_follow_tracked_fingers).
+    let index = f.get_action_handle(c"/actions/hands/in/indexcurl");
+    let data = f.input.openxr.session_data.get();
+    let loaded = data.input_data.get_loaded_actions().unwrap();
+    let fallbacks = |handle| -> HashSet<String> {
+        let profile = f.input.openxr.instance.string_to_path(path).unwrap();
+        loaded.finger_curls[ActionKey::from(KeyData::from_ffi(handle))]
+            .iter()
+            .filter(|binding| binding.profile == profile)
+            .flat_map(|binding| fakexr::get_suggested_bindings(binding.fallback.as_raw(), profile))
+            .collect()
+    };
+    assert_eq!(
+        fallbacks(index),
+        HashSet::from([
             "/user/hand/left/input/trigger/value".into(),
             "/user/hand/right/input/trigger/value".into(),
-        ],
+        ])
     );
     for action in [
         c"/actions/hands/in/middlecurl",
         c"/actions/hands/in/ringcurl",
         c"/actions/hands/in/pinkycurl",
     ] {
-        f.verify_bindings::<f32>(
-            path,
-            action,
-            [
+        assert_eq!(
+            fallbacks(f.get_action_handle(action)),
+            HashSet::from([
                 "/user/hand/left/input/squeeze/value".into(),
                 "/user/hand/right/input/squeeze/value".into(),
-            ],
+            ]),
+            "{action:?}"
         );
     }
+    drop(data);
     // The Index's pinch gesture (Blade & Sorcery grabs with it) follows the trigger.
     f.verify_custom_bindings(
         path,
