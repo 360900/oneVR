@@ -81,7 +81,7 @@ fn write(dir: &Path, id: &str, content: &str) -> anyhow::Result<()> {
 	// our own copy is replaced, so adding again works and fixes an outdated copy
 	anyhow::ensure!(!path.exists() || is_ours(&path), "{} already exists", path.display());
 	fs::create_dir_all(dir)?;
-	fs::write(path, content)?;
+	crate::write_file(&path, content)?;
 	Ok(())
 }
 

@@ -45,11 +45,14 @@ fn file(dir: &Path, steam_app_id: u64) -> PathBuf {
 	dir.join(format!("steam.app.{steam_app_id}.json"))
 }
 
-fn read(path: &Path) -> Map<String, Value> {
-	fs::read_to_string(path)
-		.ok()
-		.and_then(|s| serde_json::from_str(&s).ok())
-		.unwrap_or_default()
+/// The file's settings; none when there is no file. A file that isn't a JSON object is an error,
+/// so a change doesn't replace what its owner may still want to repair.
+fn read(path: &Path) -> anyhow::Result<Map<String, Value>> {
+	match fs::read_to_string(path) {
+		Ok(text) => serde_json::from_str(&text).map_err(|e| anyhow::anyhow!("{}: {e}", path.display())),
+		Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Map::new()),
+		Err(e) => Err(anyhow::anyhow!("{}: {e}", path.display())),
+	}
 }
 
 pub fn controller_type(steam_app_id: u64) -> ControllerType {
@@ -63,6 +66,7 @@ pub fn set_controller_type(steam_app_id: u64, ty: ControllerType) -> anyhow::Res
 
 fn controller_type_in(dir: &Path, steam_app_id: u64) -> ControllerType {
 	read(&file(dir, steam_app_id))
+		.unwrap_or_default()
 		.get("controller_type")
 		.and_then(Value::as_str)
 		.map_or(ControllerType::Auto, ControllerType::from_name)
@@ -70,7 +74,7 @@ fn controller_type_in(dir: &Path, steam_app_id: u64) -> ControllerType {
 
 fn set_controller_type_in(dir: &Path, steam_app_id: u64, ty: ControllerType) -> anyhow::Result<()> {
 	let path = file(dir, steam_app_id);
-	let mut map = read(&path);
+	let mut map = read(&path)?;
 	match ty.name() {
 		Some(name) => map.insert("controller_type".into(), name.into()),
 		None => map.remove("controller_type"),
@@ -82,7 +86,7 @@ fn set_controller_type_in(dir: &Path, steam_app_id: u64, ty: ControllerType) -> 
 		}
 	}
 	fs::create_dir_all(dir)?;
-	fs::write(&path, serde_json::to_string_pretty(&Value::Object(map))?)?;
+	crate::write_file(&path, serde_json::to_string_pretty(&Value::Object(map))?)?;
 	Ok(())
 }
 
@@ -105,13 +109,21 @@ mod tests {
 		assert_eq!(controller_type_in(&dir, 42), ControllerType::Touch);
 		set_controller_type_in(&dir, 42, ControllerType::Auto).unwrap();
 		assert_eq!(
-			read(&path),
+			read(&path).unwrap(),
 			serde_json::from_str::<Map<_, _>>(r#"{"other": 1}"#).unwrap()
 		);
 		fs::write(&path, r#"{"controller_type": "vive_controller"}"#).unwrap();
 		assert_eq!(controller_type_in(&dir, 42), ControllerType::Auto);
 		set_controller_type_in(&dir, 42, ControllerType::Auto).unwrap();
 		assert!(!path.exists());
+
+		// a broken file reads as Auto and is left as it is
+		fs::write(&path, r#"{"controller_type": "knuckles","#).unwrap();
+		assert_eq!(controller_type_in(&dir, 42), ControllerType::Auto);
+		assert!(set_controller_type_in(&dir, 42, ControllerType::Touch).is_err());
+		assert!(set_controller_type_in(&dir, 42, ControllerType::Auto).is_err());
+		assert_eq!(fs::read_to_string(&path).unwrap(), r#"{"controller_type": "knuckles","#);
+		fs::remove_file(&path).unwrap();
 
 		fs::remove_dir(&dir).unwrap();
 	}

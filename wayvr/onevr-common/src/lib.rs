@@ -1,6 +1,6 @@
 //! oneVR integration shared by the WayVR crates.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub mod added_apps;
 pub mod clipboard;
@@ -39,4 +39,43 @@ pub(crate) fn xdg_dir(var: &str, fallback: &str) -> Option<PathBuf> {
 		.map(PathBuf::from)
 		.filter(|dir| dir.is_absolute())
 		.or_else(|| Some(PathBuf::from(non_empty("HOME")?).join(fallback)))
+}
+
+/// Writes a file whole or not at all: to a temporary file next to it, renamed over it. A crash
+/// or a full disk in the middle leaves the old contents instead of a cut-off file. A symlink
+/// stays, its target is replaced.
+pub fn write_file(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+	let path = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+	let mut name = path.file_name().unwrap_or_default().to_os_string();
+	name.push(format!(".tmp{}", std::process::id()));
+	let tmp = path.with_file_name(name);
+	let written = std::fs::write(&tmp, contents).and_then(|()| std::fs::rename(&tmp, &path));
+	if written.is_err() {
+		let _ = std::fs::remove_file(&tmp);
+	}
+	written
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn write_file_replaces_whole_files() {
+		let dir = std::env::temp_dir().join(format!("onevr-write-file-{}", std::process::id()));
+		std::fs::create_dir_all(&dir).unwrap();
+		let (file, link) = (dir.join("file"), dir.join("link"));
+		write_file(&file, "one").unwrap();
+		write_file(&file, "two").unwrap();
+		assert_eq!(std::fs::read_to_string(&file).unwrap(), "two");
+		// through a symlink, which stays one
+		std::os::unix::fs::symlink(&file, &link).unwrap();
+		write_file(&link, "three").unwrap();
+		assert!(link.is_symlink());
+		assert_eq!(std::fs::read_to_string(&file).unwrap(), "three");
+		// nothing is left behind, also when the write fails
+		assert!(write_file(&dir.join("missing/file"), "four").is_err());
+		assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
+		std::fs::remove_dir_all(&dir).unwrap();
+	}
 }

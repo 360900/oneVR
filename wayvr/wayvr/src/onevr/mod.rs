@@ -99,7 +99,7 @@ impl OneVrConfig {
 
     fn save(&self) -> anyhow::Result<()> {
         let path = config_io::get_config_file_path(CONFIG_FILE);
-        std::fs::write(path, serde_json5::to_string(self)?)?;
+        onevr_common::write_file(&path, serde_json5::to_string(self)?)?;
         Ok(())
     }
 }
