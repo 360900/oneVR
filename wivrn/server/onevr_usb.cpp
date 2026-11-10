@@ -45,6 +45,9 @@ constexpr auto refresh_interval = 10s;
 // ends well, so an am start that keeps failing backs off too
 constexpr steady_clock::duration first_backoff = 10s;
 constexpr steady_clock::duration max_backoff = 60s;
+// adb answers within a second or two, also when it starts its server first. One that hangs, as on
+// a headset that stopped answering or a stuck server, would leave its device busy for good.
+constexpr auto run_timeout = 20s;
 constexpr const char * packages[] = {"com.weldiva.onevr", "com.weldiva.onevr.debug"};
 
 struct device
@@ -112,7 +115,18 @@ std::string error_text(const char * err)
 	return text;
 }
 
-// Runs a program without blocking the main loop
+// A program run by run(), until it ends or takes longer than run_timeout
+struct running
+{
+	callback done;
+	GSubprocess * process;
+	GCancellable * cancellable;
+	guint timer = 0;
+	bool timed_out = false;
+};
+
+// Runs a program without blocking the main loop. One that doesn't end within run_timeout is
+// killed and counts as failed.
 void run(const std::vector<std::string> & args, callback done)
 {
 	std::vector<const char *> argv;
@@ -130,28 +144,49 @@ void run(const std::vector<std::string> & args, callback done)
 		return;
 	}
 
+	auto r = new running{.done = std::move(done), .process = process, .cancellable = g_cancellable_new()};
+	r->timer = g_timeout_add_seconds(
+	        std::chrono::seconds(run_timeout).count(),
+	        [](gpointer data) -> gboolean {
+		        auto r = static_cast<running *>(data);
+		        r->timer = 0;
+		        r->timed_out = true;
+		        g_subprocess_force_exit(r->process);
+		        // whatever it started may keep its pipes open
+		        g_cancellable_cancel(r->cancellable);
+		        return G_SOURCE_REMOVE;
+	        },
+	        r);
+
 	g_subprocess_communicate_utf8_async(
 	        process,
 	        nullptr,
-	        nullptr,
+	        r->cancellable,
 	        [](GObject * source, GAsyncResult * result, gpointer data) {
-		        std::unique_ptr<callback> done(static_cast<callback *>(data));
+		        std::unique_ptr<running> r(static_cast<running *>(data));
 		        auto process = G_SUBPROCESS(source);
 		        char * out = nullptr;
 		        char * err = nullptr;
 		        GError * error = nullptr;
 		        std::optional<std::string> output;
-		        if (g_subprocess_communicate_utf8_finish(process, result, &out, &err, &error) and g_subprocess_get_successful(process))
+		        if (g_subprocess_communicate_utf8_finish(process, result, &out, &err, &error) and not r->timed_out and g_subprocess_get_successful(process))
 			        output = out ? out : "";
-		        auto text = error ? std::string(error->message) : error_text(err);
+		        std::string text;
+		        if (r->timed_out)
+			        text = "no answer within " + std::to_string(std::chrono::seconds(run_timeout).count()) + " s";
+		        else
+			        text = error ? std::string(error->message) : error_text(err);
 		        g_free(out);
 		        g_free(err);
 		        if (error)
 			        g_error_free(error);
+		        if (r->timer)
+			        g_source_remove(r->timer);
+		        g_object_unref(r->cancellable);
 		        g_object_unref(process);
-		        (*done)(std::move(output), std::move(text));
+		        r->done(std::move(output), std::move(text));
 	        },
-	        new callback(std::move(done)));
+	        r);
 }
 
 void adb(const std::vector<std::string> & args, callback done)
