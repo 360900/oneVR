@@ -62,8 +62,9 @@ pub fn create<T: 'static>(
 
 #[cfg(test)]
 mod tests {
-	use std::rc::Rc;
+	use std::{cell::RefCell, rc::Rc};
 
+	use glam::Vec2;
 	use onevr_common::{
 		emulator::OneVrEmulator,
 		state::{OneVrRequest, OneVrState},
@@ -72,7 +73,12 @@ mod tests {
 		packet_client::WvrProcessLaunchParams,
 		packet_server::{WvrProcess, WvrProcessHandle, WvrWindow, WvrWindowHandle},
 	};
-	use wgui::{i18n::Locale, theme::WguiTheme};
+	use wgui::{
+		event::{DeviceBitmask, Event, MouseButtonEvent, MouseButtonIndex, MouseMotionEvent},
+		i18n::Locale,
+		layout::WidgetID,
+		theme::WguiTheme,
+	};
 	use wlx_common::{
 		config::GeneralConfig,
 		dash_interface::{
@@ -84,7 +90,11 @@ mod tests {
 		locale::WayVRLangProvider,
 	};
 
-	use crate::frontend::{Frontend, FrontendUpdateParams, InitParams};
+	use super::library;
+	use crate::{
+		frontend::{Frontend, FrontendUpdateParams, InitParams},
+		util::popup_manager::PopupHolder,
+	};
 
 	const PAGES: [&str; 15] = [
 		"home",
@@ -182,6 +192,83 @@ mod tests {
 			frontend.onevr_start_pairing();
 			update(&mut frontend, &format!("desktop pairing with oneVR emulator {n}"));
 		}
+	}
+
+	/// Where a widget is in the window
+	fn boundary(frontend: &Frontend<()>, mut id: WidgetID) -> (Vec2, Vec2) {
+		let own = frontend.layout.state.get_widget_boundary(id);
+		let mut pos = own.pos;
+		while let Some((parent, _)) = frontend.layout.get_parent(id) {
+			pos += frontend.layout.state.get_widget_boundary(parent).pos;
+			id = parent;
+		}
+		(pos, own.size)
+	}
+
+	fn click(frontend: &mut Frontend<()>, id: WidgetID) {
+		let (pos, size) = boundary(frontend, id);
+		let (pos, device) = (pos + size / 2.0, DeviceBitmask(0));
+		let index = MouseButtonIndex::Left;
+		for event in [
+			Event::MouseMotion(MouseMotionEvent { pos, device }),
+			Event::MouseDown(MouseButtonEvent { index, pos, device }),
+			Event::MouseUp(MouseButtonEvent { index, pos, device }),
+		] {
+			frontend.layout.push_event(&event, &mut (), &mut ()).unwrap();
+		}
+	}
+
+	/// The Library's launch entry pop-up starts the entry clicked and closes, Cancel only closes;
+	/// its entries are as wide as each other and stay in the window whatever their names
+	#[test]
+	fn launch_popup_picks_and_cancels() {
+		let lang_provider = WayVRLangProvider::default();
+		let locale = Locale::from_env(&lang_provider);
+		let interface = DashInterfaceEmulated::new_headless(&locale, Some(OneVrEmulator::new(true)));
+		let mut frontend = frontend(Box::new(interface), &lang_provider);
+		frontend.onevr_open("library");
+		update(&mut frontend, "library");
+
+		let picked = Rc::new(RefCell::new(Vec::new()));
+		let popup = PopupHolder::default();
+		let long = "Launch in OpenXR mode with the experimental renderer and every other thing a name can say ".repeat(3);
+		let mount = |frontend: &mut Frontend<()>| {
+			let picked = picked.clone();
+			library::mount_launch_popup(
+				&frontend.tasks,
+				popup.clone(),
+				frontend.globals.clone(),
+				"How should Game start?".to_owned(),
+				vec![("0".to_owned(), "VR".to_owned()), ("7".to_owned(), long.clone())],
+				move |key| picked.borrow_mut().push(key),
+			);
+			update(frontend, "launch pop-up");
+		};
+		// the entries and Cancel, in the order `mount_launch_popup` makes them
+		let widget = |name: &str| popup.with_view(|view| view.button(name)).flatten();
+
+		mount(&mut frontend);
+		let (short, wide) = (widget("onevr_3").unwrap(), widget("onevr_4").unwrap());
+		let ((short_pos, short_size), (wide_pos, wide_size)) = (boundary(&frontend, short), boundary(&frontend, wide));
+		assert_eq!(short_size.x, wide_size.x);
+		assert_eq!(short_pos.x, wide_pos.x);
+		assert!(
+			short_pos.x >= 0.0 && short_pos.x + short_size.x <= 1280.0,
+			"{short_pos} {short_size}"
+		);
+		// the long name wraps instead of being cut off
+		assert!(wide_size.y > short_size.y, "{wide_size} {short_size}");
+
+		click(&mut frontend, wide);
+		update(&mut frontend, "pick");
+		assert_eq!(*picked.borrow(), ["7"]);
+		assert!(widget("onevr_3").is_none(), "a pick closes the pop-up");
+
+		mount(&mut frontend);
+		click(&mut frontend, widget("onevr_6").unwrap());
+		update(&mut frontend, "cancel");
+		assert_eq!(*picked.borrow(), ["7"]);
+		assert!(widget("onevr_6").is_none(), "Cancel closes the pop-up");
 	}
 
 	/// The emulator as the desktop window sees it

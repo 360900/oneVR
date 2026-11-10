@@ -50,6 +50,13 @@
     <div id="${id}" flex_direction="column" gap="4" width="100%" />
   </template>
 
+  <!-- id; a pop-up's content, a column in the middle of it that long texts wrap in -->
+  <template name="Dialog">
+    <div width="100%" flex_direction="row" justify_content="center">
+      <div id="${id}" flex_direction="column" gap="16" width="100%" max_width="520" />
+    </div>
+  </template>
+
   <!-- id; a positioning context sized to its child, for overlays on a game cover -->
   <template name="CoverWrap">
     <div id="${id}" position="relative" flex_direction="column" />
@@ -110,6 +117,15 @@
     <Button id="${id}" height="36" padding_left="12" padding_right="14" gap="8" color="${color}" flex_shrink="0">
       <sprite src_builtin="${icon}" height="16" width="16" flex_shrink="0" />
       <label text="${text}" translation="${translation}" weight="semibold" />
+    </Button>
+  </template>
+
+  <!-- id, text, icon; one of a List of answers. As wide as the list whatever its text, which
+       wraps and makes it taller. -->
+  <template name="Choice">
+    <Button id="${id}" width="100%" min_height="52" padding_left="14" padding_right="14" padding_top="8" padding_bottom="8" gap="12" color="fill" justify_content="start">
+      <sprite src_builtin="${icon}" height="16" width="16" flex_shrink="0" />
+      <label text="${text}" weight="semibold" wrap="1" />
     </Button>
   </template>
 

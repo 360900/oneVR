@@ -151,6 +151,24 @@ impl<ViewType: ViewTrait> PopupHolder<ViewType> {
 		Ok(())
 	}
 
+	/// oneVR: [`Self::get_close_callback`] for several buttons, each of which may close the pop-up
+	pub fn get_close_handler(&self, layout: &Layout) -> Rc<dyn Fn()>
+	where
+		ViewType: 'static,
+	{
+		let layout_tasks = layout.tasks.clone();
+		let weak_state = Rc::downgrade(&self.state);
+		Rc::new(move || {
+			let weak_state = weak_state.clone();
+			layout_tasks.push(LayoutTask::Dispatch(Box::new(move |_common| {
+				if let Some(state) = weak_state.upgrade() {
+					state.borrow_mut().close();
+				}
+				Ok(())
+			})));
+		})
+	}
+
 	pub fn get_close_callback(&self, layout: &Layout) -> Box<dyn FnOnce()>
 	where
 		ViewType: 'static,

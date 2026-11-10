@@ -26,7 +26,10 @@ use wgui::{
 	windowing::context_menu,
 };
 
-use crate::util::wgui_simple;
+use crate::{
+	util::wgui_simple,
+	views::{ViewTrait, ViewUpdateParams},
+};
 
 pub const WIDGETS: &str = "gui/onevr/widgets.xml";
 
@@ -131,6 +134,11 @@ impl<'a> Ui<'a> {
 	/// A column as wide as its parent, so section headers and rows in it span a `group`
 	pub fn list(&mut self, parent: WidgetID) -> anyhow::Result<WidgetID> {
 		self.container("List", parent, |_| {})
+	}
+
+	/// A pop-up's content: a column of a readable width in the middle of it
+	pub fn dialog(&mut self, parent: WidgetID) -> anyhow::Result<WidgetID> {
+		self.container("Dialog", parent, |_| {})
 	}
 
 	/// A positioning context sized to its child, so a `corner_overlay` can pin to it
@@ -363,6 +371,28 @@ impl<'a> Ui<'a> {
 		Ok(button)
 	}
 
+	/// One of a `list` of answers: a row as wide as the list, whose text wraps
+	pub fn choice(
+		&mut self,
+		parent: WidgetID,
+		text: &str,
+		icon: &str,
+		on_click: impl Fn() + 'static,
+	) -> anyhow::Result<Rc<ComponentButton>> {
+		let id = self.id();
+		let mut params = TemplateParams::new();
+		params.insert("id", &id);
+		params.insert("text", text);
+		params.insert("icon", icon);
+		self.instantiate("Choice", parent, params)?;
+		let button = self.state.fetch_component_as::<ComponentButton>(&id)?;
+		button.on_click(Rc::new(move |_common, _e| {
+			on_click();
+			Ok(())
+		}));
+		Ok(button)
+	}
+
 	/// A button with only an icon, `tooltip` says what it does
 	pub fn icon_button(
 		&mut self,
@@ -509,6 +539,32 @@ impl<'a> Ui<'a> {
 }
 
 /// A context menu entry; `action` is returned when it is picked
+/// What a pop-up built with [`Ui`] shows: its widgets and their callbacks live as long as it
+pub struct PopupContent {
+	#[allow(dead_code)]
+	state: ParserState,
+}
+
+impl PopupContent {
+	pub const fn new(state: ParserState) -> Self {
+		Self { state }
+	}
+}
+
+#[cfg(test)]
+impl PopupContent {
+	pub fn button(&self, id: &str) -> Option<WidgetID> {
+		let button = self.state.fetch_component_as::<ComponentButton>(id).ok()?;
+		Some(button.get_rect())
+	}
+}
+
+impl ViewTrait for PopupContent {
+	fn update(&mut self, _par: &mut ViewUpdateParams) -> anyhow::Result<()> {
+		Ok(())
+	}
+}
+
 pub fn menu_cell(action: String, title: Translation) -> context_menu::Cell {
 	context_menu::Cell::Button(context_menu::Button {
 		action_name: Some(action.into()),

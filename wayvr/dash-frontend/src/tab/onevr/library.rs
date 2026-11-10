@@ -32,7 +32,7 @@ use wgui::{
 use wlx_common::{async_executor::AsyncExecutor, desktop_finder::DesktopEntry};
 
 use crate::{
-	frontend::{Frontend, FrontendTask, SoundType},
+	frontend::{Frontend, FrontendTask, FrontendTasks, SoundType},
 	tab::{
 		Tab, TabType,
 		onevr::{
@@ -42,11 +42,11 @@ use crate::{
 	},
 	util::{
 		cached_fetcher::{self, CoverArt},
-		popup_manager::PopupHolder,
+		popup_manager::{MountPopupOnceParams, PopupHolder},
 		steam_launch::{self, LaunchOption, SteamLaunchInfo},
 		steam_utils::{self, AppManifest, GameSortMethod, SteamUtils},
 	},
-	views::{dialog_box, game_cover},
+	views::game_cover,
 };
 
 /// WayVR's entries, wayvr.desktop and wayvr-session.desktop (wayvr-headless.desktop in older
@@ -68,8 +68,6 @@ const SORT_ACTION_PREFIX: &str = "onevr-sort;";
 const REMOVE_ACTION_PREFIX: &str = "onevr-remove;";
 /// Followed by the Steam app id and the launch entry's key
 const LAUNCH_ACTION_PREFIX: &str = "onevr-launch;";
-/// The pop-up's buttons, which take static names; one over this many options is cut off
-const LAUNCH_POPUP_ACTIONS: [&str; 8] = ["0", "1", "2", "3", "4", "5", "6", "7"];
 /// Apps that can be added, shown at most; the search finds the others
 const MAX_CANDIDATES: usize = 30;
 
@@ -171,7 +169,7 @@ pub struct TabOneVrLibrary<T> {
 	/// Desktop icons by file, read and decoded once like the covers; None when one can't be drawn
 	icons: HashMap<String, Option<CustomGlyphData>>,
 	steam_launch: SteamLaunchInfo,
-	launch_popup: PopupHolder<dialog_box::View>,
+	launch_popup: PopupHolder<ui::PopupContent>,
 	/// By Steam app id, read once so a render reads no xrizer files
 	controllers: HashMap<u64, ControllerType>,
 	/// A start was pending at the last render, which put its badge on the app
@@ -502,46 +500,29 @@ impl<T: 'static> TabOneVrLibrary<T> {
 
 	/// What Steam would ask on the desktop, here where the player can answer
 	fn ask_launch_option(&self, frontend: &Frontend<T>, id: String, name: String) {
-		let options = self.launch_options(&id);
-		let mut entries: Vec<_> = options
+		let options = self
+			.launch_options(&id)
 			.iter()
-			.zip(LAUNCH_POPUP_ACTIONS)
 			.enumerate()
-			.map(|(index, (option, action))| dialog_box::ButtonEntry {
-				content: Translation::from_raw_text_string(option_label(option, index)),
-				icon: "@/dashboard/play.svg",
-				action,
-			})
+			.map(|(index, option)| (option.key.clone(), option_label(option, index)))
 			.collect();
-		entries.push(dialog_box::ButtonEntry {
-			content: Translation::from_translation_key("ONEVR.LIBRARY.LAUNCH_OPTION_CANCEL"),
-			icon: "@/dashboard/cancel.svg",
-			action: "cancel",
-		});
-		let keys: Vec<String> = options.iter().map(|option| option.key.clone()).collect();
-		let tasks = self.tasks.clone();
 		let globals = frontend.layout.state.globals.clone();
 		let message = globals
 			.i18n()
 			.translate_and_replace("ONEVR.LIBRARY.LAUNCH_OPTION_QUESTION", ("{NAME}", &name));
-		dialog_box::mount_titled_popup(
+		let tasks = self.tasks.clone();
+		mount_launch_popup(
+			&frontend.tasks,
 			self.launch_popup.clone(),
-			frontend.tasks.clone(),
-			Translation::from_translation_key("ONEVR.LIBRARY.LAUNCH_OPTION_TITLE"),
-			dialog_box::Params {
-				globals,
-				entries,
-				message: Translation::from_raw_text_string(message),
-				on_action_click: Box::new(move |action| {
-					let key = action.parse::<usize>().ok().and_then(|index| keys.get(index));
-					if let Some(key) = key {
-						tasks.push(Task::StartChosen {
-							id,
-							name,
-							key: key.clone(),
-						});
-					}
-				}),
+			globals,
+			message,
+			options,
+			move |key| {
+				tasks.push(Task::StartChosen {
+					id: id.clone(),
+					name: name.clone(),
+					key,
+				});
 			},
 		);
 	}
@@ -1026,6 +1007,48 @@ fn option_label(option: &LaunchOption, index: usize) -> String {
 			"openxr" => "OpenXR".to_owned(),
 			_ => format!("{}", index + 1),
 		})
+}
+
+/// The pop-up asking which launch entry to start, `options` as key and name: an entry per row,
+/// as wide as the pop-up's column, so names of any length line up and wrap. A click on one
+/// calls `on_pick` with its key; that or Cancel closes the pop-up.
+pub(super) fn mount_launch_popup(
+	frontend_tasks: &FrontendTasks,
+	popup: PopupHolder<ui::PopupContent>,
+	globals: WguiGlobals,
+	message: String,
+	options: Vec<(String, String)>,
+	on_pick: impl Fn(String) + 'static,
+) {
+	frontend_tasks.push(FrontendTask::MountPopupOnce(MountPopupOnceParams::new(
+		Translation::from_translation_key("ONEVR.LIBRARY.LAUNCH_OPTION_TITLE"),
+		Box::new(move |data| {
+			let mut state = wgui::parser::parse_from_assets(&ui::doc_params(&globals), data.layout, data.id_content)?;
+			let close = popup.get_close_handler(data.layout);
+			let on_pick = Rc::new(on_pick);
+			let mut ui = Ui::new(data.layout, &mut state, &globals);
+			let dialog = ui.dialog(data.id_content)?;
+			ui.text(dialog, Text::Raw(&message))?;
+			let list = ui.list(dialog)?;
+			for (key, label) in options {
+				let (on_pick, close) = (on_pick.clone(), close.clone());
+				ui.choice(list, &label, "@/dashboard/play.svg", move || {
+					on_pick(key.clone());
+					close();
+				})?;
+			}
+			let end = ui.row_end(dialog)?;
+			ui.button(
+				end,
+				Text::Key("ONEVR.LIBRARY.LAUNCH_OPTION_CANCEL"),
+				"@/dashboard/cancel.svg",
+				move || close(),
+			)?;
+			popup.set_view(data.handle, ui::PopupContent::new(state), None);
+			Ok(popup.get_close_callback(data.layout))
+		}),
+		Default::default(),
+	)));
 }
 
 fn parse_launch_action(name: &str) -> Option<Task> {
