@@ -18,6 +18,7 @@
 #include "onevr_usb.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <gio/gio.h>
 #include <iostream>
@@ -231,6 +232,24 @@ void failed(device & d, const std::string & message, const std::string & error =
 	d.backoff = std::min(d.backoff * 2, max_backoff);
 }
 
+// What am start says went wrong, empty if the app started. It exits with 0 either way, and adb
+// hands its stderr over as output or as error depending on the device. A warning is no failure:
+// the app that is open already still gets the intent.
+std::string am_error(const std::string & output, const std::string & error)
+{
+	for (const auto * text: {&output, &error})
+	{
+		auto at = text->find("Error");
+		// "Error: Activity not started, ..." or "Error type 3"
+		if (at == std::string::npos or (at > 0 and not std::isspace((unsigned char)(*text)[at - 1])))
+			continue;
+		auto line = text->substr(at, text->find_first_of("\r\n", at) - at);
+		if (line.starts_with("Error:") or line.starts_with("Error type"))
+			return line;
+	}
+	return "";
+}
+
 void start_app(const std::string & serial, unsigned gen, const std::string & package)
 {
 	adb({"-s", serial, "shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", uri(), package}, [serial, gen](auto output, auto error) {
@@ -240,6 +259,11 @@ void start_app(const std::string & serial, unsigned gen, const std::string & pac
 		if (not output)
 		{
 			failed(*d, "starting the headset app failed on " + serial, error);
+			return;
+		}
+		if (auto message = am_error(*output, error); not message.empty())
+		{
+			failed(*d, "starting the headset app failed on " + serial, message);
 			return;
 		}
 		d->busy = false;
