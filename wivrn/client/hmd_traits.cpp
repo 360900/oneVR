@@ -456,6 +456,24 @@ std::string hmd_traits::model_name() const
 
 	return manufacturer + " " + model;
 #else
+	// oneVR: a Linux headset, such as the Steam Frame, names itself like any Linux computer
+	const auto read = [](const char * path) {
+		std::string value;
+		std::getline(std::ifstream{path}, value, '\0');
+		const auto first = value.find_first_not_of(" \t\r\n");
+		if (first == std::string::npos)
+			return std::string{};
+		return value.substr(first, value.find_last_not_of(" \t\r\n") - first + 1);
+	};
+
+	// arm64 boards have a device tree, which already names the vendor
+	if (auto model = read("/sys/firmware/devicetree/base/model"); not model.empty())
+		return model;
+
+	const auto vendor = read("/sys/class/dmi/id/sys_vendor");
+	if (auto product = read("/sys/class/dmi/id/product_name"); not product.empty())
+		return vendor.empty() or product.starts_with(vendor) ? product : vendor + " " + product;
+
 	return "Unknown headset";
 #endif
 }
