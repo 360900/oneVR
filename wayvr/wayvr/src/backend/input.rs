@@ -208,38 +208,34 @@ impl InputState {
             if !hand.before.click {
                 if hand.now.click_modifier_right {
                     hand.interaction.mode = PointerMode::Right;
-                    continue;
-                }
-
-                if hand.now.click_modifier_middle {
+                } else if hand.now.click_modifier_middle {
                     hand.interaction.mode = PointerMode::Middle;
-                    continue;
-                }
-
-                let hmd_up = self.hmd.transform_vector3a(Vec3A::Y);
-                let dot = hmd_up.dot(hand.pose.transform_vector3a(Vec3A::X))
-                    * 2.0f32.mul_add(-(hand.idx as f32), 1.0);
-
-                hand.interaction.mode = if dot < -0.85 {
-                    PointerMode::Right
-                } else if dot > 0.7 {
-                    PointerMode::Middle
                 } else {
-                    PointerMode::Left
-                };
+                    let hmd_up = self.hmd.transform_vector3a(Vec3A::Y);
+                    let dot = hmd_up.dot(hand.pose.transform_vector3a(Vec3A::X))
+                        * 2.0f32.mul_add(-(hand.idx as f32), 1.0);
 
-                let middle_click_orientation = false;
-                let right_click_orientation = false;
-                match hand.interaction.mode {
-                    PointerMode::Middle => {
-                        if !middle_click_orientation {
+                    hand.interaction.mode = if dot < -0.85 {
+                        PointerMode::Right
+                    } else if dot > 0.7 {
+                        PointerMode::Middle
+                    } else {
+                        PointerMode::Left
+                    };
+
+                    let middle_click_orientation = false;
+                    let right_click_orientation = false;
+                    match hand.interaction.mode {
+                        PointerMode::Middle => {
+                            if !middle_click_orientation {
+                                hand.interaction.mode = PointerMode::Left;
+                            }
+                        }
+                        PointerMode::Right if !right_click_orientation => {
                             hand.interaction.mode = PointerMode::Left;
                         }
+                        _ => {}
                     }
-                    PointerMode::Right if !right_click_orientation => {
-                        hand.interaction.mode = PointerMode::Left;
-                    }
-                    _ => {}
                 }
             }
 
