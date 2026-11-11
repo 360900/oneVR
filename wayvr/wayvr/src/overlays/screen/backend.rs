@@ -399,19 +399,19 @@ impl OverlayBackend for ScreenBackend {
             };
         }
 
+        // oneVR: move to the hit before the press, and not while the last click froze the
+        // cursor: moving after the press, also in a double click's freeze, dragged a little
         if pressed {
+            if can_move() {
+                let pos = self.mouse_transform.transform_point2(hit.uv);
+                app.hid_provider
+                    .inner
+                    .mouse_move(DVec2::new(pos.x as _, pos.y as _));
+            }
             set_next_move(app.session.config.click_freeze_time_ms as _);
         }
 
         app.hid_provider.inner.send_button(btn, pressed);
-
-        if !pressed {
-            return;
-        }
-        let pos = self.mouse_transform.transform_point2(hit.uv);
-        app.hid_provider
-            .inner
-            .mouse_move(DVec2::new(pos.x as _, pos.y as _));
     }
 
     fn on_scroll(&mut self, app: &mut AppState, _hit: &PointerHit, mut delta: WheelDelta) {

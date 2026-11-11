@@ -1592,6 +1592,15 @@ impl WvrServerState {
         pressed: bool,
         click_freeze: i32,
     ) {
+        // oneVR: a press or release while the last click froze the cursor stays where it is;
+        // moving to the hit broke double clicks and made Electron apps start a drag
+        let frozen_pos = self
+            .wm
+            .mouse
+            .as_ref()
+            .filter(|mouse| self.mouse_freeze > Instant::now() && mouse.hover_window == hover_window)
+            .map(|mouse| mouse.pos);
+
         if pressed {
             self.mouse_freeze = Instant::now() + Duration::from_millis(click_freeze.max(0) as u64);
         }
@@ -1608,7 +1617,7 @@ impl WvrServerState {
             self.wm.keyboard_focus = Some(hover_window);
         }
 
-        let global_pos = DVec2::from(global_pos);
+        let global_pos = frozen_pos.unwrap_or_else(|| DVec2::from(global_pos));
         let linear_delta = self.get_mouse_relative(global_pos, hover_window);
 
         self.manager
