@@ -19,22 +19,33 @@
 
 #pragma once
 
+#include "encoder/encoder_settings.h"
 #include "ffmpeg_helper.h"
 #include "utils/gpu_timestamp_pool.h"
 #include "video_encoder_ffmpeg.h"
 
 #include <array>
+#include <cstdint>
 #include <vector>
 #include <vulkan/vulkan_raii.hpp>
 
+extern "C"
+{
+#include <libavutil/rational.h>
+}
+
+struct AVBufferRef;
+struct AVCodec;
+
 namespace wivrn
 {
-struct encoder_settings;
-
 class video_encoder_va : public video_encoder_ffmpeg
 {
 	vk_bundle & vk;
 	vk::raii::CommandPool cmd_pool;
+	// oneVR: what reconfigure() opens the encoder again with
+	encoder_settings config;
+	const AVCodec * codec = nullptr;
 	struct in_t
 	{
 		av_frame_ptr va_frame;
@@ -57,5 +68,9 @@ public:
 
 protected:
 	void push_frame(bool idr, uint8_t slot) override;
+	void reconfigure() override;
+
+private:
+	av_codec_context_ptr open_codec(AVBufferRef * frames_ctx, int64_t bitrate, AVRational framerate);
 };
 } // namespace wivrn

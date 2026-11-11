@@ -42,6 +42,9 @@ protected:
 	        wivrn::video_encoder(vk, stream_idx, vk.queue.family_index, settings, std::make_unique<default_idr_handler>(), true) {}
 
 	virtual void push_frame(bool idr, uint8_t slot) = 0;
+	// oneVR: applies a bitrate or frame rate changed on encoder_ctx, for encoders that read them
+	// only when they open
+	virtual void reconfigure() {}
 
 	av_codec_context_ptr encoder_ctx;
 

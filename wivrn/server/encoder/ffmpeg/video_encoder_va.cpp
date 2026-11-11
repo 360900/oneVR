@@ -174,7 +174,8 @@ video_encoder_va::video_encoder_va(wivrn::vk_bundle & vk,
                                    uint8_t stream_idx) :
         video_encoder_ffmpeg(vk, stream_idx, settings),
         vk{vk},
-        cmd_pool{make_cmd_pool(vk, stream_idx)}
+        cmd_pool{make_cmd_pool(vk, stream_idx)},
+        config{settings}
 {
 	auto command_buffers = vk.device.allocateCommandBuffers(
 	        {.commandPool = *cmd_pool,
@@ -231,75 +232,13 @@ video_encoder_va::video_encoder_va(wivrn::vk_bundle & vk,
 	drm_frame_ctx = av_buffer_ptr(tmp);
 
 	const char * encoder_name = encoder(settings.codec);
-	const AVCodec * codec = avcodec_find_encoder_by_name(encoder_name);
+	codec = avcodec_find_encoder_by_name(encoder_name);
 	if (codec == nullptr)
 	{
 		throw std::runtime_error(std::string("Failed to find encoder ") + encoder_name);
 	}
 
-	encoder_ctx = av_codec_context_ptr(avcodec_alloc_context3(codec));
-	if (not encoder_ctx)
-	{
-		throw std::runtime_error("failed to allocate VAAPI encoder");
-	}
-
-	AVDictionary * opts = nullptr;
-	av_dict_set(&opts, "async_depth", "1", 0);
-	switch (settings.codec)
-	{
-		case video_codec::h264:
-			encoder_ctx->profile = AV_PROFILE_H264_CONSTRAINED_BASELINE;
-			av_dict_set(&opts, "coder", "cavlc", 0);
-			av_dict_set(&opts, "rc_mode", "CBR", 0);
-			break;
-		case video_codec::h265:
-			// bit_depth is either 8 or 10 here
-			encoder_ctx->profile = settings.bit_depth == 10 ? AV_PROFILE_HEVC_MAIN_10 : AV_PROFILE_HEVC_MAIN;
-			break;
-		case video_codec::av1:
-			encoder_ctx->profile = AV_PROFILE_AV1_MAIN;
-			break;
-		case video_codec::raw:
-			throw std::runtime_error("raw codec not supported");
-	}
-	// oneVR: Mesa's VA quality bits (valid, preset, pre-encode, VBAQ), the default is the speed preset with neither
-	if (vk.physical_device.getProperties().vendorID == 0x1002)
-	{
-		constexpr int preset_balance = 1;
-		encoder_ctx->compression_level = 1 | preset_balance << 1 | 1 << 3 | 1 << 4;
-	}
-	for (auto option: settings.options)
-	{
-		av_dict_set(&opts, option.first.c_str(), option.second.c_str(), 0);
-	}
-
-	encoder_ctx->width = extent.width;
-	encoder_ctx->height = extent.height;
-	encoder_ctx->time_base = {std::chrono::steady_clock::duration::period::num,
-	                          std::chrono::steady_clock::duration::period::den};
-	encoder_ctx->framerate = AVRational{(int)settings.fps * 1000, 1000};
-	encoder_ctx->sample_aspect_ratio = AVRational{1, 1};
-	encoder_ctx->pix_fmt = AV_PIX_FMT_VAAPI;
-	encoder_ctx->color_range = AVCOL_RANGE_JPEG;
-	encoder_ctx->colorspace = AVCOL_SPC_BT709;
-	encoder_ctx->color_trc = AVCOL_TRC_BT709;
-	encoder_ctx->color_primaries = AVCOL_PRI_BT709;
-	encoder_ctx->max_b_frames = 0;
-	encoder_ctx->bit_rate = settings.bitrate;
-	encoder_ctx->gop_size = std::numeric_limits<decltype(encoder_ctx->gop_size)>::max();
-	encoder_ctx->hw_frames_ctx = av_buffer_ref(vaapi_frame_ctx.get());
-
-	err = avcodec_open2(encoder_ctx.get(), codec, &opts);
-	av_dict_free(&opts);
-	if (err < 0)
-	{
-		throw std::system_error(err, av_error_category(), "Cannot open video encoder codec");
-	}
-
-	if (encoder_ctx->delay != 0)
-	{
-		U_LOG_W("Encoder %d reports a %d frame delay, reprojection will fail", stream_idx, encoder_ctx->delay);
-	}
+	encoder_ctx = open_codec(vaapi_frame_ctx.get(), settings.bitrate, AVRational{(int)settings.fps * 1000, 1000});
 
 	const bool has_modifiers =
 	        std::ranges::any_of(vk.device_extensions, [](const char * ext) {
@@ -561,6 +500,93 @@ void video_encoder_va::present_image(vk::Image y_cbcr, vk::SemaphoreSubmitInfo, 
 	                               .pCommandBufferInfos = &cmd_info,
 	                       },
 	                       *in[slot].fence);
+}
+
+// oneVR: the encoder setup, also for reconfigure()
+av_codec_context_ptr video_encoder_va::open_codec(AVBufferRef * frames_ctx, int64_t bitrate, AVRational framerate)
+{
+	av_codec_context_ptr encoder_ctx(avcodec_alloc_context3(codec));
+	if (not encoder_ctx)
+	{
+		throw std::runtime_error("failed to allocate VAAPI encoder");
+	}
+
+	AVDictionary * opts = nullptr;
+	av_dict_set(&opts, "async_depth", "1", 0);
+	switch (config.codec)
+	{
+		case video_codec::h264:
+			encoder_ctx->profile = AV_PROFILE_H264_CONSTRAINED_BASELINE;
+			av_dict_set(&opts, "coder", "cavlc", 0);
+			av_dict_set(&opts, "rc_mode", "CBR", 0);
+			break;
+		case video_codec::h265:
+			// bit_depth is either 8 or 10 here
+			encoder_ctx->profile = config.bit_depth == 10 ? AV_PROFILE_HEVC_MAIN_10 : AV_PROFILE_HEVC_MAIN;
+			break;
+		case video_codec::av1:
+			encoder_ctx->profile = AV_PROFILE_AV1_MAIN;
+			break;
+		case video_codec::raw:
+			throw std::runtime_error("raw codec not supported");
+	}
+	// oneVR: Mesa's VA quality bits (valid, preset, pre-encode, VBAQ), the default is the speed preset with neither
+	if (vk.physical_device.getProperties().vendorID == 0x1002)
+	{
+		constexpr int preset_balance = 1;
+		encoder_ctx->compression_level = 1 | preset_balance << 1 | 1 << 3 | 1 << 4;
+	}
+	for (auto option: config.options)
+	{
+		av_dict_set(&opts, option.first.c_str(), option.second.c_str(), 0);
+	}
+
+	encoder_ctx->width = extent.width;
+	encoder_ctx->height = extent.height;
+	encoder_ctx->time_base = {std::chrono::steady_clock::duration::period::num,
+	                          std::chrono::steady_clock::duration::period::den};
+	encoder_ctx->framerate = framerate;
+	encoder_ctx->sample_aspect_ratio = AVRational{1, 1};
+	encoder_ctx->pix_fmt = AV_PIX_FMT_VAAPI;
+	encoder_ctx->color_range = AVCOL_RANGE_JPEG;
+	encoder_ctx->colorspace = AVCOL_SPC_BT709;
+	encoder_ctx->color_trc = AVCOL_TRC_BT709;
+	encoder_ctx->color_primaries = AVCOL_PRI_BT709;
+	encoder_ctx->max_b_frames = 0;
+	encoder_ctx->bit_rate = bitrate;
+	encoder_ctx->gop_size = std::numeric_limits<decltype(encoder_ctx->gop_size)>::max();
+	encoder_ctx->hw_frames_ctx = av_buffer_ref(frames_ctx);
+
+	int err = avcodec_open2(encoder_ctx.get(), codec, &opts);
+	av_dict_free(&opts);
+	if (err < 0)
+	{
+		throw std::system_error(err, av_error_category(), "Cannot open video encoder codec");
+	}
+
+	if (encoder_ctx->delay != 0)
+	{
+		U_LOG_W("Encoder %d reports a %d frame delay, reprojection will fail", stream_idx, encoder_ctx->delay);
+	}
+
+	return encoder_ctx;
+}
+
+// oneVR: VAAPI sets its rate control when the encoder opens and keeps it (FFmpeg's
+// vaapi_encode_init_rate_control), so a bitrate or frame rate set later did nothing (WiVRn #690):
+// open the encoder again on the same frames, the next frame is an IDR
+void video_encoder_va::reconfigure()
+{
+	try
+	{
+		auto reopened = open_codec(encoder_ctx->hw_frames_ctx, encoder_ctx->bit_rate, encoder_ctx->framerate);
+		encoder_ctx = std::move(reopened);
+		U_LOG_I("VAAPI encoder %d reopened at %" PRId64 " bit/s, %.2f fps", stream_idx, encoder_ctx->bit_rate, av_q2d(encoder_ctx->framerate));
+	}
+	catch (std::exception & e)
+	{
+		U_LOG_E("VAAPI encoder %d keeps its old bitrate and frame rate, it could not be opened again: %s", stream_idx, e.what());
+	}
 }
 
 void video_encoder_va::push_frame(bool idr, uint8_t slot)
