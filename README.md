@@ -26,7 +26,7 @@ Other distributions: install the build dependencies of WiVRn, xrizer and wayvr, 
 ./install.sh
 ```
 
-This builds oneVR, installs it to `~/.local/opt/onevr`, links `onevr` into `~/.local/bin` and adds oneVR to the app menu. Run it again to update; it asks before stopping a running oneVR. If it fails, the previous install stays as it was. If a Quest is connected over adb, it also installs the latest headset APK from CI on it, which needs `gh` logged in. `./uninstall.sh` removes it and keeps the settings and pairing.
+This builds oneVR, installs it to `~/.local/opt/onevr`, links `onevr` into `~/.local/bin` and adds oneVR to the app menu. Run it again to update; it asks before stopping a running oneVR and starts it again after. If it fails, the previous install stays as it was. If a Quest is connected over adb, it also installs the latest headset APK from CI on it, which needs `gh` logged in. `./uninstall.sh` removes it and keeps the settings and pairing.
 
 On Plasma before 6.8, the hidden `io.github.onevr.wayvr.desktop` entry lets oneVR capture screens without a dialog and add virtual monitors.
 

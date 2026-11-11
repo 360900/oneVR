@@ -136,6 +136,10 @@ refresh_menu
 done_pc=1
 rm -rf "$old"
 say "oneVR $action in $prefix"
+if [ -n "$was_running" ]; then
+    say "starting oneVR again"
+    "$prefix/bin/onevr" start || echo "install.sh: oneVR didn't start again, see onevr logs" >&2
+fi
 case ":$PATH:" in
     *":$bin:"*) ;;
     *) say "add $bin to PATH to run onevr from a terminal" ;;
