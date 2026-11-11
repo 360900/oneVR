@@ -443,10 +443,8 @@ pub fn realign(transform: &mut Affine3A, hmd: &Affine3A, scale: f32, snap_angle:
     let to_hmd = hmd.translation - transform.translation;
     let up_dir: Vec3A;
 
-    if hmd.x_axis.dot(Vec3A::Y).abs() > 0.2 {
-        // Snap upright
-        up_dir = hmd.y_axis;
-    } else {
+    // oneVR: upright whatever the head's tilt; a grabbing hand's twist rolls a panel instead
+    {
         let dot = to_hmd.normalize().dot(hmd.z_axis);
         let z_dist = to_hmd.length();
         let y_dist = (transform.translation.y - hmd.translation.y).abs();

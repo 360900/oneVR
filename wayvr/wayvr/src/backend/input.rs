@@ -440,6 +440,10 @@ pub struct GrabData {
     pub hand_depth: Option<HandDepth>,
     /// oneVR: a tracked hand that only resizes the panel the other hand holds
     pub hand_stretch: Option<HandStretch>,
+    /// oneVR: the panel's roll when grabbed, which the hand's twist since then turns
+    pub roll: f32,
+    pub twist: f32,
+    pub last_hand: Quat,
 }
 
 #[repr(u8)]
@@ -967,6 +971,9 @@ fn start_grab(par: StartGrabParams) {
         grab_anchor,
         hand_depth,
         hand_stretch: None,
+        roll: panel_roll(&state.transform).unwrap_or(0.0),
+        twist: 0.0,
+        last_hand: Quat::from_affine3(&pointer.pose).normalize(),
     });
 
     app.tasks.enqueue(TaskType::Overlay(OverlayTask::Modify(
@@ -1084,6 +1091,15 @@ where
 
         let scroll_factor = 90.0 * app.delta_time;
 
+        // oneVR: the head doesn't roll the panel, the hand's twist does
+        let hand = Quat::from_affine3(&pointer.pose).normalize();
+        grab_data.twist += twist_about(
+            hand * grab_data.last_hand.inverse(),
+            pointer.pose.transform_vector3a(Vec3A::NEG_Z),
+        );
+        grab_data.last_hand = hand;
+        let roll = snap_roll(grab_data.roll - grab_data.twist);
+
         if grab_anchor {
             if pointer.now.click {
                 pointer.interaction.mode = PointerMode::Special;
@@ -1115,6 +1131,18 @@ where
                     scale,
                     app.session.config.snap_angle_deg,
                 );
+                // oneVR: the set moves, the panel in the hand turns on its own
+                if overlay.config.name != *ANCHOR_NAME {
+                    let relative = overlay_state
+                        .saved_transform
+                        .unwrap_or(overlay.config.default_state.transform);
+                    let mut world = app.anchor * relative;
+                    if set_panel_roll(&mut world, roll) {
+                        overlay_state.saved_transform = Some(app.anchor.inverse() * world);
+                        overlay_state.transform = world;
+                        overlay.config.dirty = true;
+                    }
+                }
             }
         } else {
             // single grab resize
@@ -1148,6 +1176,7 @@ where
                     scale,
                     app.session.config.snap_angle_deg,
                 );
+                set_panel_roll(&mut overlay_state.transform, roll);
             }
             overlay.config.pause_movement = true;
             overlay.config.dirty = true;
@@ -1210,6 +1239,48 @@ where
         )));
         log::debug!("Hand {}: dropped {}", idx, overlay.config.name);
     }
+}
+
+/// oneVR: a grabbed panel this close to upright snaps to it, so it is easy to level again
+const ROLL_SNAP: f32 = 6.0 * std::f32::consts::PI / 180.0;
+
+/// oneVR: the angle `rotation` turns about `axis` (its twist), right-handed, in radians
+fn twist_about(rotation: Quat, axis: Vec3A) -> f32 {
+    let axis = axis.normalize_or_zero();
+    let along = Vec3A::new(rotation.x, rotation.y, rotation.z).dot(axis);
+    let angle = 2.0 * along.atan2(rotation.w);
+    // the short way round
+    if angle > std::f32::consts::PI {
+        angle - std::f32::consts::TAU
+    } else if angle < -std::f32::consts::PI {
+        angle + std::f32::consts::TAU
+    } else {
+        angle
+    }
+}
+
+/// oneVR: `roll` in [-PI, PI), level when close to it
+fn snap_roll(roll: f32) -> f32 {
+    let roll =
+        (roll + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI;
+    if roll.abs() < ROLL_SNAP { 0.0 } else { roll }
+}
+
+/// oneVR: how far a panel is turned about its face from upright, counterclockwise as its front
+/// sees it. `None` for a panel lying flat, which has no upright.
+fn panel_roll(transform: &Affine3A) -> Option<f32> {
+    let up = transform.matrix3.inverse() * Vec3A::Y;
+    let (x, y) = (up.x, up.y);
+    (x.hypot(y) > 0.1 * up.length()).then(|| x.atan2(y))
+}
+
+/// oneVR: turns a panel about its face to `roll` from upright. False for a panel lying flat.
+fn set_panel_roll(transform: &mut Affine3A, roll: f32) -> bool {
+    let Some(current) = panel_roll(transform) else {
+        return false;
+    };
+    transform.matrix3 *= glam::Mat3A::from_rotation_z(roll - current);
+    true
 }
 
 /// oneVR: the grab-help panel's height over a tracked hand, in its pointer's space
@@ -1290,4 +1361,50 @@ fn ray_test(
         local_pos,
         dist,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::f32::consts::FRAC_PI_2;
+
+    use glam::{Affine3A, Quat, Vec3, Vec3A};
+
+    use super::{panel_roll, set_panel_roll, snap_roll, twist_about};
+
+    #[test]
+    fn twist_is_the_turn_about_the_axis() {
+        let fwd = Vec3A::NEG_Z;
+        let twist = Quat::from_axis_angle(Vec3::NEG_Z, 0.5);
+        assert!((twist_about(twist, fwd) - 0.5).abs() < 1e-5);
+        // a swing alone doesn't twist
+        let swing = Quat::from_axis_angle(Vec3::X, 0.7);
+        assert!(twist_about(swing, fwd).abs() < 1e-5);
+        assert!((twist_about(swing * twist, fwd) - 0.5).abs() < 0.05);
+    }
+
+    #[test]
+    fn roll_snaps_level_and_wraps() {
+        assert!(snap_roll(0.05).abs() < f32::EPSILON);
+        assert!((snap_roll(0.5) - 0.5).abs() < 1e-6);
+        assert!((snap_roll(std::f32::consts::TAU + 0.5) - 0.5).abs() < 1e-5);
+    }
+
+    #[test]
+    fn panel_roll_round_trips() {
+        let mut panel = Affine3A::from_scale_rotation_translation(
+            Vec3::splat(2.0),
+            Quat::from_rotation_y(0.3),
+            Vec3::new(0.0, 1.5, -1.0),
+        );
+        assert!(panel_roll(&panel).unwrap().abs() < 1e-5);
+        assert!(set_panel_roll(&mut panel, 0.4));
+        assert!((panel_roll(&panel).unwrap() - 0.4).abs() < 1e-5);
+        assert!((panel.x_axis.length() - 2.0).abs() < 1e-4);
+        assert!(set_panel_roll(&mut panel, 0.0));
+        assert!(panel_roll(&panel).unwrap().abs() < 1e-5);
+
+        // lying flat has no upright
+        let flat = Affine3A::from_rotation_x(FRAC_PI_2);
+        assert!(panel_roll(&flat).is_none());
+    }
 }
