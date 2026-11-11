@@ -29,6 +29,8 @@ const WRIST_WATCH_POS: Vec3A = Vec3A::new(0.0, 0.025, 0.05);
 /// oneVR: how far the watch turns around the forearm toward the thumb, which faces the user
 const WRIST_WATCH_TILT: f32 = std::f32::consts::FRAC_PI_4;
 pub const WATCH_ROT: Quat = Quat::from_xyzw(-0.707_106_6, 0.000_796_361_8, 0.707_106_6, 0.0);
+/// oneVR: a toast shown on the watch lies on its face, this far in front of it
+const WATCH_TOAST_LIFT: Vec3 = vec3(0.0, 0.0, 0.005);
 
 #[derive(Default)]
 struct WatchState {
@@ -180,6 +182,18 @@ pub fn on_wrist(hand: LeftRight, scale: f32) -> Affine3A {
         matrix3: tilt * rotation * scale,
         translation: tilt * WRIST_WATCH_POS,
     }
+}
+
+/// oneVR: where a toast shown on the watch sits on a controller: on the watch's face
+pub fn toast_on_watch() -> (Vec3, Quat) {
+    (WATCH_POS + WATCH_ROT * WATCH_TOAST_LIFT, WATCH_ROT)
+}
+
+/// oneVR: where a toast shown on the watch sits for a tracked hand, in its wrist joint's space
+pub fn toast_on_wrist(hand: LeftRight, scale: f32) -> Affine3A {
+    on_wrist(hand, 1.0)
+        * Affine3A::from_translation(WATCH_TOAST_LIFT)
+        * Affine3A::from_scale(Vec3::splat(scale))
 }
 
 fn sets_or_overlays(panel: &mut GuiPanel<WatchState>, app: &mut AppState) {

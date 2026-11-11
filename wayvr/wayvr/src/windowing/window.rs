@@ -296,9 +296,14 @@ impl OverlayWindowConfig {
             Positioning::FollowHand { hand, lerp } => {
                 let pointer = &app.input_state.pointers[hand as usize];
                 // oneVR: a tracked hand's pointer is a ray, not on the wrist like a controller's
-                match pointer.wrist.filter(|_| &*self.name == WATCH_NAME) {
-                    Some(wrist) => (wrist * watch::on_wrist(hand, scale), lerp),
-                    None => (pointer.pose * cur_transform, lerp),
+                match pointer.wrist {
+                    Some(wrist) if &*self.name == WATCH_NAME => {
+                        (wrist * watch::on_wrist(hand, scale), lerp)
+                    }
+                    Some(wrist) if self.name == *TOAST_NAME => {
+                        (wrist * watch::toast_on_wrist(hand, scale), lerp)
+                    }
+                    _ => (pointer.pose * cur_transform, lerp),
                 }
             }
             Positioning::Anchored | Positioning::Floating => (app.anchor * cur_transform, 1.0),

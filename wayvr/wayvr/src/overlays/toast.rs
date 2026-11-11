@@ -26,6 +26,7 @@ use wlx_common::{
 use crate::{
     backend::task::{OverlayTask, SpawnPos, TaskType},
     gui::panel::{GuiPanel, NewGuiPanelParams, OnCustomIdFunc},
+    overlays::watch,
     state::AppState,
     windowing::{
         OverlaySelector, PIXELS_TO_METERS, Z_ORDER_TOAST,
@@ -390,12 +391,14 @@ fn new_toast(toast: BakedToast, app: &mut AppState) -> Option<OverlayWindowConfi
                 lerp: toast.params.lerp_amount,
             },
         ),
+        // oneVR: on the watch's face, where it floated at the hand facing the user
         ToastDisplayMethod::Watch => {
             let relative_to = Positioning::FollowHand {
                 hand: LeftRight::Left,
                 lerp: 0.1,
             };
-            (vec3(0., 0., 0.), Quat::IDENTITY, relative_to)
+            let (point, rotation) = watch::toast_on_watch();
+            (point, rotation, relative_to)
         }
     };
 
