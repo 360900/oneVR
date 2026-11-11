@@ -1014,6 +1014,9 @@ fn setting_description(key: &str, h: &HeadsetSettings) -> Option<&'static str> {
 	match key {
 		"extended_config" => Some("ONEVR.HEADSET.EXTENDED_CONFIG_DESC"),
 		"high_power_mode" => Some("ONEVR.HEADSET.HIGH_POWER_DESC"),
+		// headsets offer it whether or not they track the body, and SlimeVR users turned it on
+		// (WiVRn #713)
+		"body_tracking" => Some("ONEVR.HEADSET.BODY_TRACKING_DESC"),
 		// the headset pauses it while it tracks the body: Meta's body tracking doesn't work alongside it
 		"simultaneous_hands" if h.capabilities.body_tracking && h.config.body_tracking => {
 			Some("ONEVR.HEADSET.SIMULTANEOUS_HANDS_DESC")

@@ -165,6 +165,7 @@
       "EYE_TRACKING": "Eye tracking",
       "FACE_TRACKING": "Face tracking",
       "BODY_TRACKING": "Body tracking",
+      "BODY_TRACKING_DESC": "The body as the headset tracks it: Meta's body estimate, or trackers paired with the headset. Not needed for SlimeVR or Lighthouse trackers, which reach games on their own; with them, it adds trackers that don't exist.",
       "BODY_PARTS": "Virtual body trackers",
       "BODY": {
         "CHEST": "Chest",
