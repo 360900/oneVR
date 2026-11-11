@@ -108,7 +108,7 @@ android {
         // for AImage_getHardwareBuffer, API 26
         minSdkVersion 29
         compileSdkVersion 34
-        targetSdkVersion 32 // for Oculus Store
+        targetSdkVersion 34 // oneVR: the Meta Horizon Store takes 34 from new apps
 
         versionName = project.hasProperty('wivrn_version') ? wivrn_version : "1.0"
         versionCode = project.hasProperty('wivrn_versionCode') ? wivrn_versionCode.toInteger() : 1
@@ -200,7 +200,14 @@ android {
         {
             initWith release
             applicationIdSuffix = project.hasProperty('suffix') ? suffix: ""
-            manifestPlaceholders.ComOculusSupportedDevices = "quest2|quest3|questpro"
+            manifestPlaceholders.ComOculusSupportedDevices = "quest2|questpro|quest3|quest3s"
+            // oneVR: the store key stays out of the tree and CI, cargo xtask apk --store signs the APK
+            signingConfig = null
+            externalNativeBuild {
+                cmake {
+                    arguments '-DONEVR_STORE_BUILD=ON'
+                }
+            }
         }
 
         debug {
@@ -233,6 +240,10 @@ android {
     }
 
     sourceSets {
+        // oneVR: drops what only other vendors' headsets use
+        oculus {
+            manifest.srcFile 'AndroidManifest.store.xml'
+        }
         main {
             manifest.srcFile 'AndroidManifest.xml'
             java.srcDirs = ['client/java']

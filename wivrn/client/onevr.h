@@ -17,8 +17,13 @@
 
 #pragma once
 
+#include "wivrn_config.h"
+
 namespace wivrn::onevr
 {
+// The Meta Horizon Store's build, which the store installs and updates
+inline constexpr bool store_build = ONEVR_STORE_BUILD;
+
 // WiVRn's own settings, environments, wizard and in-stream window. oneVR shows its settings in
 // the WayVR dashboard instead and keeps only a small lobby to find and connect to a PC.
 inline constexpr bool stock_ui = false;

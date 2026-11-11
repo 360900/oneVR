@@ -43,6 +43,7 @@ static const int64_t max_extrapolation_ns = 80'000'000;
 
 #cmakedefine01 WIVRN_SHOW_IMGUI_DEMO_WINDOW
 #cmakedefine01 WIVRN_CLIENT_DEBUG_MENU
+#cmakedefine01 ONEVR_STORE_BUILD
 
 #define WIVRN_INSTALL_PREFIX "@CMAKE_INSTALL_PREFIX@"
 #define OVR_COMPAT_SEARCH_PATH "@OVR_COMPAT_SEARCH_PATH@"

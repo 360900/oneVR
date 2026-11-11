@@ -49,7 +49,8 @@ constexpr steady_clock::duration max_backoff = 60s;
 // adb answers within a second or two, also when it starts its server first. One that hangs, as on
 // a headset that stopped answering or a stuck server, would leave its device busy for good.
 constexpr auto run_timeout = 20s;
-constexpr const char * packages[] = {"com.weldiva.onevr", "com.weldiva.onevr.debug"};
+// the Meta Horizon Store's app, the APK from GitHub, a debug build
+constexpr const char * packages[] = {"com.weldiva.onevr", "com.weldiva.onevr.free", "com.weldiva.onevr.debug"};
 
 struct device
 {

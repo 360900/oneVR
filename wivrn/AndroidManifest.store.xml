@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- oneVR: the Meta Horizon Store's build. Merged over AndroidManifest.xml, it drops the
+     permissions, features and metadata that only other vendors' headsets read: the store
+     takes no permission the app doesn't need on a Quest. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Magic Leap, Pico, Android XR -->
+    <uses-permission android:name="com.magicleap.permission.HAND_TRACKING" tools:node="remove" />
+    <uses-permission android:name="com.picovr.permission.EYE_TRACKING" tools:node="remove" />
+    <uses-permission android:name="com.picovr.permission.FACE_TRACKING" tools:node="remove" />
+    <uses-permission android:name="android.permission.EYE_TRACKING_FINE" tools:node="remove" />
+    <uses-permission android:name="android.permission.FACE_TRACKING" tools:node="remove" />
+    <uses-permission android:name="android.permission.HAND_TRACKING" tools:node="remove" />
+
+    <!-- HTC -->
+    <uses-feature android:name="wave.feature.handtracking" tools:node="remove" />
+    <uses-feature android:name="wave.feature.eyetracking" tools:node="remove" />
+    <uses-feature android:name="wave.feature.lipexpression" tools:node="remove" />
+    <uses-feature android:name="wave.feature.tracker" tools:node="remove" />
+
+    <!-- Android XR. The first one is required in the main manifest, and the store
+         takes no app that requires a feature a Quest lacks. -->
+    <uses-feature android:name="android.software.xr.api.openxr" tools:node="remove" />
+    <uses-feature android:name="android.hardware.xr.input.controller" tools:node="remove" />
+    <uses-feature android:name="android.hardware.xr.input.hand_tracking" tools:node="remove" />
+    <uses-feature android:name="android.hardware.xr.input.eye_tracking" tools:node="remove" />
+
+    <application>
+        <uses-native-library android:name="libopenxr.google.so" tools:node="remove" />
+
+        <meta-data android:name="pvr.app.type" tools:node="remove" />
+        <meta-data android:name="pvr.sdk.version" tools:node="remove" />
+        <meta-data android:name="picovr.software.eye_tracking" tools:node="remove" />
+        <meta-data android:name="picovr.software.face_tracking" tools:node="remove" />
+        <meta-data android:name="com.htc.vr.content.NumDoFHmd" tools:node="remove" />
+        <meta-data android:name="com.htc.vr.content.NumDoFController" tools:node="remove" />
+
+        <property android:name="android.window.PROPERTY_XR_ACTIVITY_START_MODE" tools:node="remove" />
+        <property android:name="android.window.PROPERTY_XR_BOUNDARY_TYPE_RECOMMENDED" tools:node="remove" />
+    </application>
+</manifest>
