@@ -360,6 +360,26 @@ void scenes::stream::tracking()
 	const bool body_tracking = config.check_feature(feature::body_tracking);
 	xr::body_tracker body_tracker;
 
+	// oneVR: a tracker the runtime refuses to make is left out for the rest of the stream; the
+	// exception ended the stream (WiVRn #1135, Meta's body tracker with RUNTIME_FAILURE)
+	bool left_hand_failed = false;
+	bool right_hand_failed = false;
+	bool face_tracker_failed = false;
+	bool body_tracker_failed = false;
+	auto try_make = [](const char * what, bool & failed, auto && make) {
+		if (failed)
+			return;
+		try
+		{
+			make();
+		}
+		catch (std::exception & e)
+		{
+			failed = true;
+			spdlog::warn("Couldn't start the {}, streaming without it: {}", what, e.what());
+		}
+	};
+
 	locate_spaces_functor locate_spaces{instance, height_offset_space};
 
 	on_interaction_profile_changed({});
@@ -412,7 +432,7 @@ void scenes::stream::tracking()
 						if (std::ranges::contains(pattern, device_id::LEFT_HAND, &to_headset::tracking_control::sample::device))
 						{
 							if (not left_hand)
-								left_hand = session.create_hand_tracker(XR_HAND_LEFT_EXT, data_sources);
+								try_make("left hand tracker", left_hand_failed, [&] { left_hand = session.create_hand_tracker(XR_HAND_LEFT_EXT, data_sources); });
 						}
 						else
 							left_hand.reset();
@@ -420,7 +440,7 @@ void scenes::stream::tracking()
 						if (std::ranges::contains(pattern, device_id::RIGHT_HAND, &to_headset::tracking_control::sample::device))
 						{
 							if (not right_hand)
-								right_hand = session.create_hand_tracker(XR_HAND_RIGHT_EXT, data_sources);
+								try_make("right hand tracker", right_hand_failed, [&] { right_hand = session.create_hand_tracker(XR_HAND_RIGHT_EXT, data_sources); });
 						}
 						else
 							right_hand.reset();
@@ -431,7 +451,7 @@ void scenes::stream::tracking()
 						if (std::ranges::contains(pattern, device_id::FACE, &to_headset::tracking_control::sample::device))
 						{
 							if (std::holds_alternative<std::monostate>(face_tracker))
-								face_tracker = xr::make_face_tracker(instance, system, session);
+								try_make("face tracker", face_tracker_failed, [&] { face_tracker = xr::make_face_tracker(instance, system, session); });
 						}
 						else
 							face_tracker.emplace<std::monostate>();
@@ -443,12 +463,14 @@ void scenes::stream::tracking()
 						{
 							if (std::holds_alternative<std::monostate>(body_tracker))
 							{
-								session.set_simultaneous_hands_and_controllers(false);
-								body_tracker = xr::make_body_tracker(
-								        instance,
-								        system,
-								        session,
-								        application::get_generic_trackers());
+								try_make("body tracker", body_tracker_failed, [&] {
+									session.set_simultaneous_hands_and_controllers(false);
+									body_tracker = xr::make_body_tracker(
+									        instance,
+									        system,
+									        session,
+									        application::get_generic_trackers());
+								});
 							}
 						}
 						else
