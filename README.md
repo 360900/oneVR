@@ -23,15 +23,12 @@ This installs to `/opt/onevr` and adds `onevr` to the app menu. It doesn't confl
 Other distributions: install the build dependencies of WiVRn, xrizer and wayvr, then:
 
 ```sh
-cargo xtask build --release --i686 --prefix "$HOME/.local/opt/onevr"
-cargo xtask install
-mkdir -p ~/.local/bin ~/.local/share/applications
-ln -sf "$HOME/.local/opt/onevr/bin/onevr" ~/.local/bin/
-ln -sf "$HOME/.local/opt/onevr/share/applications/io.github.onevr.desktop" ~/.local/share/applications/
-ln -sf "$HOME/.local/opt/onevr/share/applications/io.github.onevr.wayvr.desktop" ~/.local/share/applications/
+./install.sh
 ```
 
-The prefix is fixed at build time. The links put `onevr` in `~/.local/bin` and oneVR in the app menu. On Plasma before 6.8, the `io.github.onevr.wayvr.desktop` link lets oneVR capture screens without a dialog and add virtual monitors.
+This builds oneVR, installs it to `~/.local/opt/onevr`, links `onevr` into `~/.local/bin` and adds oneVR to the app menu. Run it again to update; it stops a running oneVR first. If a Quest is connected over adb, it also installs the latest headset APK from CI on it, which needs `gh` logged in. `./uninstall.sh` removes it and keeps the settings and pairing.
+
+On Plasma before 6.8, the hidden `io.github.onevr.wayvr.desktop` entry lets oneVR capture screens without a dialog and add virtual monitors.
 
 The headset APK is the `onevr-apk-release` artifact of [CI](https://github.com/360900/oneVR/actions/workflows/ci.yml).
 
