@@ -1101,6 +1101,15 @@ impl OverlayBackend for WvrWindowBackend {
                         .set_input_focus(app.wvr_server.as_mut(), InputFocus::WayVR);
                 }
 
+                // oneVR: like screens, hover moves the mouse only on trigger touch when
+                // "Mouse move on trigger touch" is on; picking the focus still moves it
+                if app.session.config.focus_follows_mouse_mode
+                    && !app.input_state.pointers[hit.pointer].now.move_mouse
+                    && !pick_now
+                {
+                    return HoverResult::consume();
+                }
+
                 let wvr_server = app.wvr_server.as_mut().unwrap();
                 wvr_server.send_mouse_move(
                     PointerFocusTarget::Surface { surface, origin },
@@ -1122,6 +1131,15 @@ impl OverlayBackend for WvrWindowBackend {
                     app.input_state.stop_picking();
                     app.hid_provider
                         .set_input_focus(app.wvr_server.as_mut(), InputFocus::WayVR);
+                }
+
+                // oneVR: like screens, hover moves the mouse only on trigger touch when
+                // "Mouse move on trigger touch" is on; picking the focus still moves it
+                if app.session.config.focus_follows_mouse_mode
+                    && !app.input_state.pointers[hit.pointer].now.move_mouse
+                    && !pick_now
+                {
+                    return HoverResult::consume();
                 }
 
                 let wvr_server = app.wvr_server.as_mut().unwrap();
