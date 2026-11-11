@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs the latest headset APK from CI on each Quest adb reaches.
+# Installs the latest headset APK, CI's build of main, on each Quest adb reaches.
 set -eu
 
 say() { echo "sideload.sh: $*"; }
@@ -15,31 +15,32 @@ for serial in $(adb devices | awk 'NR > 1 && $2 == "device" { print $1 }'); do
     esac
 done
 if [ -z "$quests" ]; then
-    # A headset that hasn't allowed this PC yet shows up as unauthorized
-    if adb devices | awk 'NR > 1 && $2 == "unauthorized" { found = 1 } END { exit !found }'; then
-        say "a device waits for USB debugging to be allowed, accept it on the headset and run sideload.sh again"
-    else
-        say "no Quest connected over adb, headset app not installed"
-    fi
+    # adb's states for a device it can't use yet
+    case " $(adb devices | awk 'NR > 1 && NF { printf "%s ", $2 }')" in
+        *" unauthorized "*)
+            say "accept USB debugging on the headset, then run sideload.sh again" ;;
+        *" no "*)
+            say "adb has no permission to open the headset, install your distribution's udev rules for adb (such as android-udev) and plug it in again" ;;
+        *" offline "*)
+            say "the headset's adb connection is offline, plug it in again" ;;
+        *)
+            say "adb finds no Quest: plug it in by USB with a data cable, with developer mode on (the oneVR connection over Wi-Fi isn't adb)" ;;
+    esac
+    say "headset app not installed"
     exit 0
 fi
 
-if ! command -v gh >/dev/null || ! gh auth status >/dev/null 2>&1; then
-    fail "downloading the APK from CI needs gh, logged in with gh auth login"
-fi
-repo=360900/oneVR
-run=$(gh api "repos/$repo/actions/artifacts?name=onevr-apk-release&per_page=30" \
-    -q '[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == "main")][0].workflow_run.id // empty')
-[ -n "$run" ] || fail "CI has no onevr-apk-release build of main to install"
+command -v curl >/dev/null || fail "needs curl"
+# The release CI updates with each build of main
+url=https://github.com/360900/oneVR/releases/download/latest/onevr.apk
 apkdir=$(mktemp -d)
 trap 'rm -rf "$apkdir"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-say "downloading the headset APK from CI run $run"
-gh run download "$run" --repo "$repo" --name onevr-apk-release --dir "$apkdir" ||
-    fail "the APK of CI run $run didn't download, see https://www.githubstatus.com if GitHub is down"
-apk=$(find "$apkdir" -name '*.apk' | head -n 1)
-[ -n "$apk" ] || fail "CI run $run has no APK"
+apk="$apkdir/onevr.apk"
+say "downloading the latest headset APK"
+curl -fL --retry 3 --progress-bar -o "$apk" "$url" ||
+    fail "the APK didn't download from $url"
 
 # A failed adb install leaves the headset's app as it was.
 failed=""

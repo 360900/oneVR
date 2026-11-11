@@ -30,7 +30,9 @@ This builds oneVR, installs it to `~/.local/opt/onevr`, links `onevr` into `~/.l
 
 On Plasma before 6.8, the hidden `io.github.onevr.wayvr.desktop` entry lets oneVR capture screens without a dialog and add virtual monitors.
 
-The headset APK is the `onevr-apk-release` artifact of [CI](https://github.com/360900/oneVR/actions/workflows/ci.yml). `./sideload.sh` installs the latest one on each Quest connected over adb, which needs `gh` logged in.
+The headset APK is `onevr.apk` in the [latest release](https://github.com/360900/oneVR/releases/latest), which CI updates with each build of main. `./sideload.sh` installs it on each Quest connected over adb.
+
+The release also has the PC build, `onevr-x86_64.tar.gz`, built on Arch Linux for `/opt/onevr`. `sudo tar -xzf onevr-x86_64.tar.gz -C /` installs it; then link `/opt/onevr/bin/onevr` and the two entries in `/opt/onevr/share/applications` as `install.sh` does.
 
 The Steam Frame takes the `onevr-frame` artifact instead: extract it on the headset, add `onevr-frame/bin/onevr` to Steam as a non-Steam game and start it from the Library. It streams H.264 and 8-bit H.265.
 
