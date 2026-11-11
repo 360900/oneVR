@@ -1,0 +1,29 @@
+From 9693685726f46cc13b016ceddbdba99d709e96ce Mon Sep 17 00:00:00 2001
+From: 360900 <ziyad.koca@hotmail.com>
+Date: Wed, 11 Nov 2026 21:33:31 +0300
+Subject: [PATCH] d/steamvr_lh: skeletal hand root from the controller's pose
+ history
+
+---
+ src/xrt/drivers/steamvr_lh/device.cpp | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/src/xrt/drivers/steamvr_lh/device.cpp b/src/xrt/drivers/steamvr_lh/device.cpp
+index 08a0d6218..20dc444ef 100644
+--- a/src/xrt/drivers/steamvr_lh/device.cpp
++++ b/src/xrt/drivers/steamvr_lh/device.cpp
+@@ -772,6 +772,11 @@ ControllerDevice::get_hand_tracking(enum xrt_input_name name,
+ 		*out_timestamp_ns = desired_timestamp_ns;
+ 	}
+ 
++	// The root is the controller's pose, so take it from the controller's history, which limits
++	// how far it is predicted (LH_MAX_EXTRAPOLATION_MS); predicted on its own, a quick wrist turn
++	// threw it far off (WiVRn #1160)
++	Device::get_pose(desired_timestamp_ns, &out_value->hand_pose);
++
+ 	return XRT_SUCCESS;
+ }
+ 
+-- 
+2.56.1
+
