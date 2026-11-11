@@ -605,7 +605,10 @@ mod tests {
 
     #[test]
     fn missing_32bit_build_next_to_the_64bit_one() {
-        assert!(crate::own_library().is_some());
+        // Miri can't call dladdr.
+        if !cfg!(miri) {
+            assert!(crate::own_library().is_some());
+        }
 
         let dir = std::env::temp_dir().join(format!("xrizer-32bit-{}", std::process::id()));
         let linux64 = dir.join("bin/linux64");
