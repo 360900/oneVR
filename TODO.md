@@ -81,7 +81,8 @@ in xrizer/TODO.md (edited in xrizer-edge).
   stutter (#1200); the dashboard's battery follows a plug in within a second or two (#751);
   the Headset page's Color saturation slider at 50 and 150% (#711) and Body tracking's
   description (#713); an Index hand in VRChat on a quick wrist turn (#1160); `onevr --tray`
-  shows only the tray (#1089); the Games tab's search and sort (wayvr #551, #556).
+  shows only the tray, and PC > Server's Startup toggle starts it so at the next login
+  (#1089); the Games tab's search and sort (wayvr #551, #556).
 - Also: Library sections and no duplicate covers (#6/#7), no browser entry (#9), codec
   above foveation (#11), body-tracker toggles wrap (#22, shown only with Body tracking on),
   passthrough default off (#13), advanced-setting descriptions (#21).
@@ -200,8 +201,6 @@ Small features, for upstream:
   (#714). Both need new IPC packets and a `PROTOCOL_VERSION` bump, which wayvr's handshake
   matches exactly: a oneVR-only bump would clash with upstream's next one, so propose them
   upstream instead.
-- A login item for `onevr --tray` (WiVRn #1089): a toggle that writes
-  ~/.config/autostart/onevr.desktop. Not built: it starts the VR server at every login.
 
 Larger features, only if wanted:
 - The headset's play area to apps: the headset sends its stage bounds and a Monado patch

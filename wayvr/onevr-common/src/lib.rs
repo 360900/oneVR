@@ -10,6 +10,7 @@ pub mod headset;
 pub mod library;
 #[cfg(feature = "dbus")]
 pub mod link;
+pub mod login_item;
 pub mod rebrand;
 pub mod server_config;
 pub mod state;

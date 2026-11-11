@@ -113,6 +113,8 @@ enum Task {
 	Server(ServerChange),
 	OpenMenu(context_menu::Position, Vec<context_menu::Cell>),
 	PerfOverlay(bool),
+	/// Start oneVR at login, in the tray
+	LoginItem(bool),
 	Copy(String),
 	RunChecks,
 	/// Fix the check with this id, then run the checks
@@ -310,6 +312,19 @@ impl<T: 'static> Tab<T> for TabOneVrPc<T> {
 					blueprint: Blueprint::Cells(cells),
 				}),
 				Task::PerfOverlay(visible) => frontend.interface.onevr_set_perf_overlay(data, visible),
+				Task::LoginItem(enable) => {
+					if let Err(e) = onevr_common::login_item::set(enable) {
+						log::warn!("Couldn't change the login item: {e}");
+						frontend
+							.tasks
+							.push(FrontendTask::PushToast(Translation::from_raw_text_string(format!(
+								"{}: {e}",
+								frontend.globals.i18n().translate("ONEVR.PC.LOGIN_ITEM_FAILED")
+							))));
+					}
+					// shows what the file says now
+					self.invalidate();
+				}
 				Task::Copy(text) => {
 					let message = match frontend.interface.clipboard_set_text(data, &text) {
 						Ok(()) => Translation::from_translation_key("ONEVR.PC.COPIED"),
@@ -702,8 +717,26 @@ impl<T: 'static> TabOneVrPc<T> {
 			Section::Diagnostics => self.diagnostics(&mut ui)?,
 			Section::About => self.about(&mut ui)?,
 		}
+		// a setting of this PC, not of the server, so also while oneVR is stopped
+		if self.section == Section::Server {
+			self.startup(&mut ui)?;
+		}
 
 		self.widgets = Some(widgets);
+		Ok(())
+	}
+
+	/// Whether oneVR starts at login, see `onevr_common::login_item`
+	fn startup(&self, ui: &mut Ui) -> anyhow::Result<()> {
+		let group = ui.group(self.id_content, "ONEVR.PC.STARTUP", "@/dashboard/power.svg")?;
+		let tasks = self.tasks.clone();
+		ui.toggle(
+			group,
+			Text::Key("ONEVR.PC.LOGIN_ITEM"),
+			onevr_common::login_item::enabled(),
+			move |v| tasks.push(Task::LoginItem(v)),
+		)?;
+		ui.muted(group, Text::Key("ONEVR.PC.LOGIN_ITEM_DESC"))?;
 		Ok(())
 	}
 
