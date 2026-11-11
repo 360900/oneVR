@@ -84,7 +84,7 @@ Default value: unset
 Manually specify the device for encoding, can be used to offload encode to an iGPU. Device shall be in the form "/dev/dri/renderD128".
 
 
-### `options` (very advanced), only for vaapi and vulkan
+### `options` (very advanced), only for vaapi, vulkan and nvenc
 Default value: unset
 
 Json object of additional encoder options, with string values, such as `{"quality": "0"}`.
@@ -92,6 +92,15 @@ Json object of additional encoder options, with string values, such as `{"qualit
 `vaapi` passes them directly to ffmpeg `avcodec_open2`'s `option` parameter. On AMD, oneVR asks Mesa for its balanced preset with pre-encode and VBAQ, which `compression_level` overrides.
 
 `vulkan` reads `quality`, the encode quality level. 0 is the driver's default, and a level above what the driver supports is lowered to its highest. On AMD, oneVR uses level 1. Mesa 26.1 and later map 0 to the speed preset (balanced for `h265` before RDNA 4), 1 to balanced, 2 to quality and, on RDNA 3 and later, 3 to high quality. Older Mesa ignores the level and uses the speed preset.
+
+`nvenc` reads these, and logs and ignores a value it doesn't know:
+- `preset`: `p1` (fastest) to `p7` (best quality), default `p4`
+- `tuning`: `ull` (ultra low latency, default), `ll` (low latency) or `hq` (high quality, more latency)
+- `rc`: rate control, `cbr` (default) or `vbr`
+- `vbv_frames`: the rate control buffer, in frames, from 0.5 to 60, default 2; a larger one gives better quality on hard frames and more latency
+- `multipass`: `disabled`, `quarter` (default) or `full` resolution first pass
+- `aq`: spatial adaptive quantization, `1` (default) or `0`; `aq_strength` from 1 (low) to 15 (aggressive), 0 for the driver's choice (default)
+- `temporal_aq`: `1` or `0` (default)
 
 ## `application`
 Default value: unset

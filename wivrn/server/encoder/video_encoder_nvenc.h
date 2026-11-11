@@ -60,6 +60,19 @@ private:
 	uint64_t bitrate;
 	int bytesPerPixel = 1;
 
+	// oneVR: what the encoder's `options` can change (docs/configuration.md), today's values by default
+	struct tuning_t
+	{
+		GUID preset = NV_ENC_PRESET_P4_GUID;
+		NV_ENC_TUNING_INFO tuning = NV_ENC_TUNING_INFO_ULTRA_LOW_LATENCY;
+		NV_ENC_PARAMS_RC_MODE rc = NV_ENC_PARAMS_RC_CBR;
+		float vbv_frames = 2;
+		NV_ENC_MULTI_PASS multipass = NV_ENC_TWO_PASS_QUARTER_RESOLUTION;
+		bool aq = true;
+		bool temporal_aq = false;
+		uint32_t aq_strength = 0;
+	} tuning;
+
 	NV_ENC_RC_PARAMS get_rc_params(uint64_t bitrate, float framerate);
 	void set_init_params_fps(float framerate);
 

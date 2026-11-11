@@ -34,6 +34,8 @@ bool operator==(const GUID & l, const GUID & r)
 }
 
 #include <algorithm>
+#include <cctype>
+#include <map>
 #include <stdexcept>
 
 #define NVENC_CHECK_NOENCODER(x)                                          \
@@ -132,17 +134,115 @@ static void check_profile_guid_supported(std::shared_ptr<video_encoder_nvenc_sha
 	}
 }
 
+// oneVR: the AQ flags are here, as a bitrate or frame rate change rebuilds the rate control and
+// turned AQ off
 NV_ENC_RC_PARAMS video_encoder_nvenc::get_rc_params(uint64_t bitrate, float framerate)
 {
-	return {
-	        .rateControlMode = NV_ENC_PARAMS_RC_CBR,
+	NV_ENC_RC_PARAMS params{
+	        .rateControlMode = tuning.rc,
 	        .averageBitRate = static_cast<uint32_t>(bitrate),
-	        .vbvBufferSize = static_cast<uint32_t>(bitrate / framerate * 2.0f),
-	        .vbvInitialDelay = static_cast<uint32_t>(bitrate / framerate),
+	        .maxBitRate = tuning.rc == NV_ENC_PARAMS_RC_VBR ? static_cast<uint32_t>(bitrate) : 0,
+	        .vbvBufferSize = static_cast<uint32_t>(bitrate / framerate * tuning.vbv_frames),
+	        .vbvInitialDelay = static_cast<uint32_t>(bitrate / framerate * tuning.vbv_frames / 2),
 	        .enableLookahead = 0,
 	        .lowDelayKeyFrameScale = 1,
-	        .multiPass = NV_ENC_TWO_PASS_QUARTER_RESOLUTION};
+	        .multiPass = tuning.multipass};
+	params.enableTemporalAQ = tuning.temporal_aq;
+	params.enableAQ = tuning.aq;
+	params.aqStrength = tuning.aq_strength;
+	params.enableNonRefP = 1;
+	return params;
 }
+
+namespace
+{
+// oneVR: reads the nvenc options of docs/configuration.md; a value it doesn't know is logged and
+// left at its default
+void parse_nvenc_options(const std::map<std::string, std::string> & options, auto & tuning)
+{
+	auto bad = [](const std::string & key, const std::string & value) {
+		U_LOG_W("nvenc: ignoring option %s=%s", key.c_str(), value.c_str());
+	};
+	auto as_bool = [&](const std::string & key, const std::string & value, bool & out) {
+		if (value == "1" or value == "true")
+			out = true;
+		else if (value == "0" or value == "false")
+			out = false;
+		else
+			bad(key, value);
+	};
+	for (const auto & [key, value]: options)
+	{
+		if (key == "preset")
+		{
+			static const std::array presets{NV_ENC_PRESET_P1_GUID, NV_ENC_PRESET_P2_GUID, NV_ENC_PRESET_P3_GUID, NV_ENC_PRESET_P4_GUID, NV_ENC_PRESET_P5_GUID, NV_ENC_PRESET_P6_GUID, NV_ENC_PRESET_P7_GUID};
+			if (value.size() == 2 and (value[0] == 'p' or value[0] == 'P') and value[1] >= '1' and value[1] <= '7')
+				tuning.preset = presets[value[1] - '1'];
+			else
+				bad(key, value);
+		}
+		else if (key == "tuning")
+		{
+			if (value == "ull")
+				tuning.tuning = NV_ENC_TUNING_INFO_ULTRA_LOW_LATENCY;
+			else if (value == "ll")
+				tuning.tuning = NV_ENC_TUNING_INFO_LOW_LATENCY;
+			else if (value == "hq")
+				tuning.tuning = NV_ENC_TUNING_INFO_HIGH_QUALITY;
+			else
+				bad(key, value);
+		}
+		else if (key == "rc")
+		{
+			if (value == "cbr")
+				tuning.rc = NV_ENC_PARAMS_RC_CBR;
+			else if (value == "vbr")
+				tuning.rc = NV_ENC_PARAMS_RC_VBR;
+			else
+				bad(key, value);
+		}
+		else if (key == "vbv_frames")
+		{
+			try
+			{
+				float frames = std::stof(value);
+				if (frames >= 0.5f and frames <= 60.f)
+					tuning.vbv_frames = frames;
+				else
+					bad(key, value);
+			}
+			catch (std::exception &)
+			{
+				bad(key, value);
+			}
+		}
+		else if (key == "multipass")
+		{
+			if (value == "disabled")
+				tuning.multipass = NV_ENC_MULTI_PASS_DISABLED;
+			else if (value == "quarter")
+				tuning.multipass = NV_ENC_TWO_PASS_QUARTER_RESOLUTION;
+			else if (value == "full")
+				tuning.multipass = NV_ENC_TWO_PASS_FULL_RESOLUTION;
+			else
+				bad(key, value);
+		}
+		else if (key == "aq")
+			as_bool(key, value, tuning.aq);
+		else if (key == "temporal_aq")
+			as_bool(key, value, tuning.temporal_aq);
+		else if (key == "aq_strength")
+		{
+			if (value.size() <= 2 and std::ranges::all_of(value, ::isdigit) and not value.empty() and std::stoi(value) <= 15)
+				tuning.aq_strength = std::stoi(value);
+			else
+				bad(key, value);
+		}
+		else
+			bad(key, value);
+	}
+}
+} // namespace
 
 void video_encoder_nvenc::set_init_params_fps(float framerate)
 {
@@ -172,6 +272,8 @@ video_encoder_nvenc::video_encoder_nvenc(
         fps(settings.fps),
         bitrate(settings.bitrate)
 {
+	parse_nvenc_options(settings.options, tuning);
+
 	if (settings.bit_depth != 8 && settings.bit_depth != 10)
 		throw std::runtime_error("nvenc encoder only supports 8-bit and 10-bit encoding");
 
@@ -201,10 +303,10 @@ video_encoder_nvenc::video_encoder_nvenc(
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-	GUID presetGUID = NV_ENC_PRESET_P4_GUID;
+	GUID presetGUID = tuning.preset;
 	check_preset_guid_supported(shared_state, session_handle, encodeGUID, presetGUID);
 
-	NV_ENC_TUNING_INFO tuningInfo = NV_ENC_TUNING_INFO_ULTRA_LOW_LATENCY;
+	NV_ENC_TUNING_INFO tuningInfo = tuning.tuning;
 #pragma GCC diagnostic pop
 	NV_ENC_PRESET_CONFIG preset_config{
 	        .version = NV_ENC_PRESET_CONFIG_VER,
@@ -217,9 +319,6 @@ video_encoder_nvenc::video_encoder_nvenc(
 
 	// Bitrate control
 	config.rcParams = get_rc_params(bitrate, fps);
-	config.rcParams.enableTemporalAQ = 0;
-	config.rcParams.enableAQ = 1;
-	config.rcParams.enableNonRefP = 1;
 
 	config.gopLength = NVENC_INFINITE_GOPLENGTH;
 	config.frameIntervalP = 1;
