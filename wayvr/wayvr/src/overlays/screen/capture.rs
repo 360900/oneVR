@@ -1201,9 +1201,17 @@ fn extent_from_format(fmt: FrameFormat, config: &GeneralConfig) -> [u32; 2] {
         2560
     };
 
-    let h = height.min(height_limit);
-    let w = (width as f32 / height as f32 * h as f32) as u32;
-    [w, h]
+    // oneVR: the limit is on the shorter side, the height of a landscape screen, so a portrait
+    // one keeps as many pixels instead of coming out a lot blurrier
+    let short = width.min(height);
+    if short <= height_limit {
+        return [width, height];
+    }
+    let scale = height_limit as f32 / short as f32;
+    [
+        ((width as f32 * scale) as u32).max(1),
+        ((height as f32 * scale) as u32).max(1),
+    ]
 }
 
 macro_rules! new_wlx_capture {

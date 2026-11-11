@@ -68,7 +68,8 @@
 #notification_sound: ""
 
 ## If `screen_render_down` is enabled,
-## controls the maximum height of the screen
+## controls the maximum size of the screen's shorter side
+## (its height in landscape, its width in portrait)
 #screen_max_height: 1440
 
 ## Don't move the mouse more often than this value
