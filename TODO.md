@@ -2,7 +2,9 @@
 
 Reconciled against CHANGES.md on 2026-10-31. Items already implemented per CHANGES
 are removed. The 2026-10-30 branch work is merged to main (f598d729) and pushed; CI is
-building the APK.
+building the APK. Open upstream issues and PRs of WiVRn, wayvr and xrizer were checked
+against main on 2026-11-11 (see "Open: from upstream issues and PRs"). xrizer items live
+in xrizer/TODO.md (edited in xrizer-edge).
 
 ## Verify on the Quest (shipped this session, not yet confirmed on device)
 
@@ -165,11 +167,125 @@ Research first:
 - OpenXR 1.1 and quad views: track upstream Monado.
 - Other headsets: Pico needs testing; others need hardware or testers.
 
-Take from upstream when convenient:
-- WayVR PR #662: saves every panel setting; fixes screens coming back behind you.
-- WayVR PRs #553/#555: put the keyboard, screens and apps in front of you at start.
-- WayVR PR #699: a rustls update in the lockfile (TLS fixes). Trivial.
-- WiVRn PR #1087: a Vulkan AV1 encoder, only tested on AMD so far. Take once merged.
+## Open: from upstream issues and PRs (checked 2026-11-11)
+
+Open issues not listed here or above are fixed in oneVR, don't apply to it (WiVRn's Qt
+dashboard, flatpak, the in-stream window), are translations that come with merges, or
+belong to Monado, a driver or a headset runtime.
+
+Bugs, server:
+- VAAPI ignores a bitrate change during a session (WiVRn #690): video_encoder_ffmpeg.cpp
+  sets `bit_rate` on the open context, which VAAPI reads only when it opens, while the
+  Headset page sends the bitrate live. Rebuild the encoder with an IDR on a pending bitrate
+  or frame rate, or make the bitrate restart-only on VAAPI. Hits every Intel GPU.
+- Index hand root not clamped (WiVRn #1160): Monado patch 0010 limits extrapolation in
+  `Device::get_pose` but not for the root in `ControllerDevice::get_hand_tracking`. Extend
+  it in an onevr patch; verify on an Index.
+
+Bugs, headset:
+- Pico 4 left Menu does nothing (WiVRn #1210): stream.cpp maps the left `menu/click` and
+  `system/click` to one id, and the never-pressed system click overwrites it, so WayVR's
+  show/hide on it fails. WiVRn PR #1213 fixes it (protocol change: server and APK
+  together); take it once merged, cherry-pick if it stalls.
+- A body or face tracker that fails to start ends the stream (WiVRn #1135): its exception
+  leaves the tracking loop in stream_tracking.cpp and becomes a headset error. Catch it,
+  log, and stream without that tracker.
+- Battery saver holds a Quest at 72 Hz while the server renders the asked rate (WiVRn
+  #1200): the client never reads `get_current_refresh_rate()` back. Read it after each
+  request and report a rate the runtime kept. Verify on a Quest in battery saver.
+
+Bugs, wayvr:
+- A custom command on a face button rarely runs (wayvr #578): in backend/input.rs a held
+  click modifier `continue`s past the `alt_click` handling, and the default bindings put
+  the modifiers on A/B/X/Y touch.
+- Desktop notifications come minutes late (wayvr #711): one with `expire_timeout` 0 becomes
+  a toast that never expires (subsystem/notifications.rs), and listening to another daemon
+  WayVR never gets its close, so the toast queue stalls. Cap it or let the next replace it.
+- A click while the cursor is frozen moves it first, which breaks double clicks (wayvr #720)
+  and makes Electron apps in WayVR drag instead of click (#657): overlays/screen/backend.rs
+  and backend/wayvr/mod.rs move to the hit on every press. Use the frozen position.
+- Apps in WayVR ignore "Mouse move on trigger touch" (wayvr #682): the hover in
+  overlays/wayvr.rs never checks `focus_follows_mouse_mode`. Upstream PR #683.
+- The VR pointer keeps a WayVR app's mouse while it points at nothing (wayvr #721).
+- Watch notifications show at the pointer instead of the watch, which now sits on the wrist
+  (wayvr #389, overlays/toast.rs).
+- Portrait screens are blurry (wayvr #656): capture.rs limits the height only; limit the
+  longer side.
+- Panels opened after standing up or sitting down keep the old height (wayvr #316):
+  layout.rs places the anchor again only after 1.5 m or a quarter turn; also after about
+  0.3 m up or down.
+
+Small features:
+- A description under Body tracking (WiVRn #713): Quest and Pico always offer it, so
+  SlimeVR users who turn it on get phantom trackers.
+- Battery sent on Android's change events instead of every 30 s (WiVRn #751).
+- NVENC preset, tuning, rate control, VBV and AQ from the encoder's `options`, as VAAPI
+  and Vulkan already read theirs (WiVRn #1093).
+- `onevr-ui --tray`: start in the tray without the window, with an optional login
+  autostart (WiVRn #1089).
+- A saturation slider beside CAS sharpening (WiVRn #711).
+- Search and sort in the Games tab like the Library, or drop the tab for Library's Add apps
+  (wayvr #551, #556).
+- wayvrctl: query the current set and screen visibility (wayvr #712), reload panels.yaml
+  (#714).
+
+Larger features, only if wanted:
+- The headset's play area to apps: the headset sends its stage bounds and a Monado patch
+  answers `xrGetReferenceSpaceBoundsRect` (WiVRn #217).
+- Saved settings profiles beside the graphics presets (WiVRn #738), joystick navigation in
+  the lobby (#758), headset brightness (#604; first check Android's screenBrightness on a
+  Quest), the headset view in a desktop window (#404).
+- wayvr requests: drag and rotate the space on one binding (#646), relative rotate (#718),
+  several inputs per action in the bindings view (#717), stereo per set (#659), saved
+  mirrors (#164), window snapping (#315), vertical curvature (#165), resize with keyboard
+  and mouse (#724), a launcher on the watch (#722), a TKL keyboard (#625), capture
+  keybinds (#612), Whisper push-to-talk (#642), a toast line limit (#335), long-press
+  bindings (#229), press-and-release menus (#358), OSC overlay poses and keyboard (#264,
+  #120), locate a device from the watch (#327), OVR Advanced Settings style playspace
+  toggles (#560). Physical keyboard typing (#655) and touch-style scrolling (#568) come
+  with hand poke (#19). Suggest declining KMS capture (#705) and gamepad control (#348).
+
+Needs hardware to reproduce or verify:
+- AMD Vulkan encode: GPU timeouts and device lost in long sessions on RDNA3/4 (WiVRn #841,
+  #870); compare RADV quality level 0 with oneVR's 1.
+- Intel Arc pink or grey eye (WiVRn #813): check Auto picks HEVC over AV1 on VAAPI. Quest 3
+  purple eye after 20 to 30 min of AV1 (#867): check the AV1 bitrate cap.
+- NVIDIA: the headset goes to the lobby while the game still renders (WiVRn #987); stutter
+  on a 4 GB card (#954, likely fixed with the queue lock fix).
+- Quest: fast controller tracking (WiVRn #234), Quest Pro face and eye tracking to OSC
+  (#560), Half-Life: Alyx load screens (#888), RUMBLE's controllers at the feet with
+  `XR_META_touch_controller_plus` (#826, likely a Monado binding patch), Close all apps
+  with VRChat and No Man's Sky running (#1084).
+- Pico 4: invisible rays (WiVRn #1005), Pavlov walks inverted (#1169). Pico 4 Ultra: no
+  index pinch click from hands (#1196); fall back to an index pinch from the joints.
+- Steam Frame: double vision on hands and rays (WiVRn #1140), image jitter (#1173).
+- Games under xrizer-edge: Overload (WiVRn #598), Dagon (#829), Elite Dangerous losing focus
+  after a session recreate (#1029), Ragnarock Demo's buttons (xrizer #465, free demo; note
+  the result in xrizer-edge's CHANGES).
+- Desktops: rotated output on Hyprland (wayvr #726), Firefox tab bar scrolling on KDE
+  (#227; try sending `REL_WHEEL` with the high resolution wheel), a Qt flatpak app in
+  WayVR (#675).
+
+Take from upstream:
+- Now, all apply cleanly: WiVRn 7f9957ae (stream settings resolution), wayvr 88fb00ad
+  (`--capture-input`), xrizer-edge 42ee6998 (test only).
+- WayVR PR #662: saves every panel setting. Doesn't apply; port by hand in persist_layout,
+  which also fixes the known bug above (skip placeholder backends).
+- WayVR PR #699: rustls 0.23.46 in wayvr/Cargo.lock. Trivial.
+- WiVRn PR #1213: the Pico 4 menu fix above.
+- WiVRn PR #1208: Steam Frame bumper clicks and controller batteries. It removes
+  `get_battery_status()`, which stream_onevr.cpp calls, so port that call with it.
+- WiVRn PR #1194: no Wi-Fi scans during a Frame stream; needs a D-Bus policy and a setup
+  step in the Frame tarball.
+- WiVRn PR #1206: ccache; add it to oneVR's CI Android and Frame jobs.
+- WiVRn PR #1087: a Vulkan AV1 encoder. Applies now, but upstream reports no image on
+  NVIDIA and a crash on RDNA3.5. Take once merged.
+- wayvr PR #703: holds the PipeWire buffer until drawn and waits on its fences, the cause
+  behind `copy_captured_frames`. Conflicts with oneVR's capture changes (L). Once merged,
+  test whether the copy is still needed, on the Xid 69 NVIDIA machine and on AMD.
+- Not taken: wayvr #553 (oneVR places panels in front of the head) and #555 (oneVR forgets
+  placement at each launch). Later, if merged: WiVRn #730, #1094, #1178; wayvr #476,
+  #630, #695.
 
 ## Done and verified in CHANGES (reference)
 
