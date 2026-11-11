@@ -73,6 +73,15 @@ in xrizer/TODO.md (edited in xrizer-edge).
   WayVR after the pointer leaves it (#721); a screen set back to its default stereo or
   mouse transform stays so after a restart (PR #662); a body tracking failure leaves the
   stream running (WiVRn #1135).
+- Phase 2 of the upstream triage (2026-11-11): with VAAPI (Intel, or AMD on vaapi), a
+  bitrate change on the Headset page during a stream changes the picture after a short
+  freeze (WiVRn #690, the server log says "VAAPI encoder N reopened"); NVENC options from
+  `options` in the server config (#1093, docs/configuration.md); Quest battery saver on and
+  90 Hz picked: the server log shows the headset reported 72 Hz and the stream doesn't
+  stutter (#1200); the dashboard's battery follows a plug in within a second or two (#751);
+  the Headset page's Color saturation slider at 50 and 150% (#711) and Body tracking's
+  description (#713); an Index hand in VRChat on a quick wrist turn (#1160); `onevr --tray`
+  shows only the tray (#1089); the Games tab's search and sort (wayvr #551, #556).
 - Also: Library sections and no duplicate covers (#6/#7), no browser entry (#9), codec
   above foveation (#11), body-tracker toggles wrap (#22, shown only with Body tracking on),
   passthrough default off (#13), advanced-setting descriptions (#21).
@@ -180,37 +189,19 @@ Open issues not listed here or above are fixed in oneVR, don't apply to it (WiVR
 dashboard, flatpak, the in-stream window), are translations that come with merges, or
 belong to Monado, a driver or a headset runtime.
 
-Bugs, server:
-- VAAPI ignores a bitrate change during a session (WiVRn #690): video_encoder_ffmpeg.cpp
-  sets `bit_rate` on the open context, which VAAPI reads only when it opens, while the
-  Headset page sends the bitrate live. Rebuild the encoder with an IDR on a pending bitrate
-  or frame rate, or make the bitrate restart-only on VAAPI. Hits every Intel GPU.
-- Index hand root not clamped (WiVRn #1160): Monado patch 0010 limits extrapolation in
-  `Device::get_pose` but not for the root in `ControllerDevice::get_hand_tracking`. Extend
-  it in an onevr patch; verify on an Index.
-
 Bugs, headset:
 - Pico 4 left Menu does nothing (WiVRn #1210): stream.cpp maps the left `menu/click` and
   `system/click` to one id, and the never-pressed system click overwrites it, so WayVR's
   show/hide on it fails. WiVRn PR #1213 fixes it (protocol change: server and APK
   together); take it once merged, cherry-pick if it stalls.
-- Battery saver holds a Quest at 72 Hz while the server renders the asked rate (WiVRn
-  #1200): the client never reads `get_current_refresh_rate()` back. Read it after each
-  request and report a rate the runtime kept. Verify on a Quest in battery saver.
 
-Small features:
-- A description under Body tracking (WiVRn #713): Quest and Pico always offer it, so
-  SlimeVR users who turn it on get phantom trackers.
-- Battery sent on Android's change events instead of every 30 s (WiVRn #751).
-- NVENC preset, tuning, rate control, VBV and AQ from the encoder's `options`, as VAAPI
-  and Vulkan already read theirs (WiVRn #1093).
-- `onevr-ui --tray`: start in the tray without the window, with an optional login
-  autostart (WiVRn #1089).
-- A saturation slider beside CAS sharpening (WiVRn #711).
-- Search and sort in the Games tab like the Library, or drop the tab for Library's Add apps
-  (wayvr #551, #556).
+Small features, for upstream:
 - wayvrctl: query the current set and screen visibility (wayvr #712), reload panels.yaml
-  (#714).
+  (#714). Both need new IPC packets and a `PROTOCOL_VERSION` bump, which wayvr's handshake
+  matches exactly: a oneVR-only bump would clash with upstream's next one, so propose them
+  upstream instead.
+- A login item for `onevr --tray` (WiVRn #1089): a toggle that writes
+  ~/.config/autostart/onevr.desktop. Not built: it starts the VR server at every login.
 
 Larger features, only if wanted:
 - The headset's play area to apps: the headset sends its stage bounds and a Monado patch
