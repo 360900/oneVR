@@ -40,6 +40,9 @@ const PANELS_PER_ROW: usize = 3;
 
 /// A head moved this far from where the layout was placed has left it
 const LEFT_LAYOUT_METERS: f32 = 1.5;
+/// A head this much higher or lower than where the layout was placed has left it: the user stood
+/// up or sat down
+const LEFT_LAYOUT_RISE_METERS: f32 = 0.3;
 
 /// The seat, relative to [`level_head`]
 #[must_use]
@@ -97,6 +100,7 @@ pub fn panel_transform(scale: f32, rotation: Quat) -> Affine3A {
 #[must_use]
 pub fn head_left(hmd: &Affine3A, placed: &Affine3A) -> bool {
     hmd.translation.distance(placed.translation) >= LEFT_LAYOUT_METERS
+        || (hmd.translation.y - placed.translation.y).abs() >= LEFT_LAYOUT_RISE_METERS
         || level_forward(hmd).dot(level_forward(placed)) <= 0.0
 }
 
@@ -238,5 +242,17 @@ mod tests {
         let mut walked = placed;
         walked.translation.x += 2.0;
         assert!(head_left(&walked, &placed));
+    }
+
+    #[test]
+    fn standing_up_or_sitting_down_leaves_the_layout() {
+        let placed = head(0.0, 0.0, 0.0);
+        let mut moved = placed;
+        moved.translation.y += 0.1;
+        assert!(!head_left(&moved, &placed));
+        moved.translation.y = placed.translation.y + 0.5;
+        assert!(head_left(&moved, &placed));
+        moved.translation.y = placed.translation.y - 0.5;
+        assert!(head_left(&moved, &placed));
     }
 }
