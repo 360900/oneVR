@@ -3164,17 +3164,15 @@ mod tests {
         );
         assert!(next_event(&system).is_none());
 
-        // A moved stage drops the app's standing zero pose.
+        // A moved stage keeps the app's standing zero pose, which moves with it.
         fakexr::set_reference_space_pose(
             session(&xr),
             xr::ReferenceSpaceType::VIEW,
             head(1.0, 0.0),
         );
         xr.reset_tracking_space(vr::ETrackingUniverseOrigin::Standing);
-        assert_ne!(
-            translation(system.GetRawZeroPoseToStandingAbsoluteTrackingPose()),
-            [0.0, 0.0, 0.0]
-        );
+        let zero = translation(system.GetRawZeroPoseToStandingAbsoluteTrackingPose());
+        assert_ne!(zero, [0.0, 0.0, 0.0]);
         fakexr::reference_space_change_pending(
             session(&xr),
             xr::ReferenceSpaceType::STAGE,
@@ -3183,7 +3181,7 @@ mod tests {
         xr.poll_events();
         assert_eq!(
             translation(system.GetRawZeroPoseToStandingAbsoluteTrackingPose()),
-            [0.0, 0.0, 0.0]
+            zero
         );
         let event = next_event(&system).expect("no event");
         assert_eq!(

@@ -105,7 +105,7 @@ pub struct OpenXrData<C: Compositor> {
     input_focus_captured: AtomicBool,
     /// Change time of a runtime recenter of LOCAL that hasn't taken effect yet.
     pending_recenter: parking_lot::Mutex<Option<xr::Time>>,
-    /// Set when the runtime moved STAGE and the app's standing zero pose is still in place.
+    /// Set when the runtime moved STAGE, for [Self::poll_events] to tell the app.
     stage_moved: AtomicBool,
     /// Set until the standing zero has been put where LOCAL is, see [Self::align_standing].
     standing_unaligned: AtomicBool,
@@ -522,13 +522,10 @@ impl<C: Compositor> OpenXrData<C> {
         }
         self.update_standby();
         if self.stage_moved.swap(false, Ordering::Relaxed) {
-            // The runtime moved the stage, which replaces any standing zero pose the app set.
-            self.standing_unaligned.store(false, Ordering::Relaxed);
-            self.move_origin(
-                &mut self.session_data.0.write(),
-                vr::ETrackingUniverseOrigin::Standing,
-                xr::Posef::IDENTITY,
-            );
+            // The standing universe is an offset in STAGE, so it moves with the stage, like
+            // SteamVR's space drag. Its origin can be anywhere relative to the user (WiVRn's
+            // playspace moves set it), so snapping the standing zero to it would throw the app
+            // meters away.
             self.push_event(
                 vr::EVREventType::ChaperoneUniverseHasChanged,
                 Default::default(),
@@ -2535,6 +2532,13 @@ mod tests {
             },
             orientation: xr::Quaternionf::IDENTITY,
         };
+        let moved = xr::Posef {
+            position: xr::Vector3f {
+                x: 1.5,
+                ..stage.position
+            },
+            ..stage
+        };
 
         let data = OpenXrData::<FakeCompositor>::new(
             &Injector::default(),
@@ -2554,13 +2558,21 @@ mod tests {
                 .unwrap(),
             floor,
         );
-        // Only once: a later stage move isn't undone.
+        // Only once, and a later stage move carries the standing zero along rather than putting
+        // it back at STAGE's origin.
+        fakexr::set_reference_space_pose(session, xr::ReferenceSpaceType::STAGE, moved);
         data.stage_moved.store(true, Ordering::Relaxed);
         data.poll_events();
         assert_pose_eq(
             data.locate_origin(Origin::Standing, Origin::Seated)
                 .unwrap(),
-            stage,
+            xr::Posef {
+                position: xr::Vector3f {
+                    x: 0.5,
+                    ..floor.position
+                },
+                ..floor
+            },
         );
         drop(data);
 
@@ -2582,6 +2594,21 @@ mod tests {
             data.locate_origin(Origin::Standing, Origin::Seated)
                 .unwrap(),
             reset,
+        );
+        // The app's zero moves with the stage too.
+        fakexr::set_reference_space_pose(session, xr::ReferenceSpaceType::STAGE, moved);
+        data.stage_moved.store(true, Ordering::Relaxed);
+        data.poll_events();
+        assert_pose_eq(
+            data.locate_origin(Origin::Standing, Origin::Seated)
+                .unwrap(),
+            xr::Posef {
+                position: xr::Vector3f {
+                    x: reset.position.x + 0.5,
+                    ..reset.position
+                },
+                ..reset
+            },
         );
     }
 
