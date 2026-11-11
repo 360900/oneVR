@@ -27,5 +27,6 @@ for entry in io.github.onevr.desktop io.github.onevr.wayvr.desktop; do
 done
 command -v update-desktop-database >/dev/null && update-desktop-database -q "$apps" || true
 
-rm -rf "$prefix"
+# and what an interrupted install.sh left
+rm -rf "$prefix" "$prefix.staging" "$prefix.old"
 echo "uninstall.sh: oneVR removed; settings stay in ${XDG_CONFIG_HOME:-$HOME/.config}/onevr"
