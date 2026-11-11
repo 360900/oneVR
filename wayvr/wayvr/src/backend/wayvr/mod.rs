@@ -1478,7 +1478,11 @@ impl WvrServerState {
         let pos = mouse.pos;
         self.manager
             .send_mouse_move(None, pos, DVec2::ZERO, DVec2::ZERO);
-        self.wm.mouse = None;
+        // oneVR: while input is captured the physical mouse goes on in the window the pointer
+        // left; forgetting it left that mouse nowhere until the controller lost tracking
+        if !self.has_input_focus {
+            self.wm.mouse = None;
+        }
     }
 
     pub const fn get_focused_window(&self) -> Option<window::WindowHandle> {
