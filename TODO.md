@@ -62,6 +62,17 @@ in xrizer/TODO.md (edited in xrizer-edge).
   system menu or take it off for 5 s. The graphs stay and go on when you return; the stage
   values, Home's tiles and the VR overlay show "-" meanwhile. Disconnecting still shows
   "Statistics appear while a headset streams."
+- Upstream issue fixes from 2026-11-11, in VR: a notification on the watch lies on its
+  face, with a controller and with a tracked hand (`notification_topics` set to Watch,
+  wayvr #389); after standing up or sitting down, opening the dashboard or switching sets
+  opens panels at the new height (#316); double clicks on a screen and in an app in WayVR
+  with the click freeze on (#720), and an Electron app such as Spotify in WayVR clicks
+  instead of dragging (#657); a custom command bound to a face button runs (#578); with
+  "Mouse move on trigger touch" on, an app in WayVR follows the pointer only on trigger
+  touch (#682); with input captured (Super+Z), the PC's mouse keeps working in an app in
+  WayVR after the pointer leaves it (#721); a screen set back to its default stereo or
+  mouse transform stays so after a restart (PR #662); a body tracking failure leaves the
+  stream running (WiVRn #1135).
 - Also: Library sections and no duplicate covers (#6/#7), no browser entry (#9), codec
   above foveation (#11), body-tracker toggles wrap (#22, shown only with Body tracking on),
   passthrough default off (#13), advanced-setting descriptions (#21).
@@ -122,10 +133,6 @@ Known bugs and limits:
 - A headset the running session refuses on reconnect (codec, bit depth, audio or headset
   features changed) gets a new session, and the game closes with only a server log line.
   The server could send the reason as a HeadsetMessage once the new dashboard is linked.
-- WayVR (upstream): a screen whose saved settings (stereo, mouse transform, size) all go
-  back to their defaults comes back with the old ones after a restart: persist_layout
-  (windowing/manager.rs) skips it and never clears its entry. Clearing must skip
-  placeholder backends (pw.rs), which answer None.
 - BGR888 screen capture: wlroots with the GLES2 renderer on NVIDIA (seen on 0.20 with an
   RTX 5080) offers only BGR888 shared memory, which neither wlr_screencopy.rs nor
   ext_image_copy_capture.rs takes, so screens and virtual monitors stay blank on
@@ -187,33 +194,9 @@ Bugs, headset:
   `system/click` to one id, and the never-pressed system click overwrites it, so WayVR's
   show/hide on it fails. WiVRn PR #1213 fixes it (protocol change: server and APK
   together); take it once merged, cherry-pick if it stalls.
-- A body or face tracker that fails to start ends the stream (WiVRn #1135): its exception
-  leaves the tracking loop in stream_tracking.cpp and becomes a headset error. Catch it,
-  log, and stream without that tracker.
 - Battery saver holds a Quest at 72 Hz while the server renders the asked rate (WiVRn
   #1200): the client never reads `get_current_refresh_rate()` back. Read it after each
   request and report a rate the runtime kept. Verify on a Quest in battery saver.
-
-Bugs, wayvr:
-- A custom command on a face button rarely runs (wayvr #578): in backend/input.rs a held
-  click modifier `continue`s past the `alt_click` handling, and the default bindings put
-  the modifiers on A/B/X/Y touch.
-- Desktop notifications come minutes late (wayvr #711): one with `expire_timeout` 0 becomes
-  a toast that never expires (subsystem/notifications.rs), and listening to another daemon
-  WayVR never gets its close, so the toast queue stalls. Cap it or let the next replace it.
-- A click while the cursor is frozen moves it first, which breaks double clicks (wayvr #720)
-  and makes Electron apps in WayVR drag instead of click (#657): overlays/screen/backend.rs
-  and backend/wayvr/mod.rs move to the hit on every press. Use the frozen position.
-- Apps in WayVR ignore "Mouse move on trigger touch" (wayvr #682): the hover in
-  overlays/wayvr.rs never checks `focus_follows_mouse_mode`. Upstream PR #683.
-- The VR pointer keeps a WayVR app's mouse while it points at nothing (wayvr #721).
-- Watch notifications show at the pointer instead of the watch, which now sits on the wrist
-  (wayvr #389, overlays/toast.rs).
-- Portrait screens are blurry (wayvr #656): capture.rs limits the height only; limit the
-  longer side.
-- Panels opened after standing up or sitting down keep the old height (wayvr #316):
-  layout.rs places the anchor again only after 1.5 m or a quarter turn; also after about
-  0.3 m up or down.
 
 Small features:
 - A description under Body tracking (WiVRn #713): Quest and Pico always offer it, so
@@ -267,11 +250,6 @@ Needs hardware to reproduce or verify:
   WayVR (#675).
 
 Take from upstream:
-- Now, all apply cleanly: WiVRn 7f9957ae (stream settings resolution), wayvr 88fb00ad
-  (`--capture-input`), xrizer-edge 42ee6998 (test only).
-- WayVR PR #662: saves every panel setting. Doesn't apply; port by hand in persist_layout,
-  which also fixes the known bug above (skip placeholder backends).
-- WayVR PR #699: rustls 0.23.46 in wayvr/Cargo.lock. Trivial.
 - WiVRn PR #1213: the Pico 4 menu fix above.
 - WiVRn PR #1208: Steam Frame bumper clicks and controller batteries. It removes
   `get_battery_status()`, which stream_onevr.cpp calls, so port that call with it.
