@@ -90,6 +90,8 @@ public:
 	bool simultaneous_hands = false;
 	// oneVR: contrast adaptive sharpening of the decoded stream, 0: off, up to 1
 	float sharpness = 0;
+	// oneVR: color saturation of the decoded stream, 1: unchanged, 0.5 to 1.5 (WiVRn #711)
+	float saturation = 1;
 	// oneVR: scale of the FOV tangents reported to the server, 1: headset FOV
 	float fov_horizontal = 1;
 	float fov_vertical = 1;

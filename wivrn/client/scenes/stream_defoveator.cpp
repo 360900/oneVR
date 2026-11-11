@@ -46,6 +46,7 @@ struct vert_pc
 	std::array<float, 4> scale;
 	std::array<float, 4> bias;
 	float sharpness;
+	float saturation;
 };
 
 void stream_defoveator::ensure_vertices(size_t num_vertices)
@@ -308,6 +309,7 @@ void stream_defoveator::defoveate(vk::raii::CommandBuffer & command_buffer,
                                   std::array<float, 4> scale,
                                   std::array<float, 4> bias,
                                   float sharpness,
+                                  float saturation,
                                   int destination)
 {
 	if (destination < 0 || destination >= (int)output_images.size())
@@ -431,6 +433,7 @@ void stream_defoveator::defoveate(vk::raii::CommandBuffer & command_buffer,
 		        .scale = scale,
 		        .bias = bias,
 		        .sharpness = sharpness,
+		        .saturation = saturation,
 		};
 
 		device.updateDescriptorSets(descriptor_writes, {});
@@ -482,6 +485,7 @@ void stream_defoveator::redraw(vk::raii::CommandBuffer & command_buffer,
 		        .scale = {1, 1, 1, 1},
 		        .bias = {0, 0, 0, 0},
 		        .sharpness = 0,
+		        .saturation = 1,
 		};
 
 		command_buffer.beginRenderPass(

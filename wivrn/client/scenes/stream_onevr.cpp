@@ -236,6 +236,7 @@ onevr::headset_config scenes::stream::onevr_config()
 	        .foveation_distance = config.override_foveation_distance,
 	        .super_sampling = to_level(config.openxr_post_processing.super_sampling),
 	        .sharpening = config.sharpness,
+	        .saturation = config.saturation,
 	        .microphone = config.check_feature(feature::microphone),
 	        .mic_unprocessed = config.mic_unprocessed_audio,
 	        .forward_keyboard = config.forward_keyboard,
@@ -401,6 +402,8 @@ bool scenes::stream::onevr_apply(const onevr::headset_config & patch)
 		// replaced by our own sharpening, don't stack the runtime's on top
 		config.openxr_post_processing.sharpening = 0;
 	}
+	if (patch.saturation)
+		config.saturation = std::clamp(*patch.saturation, 0.5f, 1.5f);
 
 	if (patch.mic_unprocessed)
 		config.mic_unprocessed_audio = *patch.mic_unprocessed;

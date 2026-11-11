@@ -151,6 +151,7 @@
       "FOVEATION_DISTANCE": "Foveation center distance (m)",
       "SUPERSAMPLING": "Supersampling",
       "SHARPENING": "Sharpening (%)",
+      "SATURATION": "Color saturation (%)",
       "PP_OFF": "Off",
       "PP_NORMAL": "Normal",
       "PP_QUALITY": "Quality",

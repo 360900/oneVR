@@ -144,6 +144,9 @@ pub struct Config {
 	pub foveation_distance: f32,
 	pub super_sampling: PostProcessing,
 	pub sharpening: f32,
+	/// 1 leaves the colors unchanged; a server without it sends none
+	#[serde(default = "unchanged_saturation")]
+	pub saturation: f32,
 	pub microphone: bool,
 	pub mic_unprocessed: bool,
 	pub forward_keyboard: bool,
@@ -240,6 +243,10 @@ impl HeadsetStats {
 	}
 }
 
+const fn unchanged_saturation() -> f32 {
+	1.0
+}
+
 #[cfg(test)]
 mod tests {
 	use std::collections::BTreeSet;
@@ -258,6 +265,7 @@ mod tests {
 		assert_eq!(settings.capabilities.codecs, [Codec::H264, Codec::H265, Codec::Av1]);
 		assert_eq!(settings.config.codec, Codec::Automatic);
 		assert_eq!(settings.config.sharpening, 0.5);
+		assert_eq!(settings.config.saturation, 1.0);
 		assert_eq!(settings.config.fov_vertical, 0.9);
 		assert_eq!(settings.config.body_parts, ["chest", "hip"]);
 		assert_eq!(settings.permission_pending, ["microphone"]);

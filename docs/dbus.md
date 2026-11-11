@@ -32,6 +32,7 @@ oneVR's server (`wivrn-server`) keeps WiVRn's session bus interface: name `io.gi
 | `foveation_distance` | meters, 0.2 to 20 | now |
 | `super_sampling` | `off`, `normal`, `quality` | now |
 | `sharpening` | 0 (off) to 1, sharpens the decoded stream on the headset | now |
+| `saturation` | 0.5 to 1.5, the decoded stream's color saturation on the headset, 1 leaves it unchanged | now |
 | `microphone`, `mic_unprocessed` | boolean | restart |
 | `forward_keyboard`, `forward_mouse`, `forward_gamepad` | boolean | now |
 | `hand_tracking`, `eye_gaze`, `face_tracking`, `body_tracking` | boolean | restart |

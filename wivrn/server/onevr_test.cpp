@@ -105,6 +105,7 @@ onevr::headset_settings example_settings()
 	                .foveation_distance = 3,
 	                .super_sampling = onevr::pp_level::off,
 	                .sharpening = 0.5f,
+	                .saturation = 1,
 	                .microphone = false,
 	                .mic_unprocessed = false,
 	                .forward_keyboard = false,

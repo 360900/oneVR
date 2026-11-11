@@ -357,6 +357,7 @@ const std::vector<config_field> & configuration::config_fields()
 	        scalar("see_through", &configuration::see_through),
 	        scalar("simultaneous_hands", &configuration::simultaneous_hands),
 	        scalar("sharpness", &configuration::sharpness),
+	        scalar("saturation", &configuration::saturation),
 	        scalar("fov_horizontal", &configuration::fov_horizontal),
 	        scalar("fov_vertical", &configuration::fov_vertical),
 	        scalar("mic_unprocessed_audio", &configuration::mic_unprocessed_audio),

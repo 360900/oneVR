@@ -25,6 +25,7 @@ layout(push_constant) uniform pc
 	vec4 scale;
 	vec4 bias;
 	float sharpness;
+	float saturation; // oneVR: 1 leaves the colors as they are
 };
 
 #ifdef VERT_SHADER
@@ -106,6 +107,13 @@ void main()
 
 	if (sharpness > 0)
 		outColor.rgb = sharpen(outColor.rgb, inUV.xy);
+
+	// oneVR: away from or toward the pixel's Rec. 709 luma, on the encoded values
+	if (saturation != 1)
+	{
+		float luma = dot(outColor.rgb, vec3(0.2126, 0.7152, 0.0722));
+		outColor.rgb = clamp(mix(vec3(luma), outColor.rgb, saturation), 0.0, 1.0);
+	}
 
 	if (do_srgb)
 	{

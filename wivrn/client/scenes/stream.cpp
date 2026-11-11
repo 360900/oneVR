@@ -1113,6 +1113,7 @@ void scenes::stream::render(const XrFrameState & frame_state)
 		                      {scale, scale, scale, 1.},
 		                      {bias, bias, bias, 0.},
 		                      application::get_config().sharpness,
+		                      std::clamp(application::get_config().saturation, 0.5f, 1.5f),
 		                      image_index);
 
 		// oneVR: while the stream arrives at half rate, the runtime synthesises every other frame

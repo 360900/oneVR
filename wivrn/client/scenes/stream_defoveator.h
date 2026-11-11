@@ -90,11 +90,12 @@ public:
 	        std::array<float, 4> scale,
 	        std::array<float, 4> bias,
 	        float sharpness,
+	        float saturation,
 	        int destination);
 
 	// oneVR: draws what the last defoveate() drew, in the same command buffer, into other
 	// framebuffers made with render_pass(), each view stretched over the whole extent. No
-	// sharpening, scale or bias
+	// sharpening, saturation, scale or bias
 	void redraw(
 	        vk::raii::CommandBuffer & command_buffer,
 	        const std::array<wivrn::to_headset::foveation_parameter, 2> & foveation,

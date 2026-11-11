@@ -103,6 +103,7 @@ void publish_offline()
 	X(foveation_distance)     \
 	X(super_sampling)         \
 	X(sharpening)             \
+	X(saturation)             \
 	X(microphone)             \
 	X(mic_unprocessed)        \
 	X(forward_keyboard)       \

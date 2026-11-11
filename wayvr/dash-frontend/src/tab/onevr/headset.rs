@@ -385,6 +385,17 @@ fn settings() -> Vec<Setting> {
 			},
 		},
 		Setting {
+			key: "saturation",
+			label: "ONEVR.HEADSET.SATURATION",
+			section: PostProcessing,
+			show: always,
+			control: Control::Slider {
+				range: |_| (50.0, 150.0, 5.0),
+				get: |c| c.saturation * 100.0,
+				set: |v| json!(v / 100.0),
+			},
+		},
+		Setting {
 			key: "microphone",
 			label: "ONEVR.HEADSET.MICROPHONE",
 			section: Audio,
