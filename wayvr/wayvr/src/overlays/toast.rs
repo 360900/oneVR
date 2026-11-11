@@ -86,6 +86,9 @@ pub struct BakedToast {
     params: ToastParams,
 }
 
+/// oneVR: how long a toast that never expires stays once another waits behind it.
+pub const RESIDENT_TOAST_SECS: f32 = 10.0;
+
 #[derive(Default)]
 pub struct ToastQueue {
     queue: VecDeque<BakedToast>,
@@ -193,12 +196,25 @@ pub fn toast_tick(app: &mut AppState, delta: f32) -> Option<ToastId> {
         return None;
     }
 
+    // oneVR: a toast that never expires gives way to the next one, which waited for good
+    if !queue.current_remaining.is_finite() && !queue.queue.is_empty() {
+        queue.current_remaining = RESIDENT_TOAST_SECS;
+    }
+
     if !gaze_paused {
         queue.current_remaining -= delta;
     }
 
     if queue.current_remaining <= 0.0 {
-        return queue.current.take().map(|toast| toast.id);
+        let toast = queue.current.take()?;
+        // oneVR: the overlay of a toast that never expires has no lifetime to end it
+        if !toast.params.timeout.is_finite() {
+            app.tasks
+                .enqueue(TaskType::Overlay(OverlayTask::Drop(OverlaySelector::Name(
+                    TOAST_NAME.clone(),
+                ))));
+        }
+        return Some(toast.id);
     }
 
     None

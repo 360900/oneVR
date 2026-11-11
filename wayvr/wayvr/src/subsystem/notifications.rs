@@ -21,7 +21,7 @@ use wgui::i18n::Translation;
 use wlx_common::overlays::ToastTopic;
 
 use crate::{
-    overlays::toast::{BakedToast, Toast, ToastId},
+    overlays::toast::{BakedToast, RESIDENT_TOAST_SECS, Toast, ToastId},
     state::AppSession,
     subsystem::dbus::DbusConnector,
 };
@@ -371,6 +371,14 @@ fn parse_dbus(msg: &dbus::Message) -> anyhow::Result<(u32, BakedToast)> {
     let _: Vec<String> = args.read()?;
     let _: dbus::arg::PropMap = args.read()?;
     let expire_timeout: i32 = args.read()?;
+
+    // oneVR: the daemon that shows it closes it, and a listener never hears of that, so a
+    // notification that never expires would stay in VR for good
+    let expire_timeout = if expire_timeout == 0 {
+        (RESIDENT_TOAST_SECS * 1000.0) as i32
+    } else {
+        expire_timeout
+    };
 
     Ok((
         replaces_id,
