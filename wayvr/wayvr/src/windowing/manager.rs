@@ -886,11 +886,15 @@ impl<T> OverlayWindowManager<T> {
         });
 
         // BackendAttrib
+        // oneVR: every value is saved, as upstream PR #662 does, so one set back to its default
+        // replaces the saved one instead of coming back after a restart; a window without a size
+        // yet isn't saved. An overlay that answers nothing keeps its entry: a screen still waiting
+        // for its capture (pw.rs) has none yet.
         for o in self.overlays.values() {
             let attrs: Vec<_> = SAVED_ATTRIBS
                 .iter()
                 .filter_map(|a| o.config.backend.get_attrib(*a))
-                .filter(|val| !val.is_default())
+                .filter(|val| !matches!(val, BackendAttribValue::WindowSize([w, h]) if *w == 0 || *h == 0))
                 .collect();
             if !attrs.is_empty() && o.config.can_persist() {
                 app.session
