@@ -1495,6 +1495,12 @@ impl<T> OverlayWindowManager<T> {
         Some(())
     }
 
+    /// oneVR: the headset was recentered: what is open comes to the head, as when the dashboard
+    /// opens.
+    pub fn recenter(&mut self, app: &mut AppState) {
+        self.seat_anchor(app);
+    }
+
     /// oneVR: puts the anchor at the head, and with it all that is placed relative to it, exactly
     /// where it was in the layout. A size given to the whole layout stays.
     fn seat_anchor(&mut self, app: &mut AppState) {

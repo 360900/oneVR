@@ -173,6 +173,8 @@ pub fn openxr_run(args: &Args, params: RunParams) -> Result<(), BackendError> {
     let mut fps_counter: VecDeque<Instant> = VecDeque::new();
 
     let mut main_session_visible = false;
+    // oneVR: a recenter of the headset, put into effect at this display time
+    let mut pending_recenter: Option<xr::Time> = None;
     let mut environment_blend_mode = modes[0];
     let mut last_frame_time = Instant::now();
     let mut retired_swapchains = SwapchainRetirementQueue::default();
@@ -245,6 +247,22 @@ pub fn openxr_run(args: &Args, params: RunParams) -> Result<(), BackendError> {
                 }
                 xr::Event::EventsLost(e) => {
                     log::warn!("lost {} events", e.lost_event_count());
+                }
+                // oneVR: the panels are placed in STAGE. A recenter on the headset moves LOCAL,
+                // the user's front, which brings the panels there.
+                xr::Event::ReferenceSpaceChangePending(e) => {
+                    let ty = e.reference_space_type();
+                    log::info!("Runtime is moving reference space {ty:?}");
+                    match ty {
+                        xr::ReferenceSpaceType::STAGE => {
+                            let pose = e
+                                .pose_valid()
+                                .then(|| helpers::posef_to_transform(&e.pose_in_previous_space()));
+                            playspace_mover.stage_moved(&mut overlays, &mut app, pose);
+                        }
+                        xr::ReferenceSpaceType::LOCAL => pending_recenter = Some(e.change_time()),
+                        _ => {}
+                    }
                 }
                 xr::Event::MainSessionVisibilityChangedEXTX(e) => {
                     main_session_visible = e.visible();
@@ -338,6 +356,14 @@ pub fn openxr_run(args: &Args, params: RunParams) -> Result<(), BackendError> {
         {
             app.tasks
                 .enqueue(TaskType::Overlay(OverlayTask::ToggleDashboard));
+        }
+
+        if pending_recenter
+            .is_some_and(|t| t.as_nanos() <= xr_frame_state.predicted_display_time.as_nanos())
+        {
+            pending_recenter = None;
+            log::info!("Headset recentered, bringing the panels to the head");
+            overlays.recenter(&mut app);
         }
 
         playspace_mover.update(&mut overlays, &mut app);

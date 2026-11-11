@@ -1,3 +1,5 @@
+use std::time::{Duration, Instant};
+
 use glam::{Affine3A, Mat3A, Quat, Vec3, Vec3A, vec3a};
 use libmonado::{Monado, Pose, ReferenceSpaceType};
 use wgui::log::LogErr;
@@ -27,12 +29,17 @@ struct MoverData<T> {
 const DRAG_DEADZONE: f32 = 0.03;
 /// oneVR: how far the hand turns before a rotate turns the playspace, in radians
 const ROTATE_DEADZONE: f32 = 0.09;
+/// oneVR: the runtime tells every session when the stage offset changes, wayvr too. A move this
+/// soon after wayvr's own write is that write, whose panels were already moved.
+const OWN_MOVE_WINDOW: Duration = Duration::from_millis(500);
 
 pub(super) struct PlayspaceMover {
     drag: Option<MoverData<Vec3A>>,
     rotate: Option<MoverData<Affine3A>>,
     gravity: SpaceGravity,
     playspace_state: PlayspaceState,
+    /// oneVR: when wayvr last wrote the stage offset
+    last_write: Option<Instant>,
 }
 
 struct SpaceGravityStepResult {
@@ -49,6 +56,7 @@ impl PlayspaceMover {
             rotate: None,
             gravity: SpaceGravity::new(),
             playspace_state: load_playspace_state().unwrap_or_default(),
+            last_write: None,
         }
     }
 
@@ -64,12 +72,15 @@ impl PlayspaceMover {
 
         match task {
             PlayspaceTask::FixFloor => {
+                log::info!("Fix floor");
                 self.fix_floor(app, overlays);
             }
             PlayspaceTask::Reset => {
+                log::info!("Space reset");
                 self.reset_offset(app, overlays);
             }
             PlayspaceTask::Recenter => {
+                log::info!("Space recenter");
                 self.recenter(app, overlays);
             }
             PlayspaceTask::SaveCenter => {
@@ -79,6 +90,43 @@ impl PlayspaceMover {
                 self.playspace_state.openxr_space_center = Affine3A::IDENTITY;
             }
         }
+    }
+
+    /// oneVR: the runtime moved STAGE, which the panels are placed in. `new_in_previous` is the
+    /// new stage origin in the old stage, if the runtime knows it. Unless wayvr moved it, the
+    /// panels stay where they are in the room.
+    pub fn stage_moved(
+        &mut self,
+        overlays: &mut OverlayWindowManager<OpenXrOverlayData>,
+        app: &mut AppState,
+        new_in_previous: Option<Affine3A>,
+    ) {
+        if self
+            .last_write
+            .is_some_and(|written| written.elapsed() < OWN_MOVE_WINDOW)
+        {
+            return;
+        }
+        let Some(new_in_previous) = new_in_previous else {
+            log::info!("Stage moved by the runtime, to an unknown pose");
+            return;
+        };
+        log::info!("Stage moved by the runtime, keeping the panels in place");
+
+        // their start poses are in the old stage
+        if self.drag.take().is_some() {
+            log::info!("Space drag interrupted by a stage move");
+        }
+        if self.rotate.take().is_some() {
+            log::info!("Space rotate interrupted by a stage move");
+        }
+
+        playspace_common::shift_world(
+            overlays,
+            &mut app.anchor,
+            &Affine3A::IDENTITY,
+            &new_in_previous,
+        );
     }
 
     pub fn update(
@@ -163,7 +211,7 @@ impl PlayspaceMover {
                 playspace_common::shift_world(overlays, &mut app.anchor, &before_pose, &data.pose);
             }
 
-            apply_offset(data.pose, &mut monado.ipc);
+            self.apply_offset(data.pose, &mut monado.ipc);
             self.rotate = Some(data);
             // drag and rotate can share a button
             return;
@@ -244,7 +292,7 @@ impl PlayspaceMover {
 
             // oneVR: a drag multiplier of 0 doesn't move anything
             if relative_pos != Vec3A::ZERO {
-                apply_offset(data.pose, &mut monado.ipc);
+                self.apply_offset(data.pose, &mut monado.ipc);
             }
             self.drag = Some(data);
         } else {
@@ -287,7 +335,7 @@ impl PlayspaceMover {
         ) {
             let mut pose = res_step.pose_prev;
             pose.translation += res_step.playspace_offset_delta;
-            apply_offset(pose, &mut monado.ipc);
+            self.apply_offset(pose, &mut monado.ipc);
 
             if !app.session.config.space_drag_affects_world {
                 playspace_common::shift_world(
@@ -395,6 +443,7 @@ impl PlayspaceMover {
             .ipc
             .set_reference_space_offset(ReferenceSpaceType::Stage, pose)
             .inspect_err(|e| log::warn!("Could not recenter due to libmonado error: {e:?}"));
+        self.last_write = Some(Instant::now());
 
         self.gravity.reset();
 
@@ -442,7 +491,7 @@ impl PlayspaceMover {
             log::debug!("Space reset: already at the center");
             return;
         }
-        apply_offset(offset, &mut monado.ipc);
+        self.apply_offset(offset, &mut monado.ipc);
 
         if !app.session.config.space_drag_affects_world {
             let after = offset;
@@ -495,6 +544,7 @@ impl PlayspaceMover {
             .ipc
             .set_reference_space_offset(ReferenceSpaceType::Stage, pose)
             .inspect_err(|e| log::warn!("Could not fix floor due to libmonado error: {e:?}"));
+        self.last_write = Some(Instant::now());
 
         let after =
             Affine3A::from_rotation_translation(pose.orientation.into(), pose.position.into());
@@ -531,10 +581,13 @@ impl PlayspaceMover {
     }
 }
 
-fn apply_offset(transform: Affine3A, monado: &mut Monado) {
-    let pose = Pose {
-        position: transform.translation.into(),
-        orientation: Quat::from_affine3(&transform).into(),
-    };
-    let _ = monado.set_reference_space_offset(ReferenceSpaceType::Stage, pose);
+impl PlayspaceMover {
+    fn apply_offset(&mut self, transform: Affine3A, monado: &mut Monado) {
+        let pose = Pose {
+            position: transform.translation.into(),
+            orientation: Quat::from_affine3(&transform).into(),
+        };
+        let _ = monado.set_reference_space_offset(ReferenceSpaceType::Stage, pose);
+        self.last_write = Some(Instant::now());
+    }
 }
