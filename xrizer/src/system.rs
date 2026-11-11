@@ -3164,17 +3164,15 @@ mod tests {
         );
         assert!(next_event(&system).is_none());
 
-        // A moved stage drops the app's standing zero pose.
+        // A moved stage keeps the app's standing zero pose, which moves with it.
         fakexr::set_reference_space_pose(
             session(&xr),
             xr::ReferenceSpaceType::VIEW,
             head(1.0, 0.0),
         );
         xr.reset_tracking_space(vr::ETrackingUniverseOrigin::Standing);
-        assert_ne!(
-            translation(system.GetRawZeroPoseToStandingAbsoluteTrackingPose()),
-            [0.0, 0.0, 0.0]
-        );
+        let zero = translation(system.GetRawZeroPoseToStandingAbsoluteTrackingPose());
+        assert_ne!(zero, [0.0, 0.0, 0.0]);
         fakexr::reference_space_change_pending(
             session(&xr),
             xr::ReferenceSpaceType::STAGE,
@@ -3183,7 +3181,7 @@ mod tests {
         xr.poll_events();
         assert_eq!(
             translation(system.GetRawZeroPoseToStandingAbsoluteTrackingPose()),
-            [0.0, 0.0, 0.0]
+            zero
         );
         let event = next_event(&system).expect("no event");
         assert_eq!(
@@ -3738,6 +3736,58 @@ mod tests {
             system.GetTrackedDeviceClass(1),
             vr::ETrackedDeviceClass::Controller
         );
+    }
+
+    #[test]
+    fn controller_roles_follow_a_tracked_hand() {
+        use fakexr::UserPath::LeftHand;
+        fakexr::set_hand_tracking_supported(true);
+        let (xr, system, input) = system_with_input();
+        // fakexr can't locate in the stage space.
+        xr.set_tracking_space(vr::ETrackingUniverseOrigin::Seated);
+        let role = vr::ETrackedControllerRole::LeftHand;
+        bind_profile(
+            &xr,
+            &input,
+            LeftHand,
+            "/interaction_profiles/oculus/touch_controller",
+        );
+        assert_eq!(system.GetTrackedDeviceIndexForControllerRole(role), 1);
+
+        // The controller is put down and the hand tracked, on an index of its own.
+        fakexr::set_interaction_profile(session(&xr), LeftHand, xr::Path::NULL);
+        sync_profiles(&xr, &input);
+        fakexr::set_hand_tracked(
+            session(&xr),
+            LeftHand,
+            Some(xr::HandTrackingDataSourceEXT::UNOBSTRUCTED),
+        );
+        input.frame_start_update();
+        assert_eq!(system.GetTrackedDeviceIndexForControllerRole(role), 3);
+        assert_eq!(system.GetControllerRoleForTrackedDeviceIndex(3), role);
+        assert_eq!(
+            system.GetControllerRoleForTrackedDeviceIndex(1),
+            vr::ETrackedControllerRole::Invalid
+        );
+        assert!(system.IsTrackedDeviceConnected(3) && !system.IsTrackedDeviceConnected(1));
+        assert_eq!(
+            system.GetTrackedDeviceClass(3),
+            vr::ETrackedDeviceClass::Controller
+        );
+
+        // Picked back up: the role goes back to the controller.
+        bind_profile(
+            &xr,
+            &input,
+            LeftHand,
+            "/interaction_profiles/oculus/touch_controller",
+        );
+        assert_eq!(system.GetTrackedDeviceIndexForControllerRole(role), 1);
+        assert_eq!(
+            system.GetControllerRoleForTrackedDeviceIndex(3),
+            vr::ETrackedControllerRole::Invalid
+        );
+        assert!(!system.IsTrackedDeviceConnected(3));
     }
 
     #[test]

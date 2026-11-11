@@ -1891,10 +1891,15 @@ impl<C: openxr_data::Compositor> vr::IVRInput011_Interface for Input<C> {
 
         let hand = self.hand_from_key(key);
         // The device the origin is on, not the origin: apps look the device's handle up to
-        // find the hand (Unity's activeDevice).
+        // find the hand (Unity's activeDevice). Its index is the controller's, or the hand's
+        // tracked in its place.
+        let hand_index = |hand| {
+            self.get_controller_device_index(hand)
+                .unwrap_or(vr::k_unTrackedDeviceIndexInvalid)
+        };
         let (index, device) = match hand {
-            Some(Hand::Left) => (Hand::Left as u32, self.left_hand_key),
-            Some(Hand::Right) => (Hand::Right as u32, self.right_hand_key),
+            Some(Hand::Left) => (hand_index(Hand::Left), self.left_hand_key),
+            Some(Hand::Right) => (hand_index(Hand::Right), self.right_hand_key),
             None if self.is_head_source(handle) => (vr::k_unTrackedDeviceIndex_Hmd, self.head_key),
             // The gamepad has no tracked device.
             None if self.device_from_key(key) == Some(InputDevice::Gamepad) => {
@@ -3852,8 +3857,11 @@ impl<C: openxr_data::Compositor> Input<C> {
                 if profile_path != xr::Path::NULL
                     && (controller.last_profile_path != profile_path || controller.hand_took_over())
                 {
-                    // Another controller, or one in place of a hand tracked without a profile.
-                    if controller.last_profile_path != xr::Path::NULL || controller.recently_seen()
+                    // Another controller where the app saw one. In place of a hand, the hand's
+                    // index goes and the controller's comes back instead.
+                    if !controller.shows_hand()
+                        && (controller.last_profile_path != xr::Path::NULL
+                            || controller.recently_seen())
                     {
                         controller.replace();
                     }
@@ -3998,6 +4006,9 @@ impl<C: openxr_data::Compositor> Input<C> {
         for device in devices.iter() {
             device.clear_pose_cache();
             device.hold_connection(focus_captured);
+            // A hand taking a controller's place moves to its own index, which role queries
+            // follow from now on, even for apps that don't poll events.
+            device.is_tracked_hand(&self.openxr, &data);
         }
 
         let left_hand = devices.get_controller(Hand::Left);
@@ -4111,13 +4122,13 @@ impl<C: openxr_data::Compositor> Input<C> {
         let devices = data.input_data.devices.read().unwrap();
 
         // Before taking the event queue, since this may locate hand joints.
+        for device in devices.iter() {
+            // A hand may have taken a controller's place, which moves it to its own index.
+            device.is_tracked_hand(&self.openxr, &data);
+        }
         let connected: Vec<_> = devices
-            .iter()
-            .map(|device| {
-                // A hand may have taken a controller's place, which the app sees as a new device.
-                device.is_tracked_hand(&self.openxr, &data);
-                device.is_connected(&self.openxr, &data)
-            })
+            .indexed()
+            .map(|(_, device)| device.is_connected(&self.openxr, &data))
             .collect();
         let mut events = self.events.lock().unwrap();
 
@@ -4125,23 +4136,25 @@ impl<C: openxr_data::Compositor> Input<C> {
         // since the last poll, so its activation goes ahead of them. A deactivation goes after
         // the releases queued for it.
         let mut activations = 0;
-        for (i, (device, current)) in devices.iter().zip(connected).enumerate() {
-            let index = i as vr::TrackedDeviceIndex_t;
+        for ((index, device), current) in devices.indexed().zip(connected) {
             // SteamVR assigns the hand roles when a controller comes or goes, and tells the app
             // with TrackedDeviceRoleChanged after its activation or deactivation.
-            let role_changed = matches!(device.get_type(), TrackedDeviceType::Controller { .. })
-                .then(|| {
-                    InputEvent::new(
-                        vr::EVREventType::TrackedDeviceRoleChanged,
-                        index,
-                        Default::default(),
-                    )
-                });
+            let role_changed = matches!(
+                device.device.get_type(),
+                TrackedDeviceType::Controller { .. }
+            )
+            .then(|| {
+                InputEvent::new(
+                    vr::EVREventType::TrackedDeviceRoleChanged,
+                    index,
+                    Default::default(),
+                )
+            });
             let replaced = device.take_replaced();
             if !device.has_connected_changed(current) {
                 // The app saw the old device, which goes, and the new one comes, like in SteamVR.
                 if replaced && current {
-                    debug!("sending {:?} replaced", device.get_type());
+                    debug!("sending {:?} replaced", device.device.get_type());
                     for ty in [
                         vr::EVREventType::TrackedDeviceDeactivated,
                         vr::EVREventType::TrackedDeviceActivated,
@@ -4152,8 +4165,9 @@ impl<C: openxr_data::Compositor> Input<C> {
                 }
             } else {
                 debug!(
-                    "sending {:?} {}connected",
-                    device.get_type(),
+                    "sending {:?}{} {}connected",
+                    device.device.get_type(),
+                    if device.as_hand { " hand" } else { "" },
                     if current { "" } else { "not " }
                 );
 
