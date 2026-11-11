@@ -86,6 +86,14 @@ in xrizer/TODO.md (edited in xrizer-edge).
 - Also: Library sections and no duplicate covers (#6/#7), no browser entry (#9), codec
   above foveation (#11), body-tracker toggles wrap (#22, shown only with Body tracking on),
   passthrough default off (#13), advanced-setting descriptions (#21).
+- VRChat hands and controllers (2026-11-12): put the controllers down and pick them up again;
+  VRChat switches both ways with no ghost gamepad and hand models left on the hands (xrizer
+  reports tracked hands on their own indices 3/4 now). A WayVR playspace drag, recenter or
+  reset moves VRChat's world by the same amount instead of a jump of meters.
+- WayVR panels (2026-11-12): a set held by one hand turns about the head and keeps its layout;
+  tilting the head rolls no panel; twisting the hand rolls the held panel, also the keyboard in
+  a held set, and it snaps level within 6 degrees; a recenter on the headset brings the open
+  panels to the head.
 
 ## Open: from the 2026-10-30 test session
 
