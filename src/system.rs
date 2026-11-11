@@ -3739,6 +3739,58 @@ mod tests {
     }
 
     #[test]
+    fn controller_roles_follow_a_tracked_hand() {
+        use fakexr::UserPath::LeftHand;
+        fakexr::set_hand_tracking_supported(true);
+        let (xr, system, input) = system_with_input();
+        // fakexr can't locate in the stage space.
+        xr.set_tracking_space(vr::ETrackingUniverseOrigin::Seated);
+        let role = vr::ETrackedControllerRole::LeftHand;
+        bind_profile(
+            &xr,
+            &input,
+            LeftHand,
+            "/interaction_profiles/oculus/touch_controller",
+        );
+        assert_eq!(system.GetTrackedDeviceIndexForControllerRole(role), 1);
+
+        // The controller is put down and the hand tracked, on an index of its own.
+        fakexr::set_interaction_profile(session(&xr), LeftHand, xr::Path::NULL);
+        sync_profiles(&xr, &input);
+        fakexr::set_hand_tracked(
+            session(&xr),
+            LeftHand,
+            Some(xr::HandTrackingDataSourceEXT::UNOBSTRUCTED),
+        );
+        input.frame_start_update();
+        assert_eq!(system.GetTrackedDeviceIndexForControllerRole(role), 3);
+        assert_eq!(system.GetControllerRoleForTrackedDeviceIndex(3), role);
+        assert_eq!(
+            system.GetControllerRoleForTrackedDeviceIndex(1),
+            vr::ETrackedControllerRole::Invalid
+        );
+        assert!(system.IsTrackedDeviceConnected(3) && !system.IsTrackedDeviceConnected(1));
+        assert_eq!(
+            system.GetTrackedDeviceClass(3),
+            vr::ETrackedDeviceClass::Controller
+        );
+
+        // Picked back up: the role goes back to the controller.
+        bind_profile(
+            &xr,
+            &input,
+            LeftHand,
+            "/interaction_profiles/oculus/touch_controller",
+        );
+        assert_eq!(system.GetTrackedDeviceIndexForControllerRole(role), 1);
+        assert_eq!(
+            system.GetControllerRoleForTrackedDeviceIndex(3),
+            vr::ETrackedControllerRole::Invalid
+        );
+        assert!(!system.IsTrackedDeviceConnected(3));
+    }
+
+    #[test]
     #[cfg_attr(not(feature = "monado"), ignore)]
     fn trackers_opt_out_of_hand_roles() {
         let (xr, system, input) = system_with_input();
