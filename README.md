@@ -56,7 +56,7 @@ cargo xtask run
 
 This builds into `target/stage`, installs there and starts its `onevr`. Build options such as `--i686` go first, arguments after `--` go to `onevr`.
 
-`cargo xtask apk --debug` builds an installable headset APK and needs the Android SDK and NDK. `cargo xtask frame` builds the Steam Frame's app and needs an arm64 host. Upstream changes are merged as described in [CHANGES.md](CHANGES.md), followed by `cargo xtask rebrand`.
+`cargo xtask apk --debug` builds an installable headset APK and needs the Android SDK and NDK. `cargo xtask apk --store` builds the Meta Horizon Store's app, a separate package, and signs it with the keystore in `ONEVR_STORE_KEYSTORE`; `cargo xtask store-check` tells whether a PC release has to wait for a store update. `cargo xtask frame` builds the Steam Frame's app and needs an arm64 host. Upstream changes are merged as described in [CHANGES.md](CHANGES.md), followed by `cargo xtask rebrand`.
 
 # License
 

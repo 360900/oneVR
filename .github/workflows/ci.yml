@@ -122,7 +122,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        type: [release, debug]
+        # store: the Meta Horizon Store's app, built unsigned to check that it
+        # builds. Its key is in no secret, cargo xtask apk --store signs it locally.
+        type: [release, debug, store]
     steps:
       - uses: actions/checkout@v6
         with:
@@ -182,8 +184,9 @@ jobs:
             echo "No debug keystore secret, the debug APK gets a new signing key"
           fi
       - name: Build
-        run: cargo xtask apk ${{ matrix.type == 'debug' && '--debug' || '' }} -- -Pwivrn_compress_glb=ON
+        run: cargo xtask apk ${{ matrix.type == 'debug' && '--debug' || matrix.type == 'store' && '--store' || '' }} -- -Pwivrn_compress_glb=ON
       - uses: actions/upload-artifact@v7
+        if: matrix.type != 'store'
         with:
           name: onevr-apk-${{ matrix.type }}
           path: target/dist/*.apk

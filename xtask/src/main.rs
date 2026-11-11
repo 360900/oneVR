@@ -23,8 +23,14 @@ commands:
         install the last build into its prefix, under D if given
   dist [--prefix P]
         release build with --i686, packed into target/dist/onevr-<version>-x86_64.tar.gz
-  apk [--debug] [-- GRADLE_ARGS...]
-        build the headset APK into target/dist (needs the Android SDK and NDK)
+  apk [--debug | --store] [-- GRADLE_ARGS...]
+        build the headset APK into target/dist (needs the Android SDK and NDK);
+        --store builds the Meta Horizon Store's app and signs it with the key
+        store in ONEVR_STORE_KEYSTORE (alias ONEVR_STORE_KEY_ALIAS, default
+        onevr), asking for its password
+  store-check
+        tell whether the headset protocol changed since the last store-* tag,
+        the commit of the build the store has
   run [BUILD_ARGS...] [-- ONEVR_ARGS...]
         build into target/stage, install there and start its onevr, for testing
         from the tree; BUILD_ARGS as for build, without --prefix
@@ -66,6 +72,7 @@ fn main() -> ExitCode {
         Some("install") => install(rest),
         Some("dist") => dist(rest),
         Some("apk") => apk(rest),
+        Some("store-check") => store_check(),
         Some("frame") => frame(rest),
         Some("client") => client(rest),
         Some("run") => run_staged(rest),
@@ -462,6 +469,13 @@ fn dist(args: &[String]) -> Result {
         &tarball,
     )?;
     remove_dir(&stage)?;
+    if let Some(tag) = store_tag()?
+        && !protocol_changes(&tag)?.is_empty()
+    {
+        eprintln!(
+            "xtask: the protocol may differ from {tag}'s, the store's app: see cargo xtask store-check before releasing"
+        );
+    }
     println!("{}", tarball.display());
     Ok(())
 }
@@ -487,10 +501,12 @@ fn pack(stage: &Path, member: &Path, tarball: &Path) -> Result {
 
 fn apk(args: &[String]) -> Result {
     let mut debug = false;
+    let mut store = false;
     let mut gradle_args: &[String] = &[];
     for (i, arg) in args.iter().enumerate() {
         match arg.as_str() {
             "--debug" => debug = true,
+            "--store" => store = true,
             "--" => {
                 gradle_args = &args[i + 1..];
                 break;
@@ -499,12 +515,22 @@ fn apk(args: &[String]) -> Result {
         }
     }
 
+    if debug && store {
+        return Err("apk: --debug and --store exclude each other".into());
+    }
+    // Checked before the long build
+    let store_key = if store { store_key()? } else { None };
+
     let ver = version()?;
     let wivrn = root().join("wivrn");
+    // The store's app and the APK from GitHub have different keys, so they are
+    // different packages: one couldn't replace the other.
     let (suffix, name, task, kind) = if debug {
         (".debug", "oneVR Debug", "assembleDebug", "debug")
+    } else if store {
+        ("", "oneVR", "assembleOculus", "oculus")
     } else {
-        ("", "oneVR", "assembleRelease", "release")
+        (".free", "oneVR", "assembleRelease", "release")
     };
     let mut cmd = Command::new(wivrn.join("gradlew"));
     cmd.current_dir(&wivrn)
@@ -537,6 +563,27 @@ fn apk(args: &[String]) -> Result {
             continue;
         };
         if !file.ends_with(".apk") {
+            continue;
+        }
+        if store {
+            let dst = match &store_key {
+                Some(key) => {
+                    let dst = dist.join(format!("onevr-{ver}-store.apk"));
+                    sign(&src, &dst, key)?;
+                    dst
+                }
+                None => {
+                    let dst = dist.join(format!("onevr-{ver}-store-unsigned.apk"));
+                    copy(&src, &dst, 0o644)?;
+                    eprintln!(
+                        "xtask: {} is unsigned and the store refuses it; set ONEVR_STORE_KEYSTORE to sign it",
+                        dst.display()
+                    );
+                    dst
+                }
+            };
+            println!("{}", dst.display());
+            found = true;
             continue;
         }
         let unsigned = file.contains("unsigned");
@@ -654,6 +701,167 @@ fn client(args: &[String]) -> Result {
 
 /// The oneVR version. WiVRn's GitVersion.cmake runs the same command, so the
 /// APK, which Gradle configures on its own, reports the same string.
+/// The store key: a keystore outside the tree and the alias of its key.
+struct StoreKey {
+    keystore: PathBuf,
+    alias: String,
+}
+
+/// None without ONEVR_STORE_KEYSTORE, for a build that only checks that the
+/// store's app still builds.
+fn store_key() -> Result<Option<StoreKey>> {
+    let Some(keystore) = env::var_os("ONEVR_STORE_KEYSTORE").filter(|k| !k.is_empty()) else {
+        return Ok(None);
+    };
+    let keystore = PathBuf::from(keystore);
+    if !keystore.is_file() {
+        return Err(format!(
+            "ONEVR_STORE_KEYSTORE: {} not found",
+            keystore.display()
+        ));
+    }
+    // A key in the tree ends up in a commit sooner or later
+    if let (Ok(key), Ok(tree)) = (keystore.canonicalize(), root().canonicalize())
+        && key.starts_with(&tree)
+    {
+        return Err(format!(
+            "ONEVR_STORE_KEYSTORE: {} is inside the repository, keep the store key out of it",
+            keystore.display()
+        ));
+    }
+    let alias = env::var("ONEVR_STORE_KEY_ALIAS")
+        .ok()
+        .filter(|a| !a.is_empty())
+        .unwrap_or_else(|| "onevr".into());
+    Ok(Some(StoreKey { keystore, alias }))
+}
+
+/// Signs `src` into `dst` with the store key. apksigner asks for the password
+/// on the terminal, so it is in no file, argument, environment or log.
+fn sign(src: &Path, dst: &Path, key: &StoreKey) -> Result {
+    let apksigner = apksigner()?;
+    if let Some(dir) = dst.parent() {
+        fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
+    let mut cmd = Command::new(&apksigner);
+    cmd.arg("sign")
+        .arg("--ks")
+        .arg(&key.keystore)
+        .args(["--ks-key-alias", &key.alias])
+        .arg("--out")
+        .arg(dst)
+        .arg(src);
+    run(cmd)?;
+    // apksigner leaves a v4 signature file next to the APK, which only adb's
+    // incremental install reads
+    let mut idsig = dst.as_os_str().to_owned();
+    idsig.push(".idsig");
+    let _ = fs::remove_file(idsig);
+
+    // Also prints the certificate's digests, to compare with the key's
+    let mut cmd = Command::new(&apksigner);
+    cmd.args(["verify", "--print-certs"]).arg(dst);
+    run(cmd)
+}
+
+/// apksigner of the newest build-tools in the Android SDK.
+fn apksigner() -> Result<PathBuf> {
+    let sdk = android_sdk()
+        .ok_or("apk: no Android SDK: set ANDROID_HOME, or sdk.dir in wivrn/local.properties")?;
+    let tools = sdk.join("build-tools");
+    let mut found: Vec<(Vec<u32>, PathBuf)> = fs::read_dir(&tools)
+        .map_err(|e| format!("{}: {e}", tools.display()))?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|dir| dir.join("apksigner").is_file())
+        .map(|dir| (build_tools_version(&dir), dir.join("apksigner")))
+        .collect();
+    found.sort();
+    found
+        .pop()
+        .map(|(_, path)| path)
+        .ok_or_else(|| format!("apk: no apksigner in {}", tools.display()))
+}
+
+/// The numbers in a build-tools directory's name, which sort 9.0.0 before
+/// 34.0.0.
+fn build_tools_version(dir: &Path) -> Vec<u32> {
+    dir.file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default()
+        .split(|c: char| !c.is_ascii_digit())
+        .filter_map(|part| part.parse().ok())
+        .collect()
+}
+
+fn android_sdk() -> Option<PathBuf> {
+    for var in ["ANDROID_HOME", "ANDROID_SDK_ROOT"] {
+        if let Some(dir) = env::var_os(var).filter(|d| !d.is_empty()) {
+            return Some(dir.into());
+        }
+    }
+    let properties = fs::read_to_string(root().join("wivrn/local.properties")).ok()?;
+    properties
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("sdk.dir="))
+        .map(|dir| PathBuf::from(dir.trim()))
+}
+
+/// What the headset and the server must agree on. The protocol version is a
+/// hash of the packet types, which these files define; a change to one that
+/// keeps the types, such as a comment, is reported too.
+const PROTOCOL_FILES: [&str; 6] = [
+    "wivrn/common/wivrn_packets.h",
+    "wivrn/common/onevr_packets.h",
+    "wivrn/common/wivrn_serialization.h",
+    "wivrn/common/wivrn_serialization_types.h",
+    "wivrn/common/packed_quaternion.h",
+    "wivrn/common/smp.h",
+];
+
+/// The store reviews every update, so its app is days behind a release. A PC
+/// release with another protocol than the store's app has to wait for it.
+fn store_check() -> Result {
+    let Some(tag) = store_tag()? else {
+        return Err(
+            "store-check: no store-* tag; tag the commit of the build the store has, such as store-1.0.0"
+                .into(),
+        );
+    };
+    let changed = protocol_changes(&tag)?;
+    if changed.is_empty() {
+        println!(
+            "The protocol is the one of {tag}: this tree's PC side works with the store's app"
+        );
+        return Ok(());
+    }
+    Err(format!(
+        "the protocol may differ from {tag}'s, changed: {}\nBuild the store's app (cargo xtask apk --store), have the store approve it, tag its commit store-<version>, then release the PC side",
+        changed.join(", ")
+    ))
+}
+
+/// The newest store-* tag in HEAD's history.
+fn store_tag() -> Result<Option<String>> {
+    let out = Command::new("git")
+        .current_dir(root())
+        .args(["describe", "--tags", "--abbrev=0", "--match", "store-*"])
+        .output()
+        .map_err(|e| format!("running git: {e}"))?;
+    // git fails when no tag matches
+    Ok(out
+        .status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string()))
+}
+
+/// The protocol files that differ between `tag` and the working tree.
+fn protocol_changes(tag: &str) -> Result<Vec<String>> {
+    let mut args = vec!["diff", "--name-only", tag, "--"];
+    args.extend(PROTOCOL_FILES);
+    Ok(git(&args)?.lines().map(str::to_string).collect())
+}
+
 fn version() -> Result<String> {
     git(&["describe", "--tags", "--always"])
 }
@@ -805,6 +1013,16 @@ fn strings(args: &[&str]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn build_tools_versions_sort_by_number() {
+        let mut dirs = ["9.0.0", "34.0.0", "35.0.0-rc1", "33.0.2"].map(PathBuf::from);
+        dirs.sort_by_key(|dir| build_tools_version(dir));
+        assert_eq!(
+            dirs.map(|dir| dir.display().to_string()),
+            ["9.0.0", "33.0.2", "34.0.0", "35.0.0-rc1"]
+        );
+    }
 
     #[test]
     fn desktop_exec_args() {

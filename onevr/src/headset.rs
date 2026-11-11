@@ -19,8 +19,13 @@ const PAIRING_SECS: i32 = 120;
 const SESSION_END_TIMEOUT: Duration = Duration::from_secs(15);
 /// How long the pairing question waits for an answer as a notification
 const CONFIRM_TIMEOUT: Duration = Duration::from_secs(60);
-/// The app's package names, the release build first
-const PACKAGES: [&str; 2] = ["com.weldiva.onevr", "com.weldiva.onevr.debug"];
+/// The app's package names: the Meta Horizon Store's app, the APK from
+/// GitHub, a debug build
+const PACKAGES: [&str; 3] = [
+    "com.weldiva.onevr",
+    "com.weldiva.onevr.free",
+    "com.weldiva.onevr.debug",
+];
 
 pub fn pair() -> Result<(), String> {
     // from the app menu, the window asks and shows the PIN
