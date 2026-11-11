@@ -863,7 +863,8 @@ fn protocol_changes(tag: &str) -> Result<Vec<String>> {
 }
 
 fn version() -> Result<String> {
-    git(&["describe", "--tags", "--always"])
+    // latest is the release CI moves to each build of main
+    git(&["describe", "--tags", "--always", "--exclude", "latest"])
 }
 
 fn git(args: &[&str]) -> Result<String> {

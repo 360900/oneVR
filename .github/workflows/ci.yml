@@ -234,3 +234,45 @@ jobs:
         with:
           name: onevr-frame
           path: target/dist/*.tar.gz
+
+  # The latest build of main as the release tagged latest, which the tag moves
+  # with, so sideload.sh and people without a GitHub login can download it:
+  # artifacts need one. Not a prerelease, so it shows as the repo's release.
+  publish:
+    name: Publish
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [linux, android]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: onevr-apk-release
+          path: apk
+      - uses: actions/download-artifact@v8
+        with:
+          name: onevr-linux-x86_64
+          path: linux
+      - name: Update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          # An unsigned APK doesn't install
+          SIGNED: ${{ secrets.APK_KEYSTORE_BASE64 != '' && secrets.APK_SIGNINGKEYPASSWORD != '' }}
+        run: |
+          if [ "$SIGNED" != true ]; then
+            echo "No signing secrets, the release APK is unsigned and not published"
+            exit 0
+          fi
+          # Fixed names, so their download links stay the same
+          mv apk/*.apk onevr.apk
+          mv linux/*.tar.gz onevr-x86_64.tar.gz
+          notes="Built from ${GITHUB_SHA::8}."
+          if gh release view latest >/dev/null 2>&1; then
+            gh api -X PATCH "repos/$GH_REPO/git/refs/tags/latest" -f sha="$GITHUB_SHA" -F force=true
+            gh release upload latest onevr.apk onevr-x86_64.tar.gz --clobber
+            gh release edit latest --notes "$notes" --latest
+          else
+            gh release create latest onevr.apk onevr-x86_64.tar.gz --target "$GITHUB_SHA" --title "Latest build" --notes "$notes" --latest
+          fi
