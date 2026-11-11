@@ -26,11 +26,11 @@ Other distributions: install the build dependencies of WiVRn, xrizer and wayvr, 
 ./install.sh
 ```
 
-This builds oneVR, installs it to `~/.local/opt/onevr`, links `onevr` into `~/.local/bin` and adds oneVR to the app menu. Run it again to update; it asks before stopping a running oneVR and starts it again after. If it fails, the previous install stays as it was. If a Quest is connected over adb, it also installs the latest headset APK from CI on it, which needs `gh` logged in. `./uninstall.sh` removes it and keeps the settings and pairing.
+This builds oneVR, installs it to `~/.local/opt/onevr`, links `onevr` into `~/.local/bin` and adds oneVR to the app menu. Run it again to update; it asks before stopping a running oneVR and starts it again after. If it fails, the previous install stays as it was. If a Quest is connected over adb, it also runs `./sideload.sh`. `./uninstall.sh` removes it and keeps the settings and pairing.
 
 On Plasma before 6.8, the hidden `io.github.onevr.wayvr.desktop` entry lets oneVR capture screens without a dialog and add virtual monitors.
 
-The headset APK is the `onevr-apk-release` artifact of [CI](https://github.com/360900/oneVR/actions/workflows/ci.yml).
+The headset APK is the `onevr-apk-release` artifact of [CI](https://github.com/360900/oneVR/actions/workflows/ci.yml). `./sideload.sh` installs the latest one on each Quest connected over adb, which needs `gh` logged in.
 
 The Steam Frame takes the `onevr-frame` artifact instead: extract it on the headset, add `onevr-frame/bin/onevr` to Steam as a non-Steam game and start it from the Library. It streams H.264 and 8-bit H.265.
 

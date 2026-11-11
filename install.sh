@@ -32,7 +32,6 @@ moved_new=""
 saved_links=""
 linked=""
 done_pc=""
-apkdir=""
 
 rollback() {
     say "install failed, undoing it"
@@ -68,7 +67,6 @@ cleanup() {
         rollback
     fi
     rm -rf "$staging"
-    if [ -n "$apkdir" ]; then rm -rf "$apkdir"; fi
     exit "$status"
 }
 trap cleanup EXIT
@@ -145,38 +143,9 @@ case ":$PATH:" in
     *) say "add $bin to PATH to run onevr from a terminal" ;;
 esac
 
-# The headset app: the latest release APK from CI, on each Quest adb reaches.
-# A failed adb install leaves the headset's app as it was.
-if ! command -v adb >/dev/null || ! adb start-server >/dev/null 2>&1; then
-    say "adb isn't available, headset app not installed"
-    exit 0
+# The headset app, if a Quest is connected
+if command -v adb >/dev/null; then
+    ./sideload.sh
+else
+    say "adb isn't installed, headset app not installed"
 fi
-quests=""
-for serial in $(adb devices | awk 'NR > 1 && $2 == "device" { print $1 }'); do
-    case "$(adb -s "$serial" shell getprop ro.product.manufacturer 2>/dev/null | tr -d '\r')" in
-        Oculus | Meta*) quests="$quests $serial" ;;
-    esac
-done
-if [ -z "$quests" ]; then
-    say "no Quest connected over adb, headset app not installed"
-    exit 0
-fi
-
-if ! command -v gh >/dev/null || ! gh auth status >/dev/null 2>&1; then
-    fail "a Quest is connected, but downloading the APK from CI needs gh, logged in with gh auth login"
-fi
-repo=360900/oneVR
-run=$(gh api "repos/$repo/actions/artifacts?name=onevr-apk-release&per_page=30" \
-    -q '[.artifacts[] | select(.expired | not) | select(.workflow_run.head_branch == "main")][0].workflow_run.id // empty')
-[ -n "$run" ] || fail "CI has no onevr-apk-release build of main to install"
-apkdir=$(mktemp -d)
-say "downloading the headset APK from CI run $run"
-gh run download "$run" --repo "$repo" --name onevr-apk-release --dir "$apkdir"
-apk=$(find "$apkdir" -name '*.apk' | head -n 1)
-[ -n "$apk" ] || fail "CI run $run has no APK"
-for serial in $quests; do
-    model=$(adb -s "$serial" shell getprop ro.product.model 2>/dev/null | tr -d '\r')
-    say "installing $(basename "$apk") on ${model:-the headset} ($serial)"
-    "$prefix/bin/onevr" install "$apk" "$serial" || fail "headset app not installed on ${model:-the headset} ($serial)"
-    say "headset app installed on ${model:-the headset} ($serial)"
-done
