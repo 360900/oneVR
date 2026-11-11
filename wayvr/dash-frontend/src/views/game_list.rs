@@ -2,7 +2,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use wgui::{
 	assets::AssetPathRef,
-	components::button::ComponentButton,
+	components::{button::ComponentButton, editbox::ComponentEditBox},
 	globals::WguiGlobals,
 	i18n::Translation,
 	layout::{Layout, WidgetID},
@@ -33,6 +33,7 @@ enum Task {
 	FillPage(u32),
 	PrevPage,
 	NextPage,
+	ToggleSort,
 }
 
 pub struct Params<'a> {
@@ -61,6 +62,12 @@ pub struct View {
 	executor: AsyncExecutor,
 	mounted_game_covers: HashMap<AppID, GameCoverCell>,
 	all_manifests: Vec<steam_utils::AppManifest>,
+	// oneVR: the ones matching the search, in the chosen order, which the pages show
+	shown: Vec<steam_utils::AppManifest>,
+	search_box: Rc<ComponentEditBox>,
+	search: String,
+	sort_button: Rc<ComponentButton>,
+	by_name: bool,
 	cur_page: u32,
 	page_count: u32,
 	id_label_page: WidgetID,
@@ -79,8 +86,27 @@ impl ViewTrait for View {
 					Task::SetCoverArt(app_id, cover_art) => self.set_cover_art(par.layout, app_id, cover_art),
 					Task::PrevPage => self.page_prev(),
 					Task::NextPage => self.page_next(),
+					Task::ToggleSort => {
+						self.by_name = !self.by_name;
+						self.sort_button.set_text(
+							&mut par.layout.common(),
+							Translation::from_translation_key(if self.by_name {
+								"ONEVR.LIBRARY.SORT_NAME"
+							} else {
+								"ONEVR.LIBRARY.SORT_RECENT"
+							}),
+						);
+						self.refilter();
+					}
 				}
 			}
+		}
+
+		// oneVR: the list follows the search as it is typed
+		if *self.search_box.get_text() != self.search {
+			self.search = self.search_box.get_text().clone();
+			self.refilter();
+			self.fill_page(par.layout, par.executor, 0)?;
 		}
 
 		self.view_launcher.update(par)?;
@@ -112,6 +138,10 @@ impl View {
 			Task::NextPage,
 		);
 
+		let sort_button = parser_state.fetch_component_as::<ComponentButton>("btn_sort")?;
+		tasks.handle_button(&sort_button, Task::ToggleSort);
+		let search_box = parser_state.fetch_component_as::<ComponentEditBox>("search")?;
+
 		tasks.push(Task::LoadManifests);
 
 		Ok(Self {
@@ -124,6 +154,11 @@ impl View {
 			game_cover_view_common: game_cover::ViewCommon::new(params.globals.clone()),
 			executor: params.executor,
 			all_manifests: Vec::new(),
+			shown: Vec::new(),
+			search_box,
+			search: String::new(),
+			sort_button,
+			by_name: false,
 			cur_page: 0,
 			page_count: 0,
 			id_label_page,
@@ -179,14 +214,32 @@ impl View {
 			.list_installed_games(steam_utils::GameSortMethod::PlayDateDesc)
 		{
 			Ok(manifests) => {
-				self.page_count = (manifests.len() as u32 + MAX_GAMES_PER_PAGE) / MAX_GAMES_PER_PAGE;
 				self.all_manifests = manifests;
-				self.tasks.push(Task::FillPage(0));
+				self.refilter();
 			}
 			Err(e) => {
 				log::error!("Failed to list installed games: {e:?}");
 			}
 		}
+	}
+
+	/// oneVR: the games matching the search in the chosen order, from the first page; the order
+	/// from Steam is the most recently played first
+	fn refilter(&mut self) {
+		let query = self.search.trim().to_lowercase();
+		self.shown = self
+			.all_manifests
+			.iter()
+			.filter(|m| m.name.to_lowercase().contains(&query))
+			.cloned()
+			.collect();
+		if self.by_name {
+			self.shown.sort_by_cached_key(|m| m.name.to_lowercase());
+		}
+		// at least one page, for "No games found"
+		self.page_count = (self.shown.len() as u32).div_ceil(MAX_GAMES_PER_PAGE).max(1);
+		self.cur_page = 0;
+		self.tasks.push(Task::FillPage(0));
 	}
 
 	fn page_prev(&mut self) {
@@ -210,10 +263,10 @@ impl View {
 		layout.remove_children(self.id_list_parent);
 		self.mounted_game_covers.clear();
 
-		let idx_from = (page_idx * MAX_GAMES_PER_PAGE).min(self.all_manifests.len() as u32);
-		let idx_to = ((page_idx + 1) * MAX_GAMES_PER_PAGE).min(self.all_manifests.len() as u32);
+		let idx_from = (page_idx * MAX_GAMES_PER_PAGE).min(self.shown.len() as u32);
+		let idx_to = ((page_idx + 1) * MAX_GAMES_PER_PAGE).min(self.shown.len() as u32);
 
-		let page_manifests = &self.all_manifests[idx_from as usize..idx_to as usize];
+		let page_manifests = &self.shown[idx_from as usize..idx_to as usize];
 
 		let mut text: Option<Translation> = None;
 

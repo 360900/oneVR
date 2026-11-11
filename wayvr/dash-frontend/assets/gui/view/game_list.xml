@@ -1,5 +1,12 @@
 <layout version="2">
   <elements>
+    <!-- oneVR: search and sort, like the Library -->
+    <div align_items="center" justify_content="center" gap="8" padding_top="8">
+      <label translation="ONEVR.LIBRARY.SEARCH" />
+      <EditBox id="search" text="" width="260" height="36" />
+      <label translation="ONEVR.LIBRARY.SORT" />
+      <Button id="btn_sort" height="36" padding_left="12" padding_right="12" translation="ONEVR.LIBRARY.SORT_RECENT" />
+    </div>
     <div flex_direction="column" padding_top="8" padding_bottom="8">
       <div id="list_parent" gap="8" flex_direction="row" flex_wrap="wrap" justify_content="center" />
     </div>
