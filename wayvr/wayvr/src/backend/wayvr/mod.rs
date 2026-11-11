@@ -1602,7 +1602,9 @@ impl WvrServerState {
             .wm
             .mouse
             .as_ref()
-            .filter(|mouse| self.mouse_freeze > Instant::now() && mouse.hover_window == hover_window)
+            .filter(|mouse| {
+                self.mouse_freeze > Instant::now() && mouse.hover_window == hover_window
+            })
             .map(|mouse| mouse.pos);
 
         if pressed {
