@@ -285,6 +285,11 @@ void scenes::stream::tracking()
 
 	XrTime next_battery_check = 0;
 	const XrDuration battery_check_interval = 30'000'000'000; // 30s
+	// oneVR: Android updates the status on each change; it is looked at once a second and sent
+	// when it changed, the dashboard and OSC apps lagged up to 30 s (WiVRn #751)
+	XrTime next_battery_look = 0;
+	const XrDuration battery_look_interval = 1'000'000'000;
+	std::optional<battery_status> battery_sent;
 
 	magic_enum::containers::array<device_id, XrSpace> spaces{};
 
@@ -630,17 +635,22 @@ void scenes::stream::tracking()
 					throw;
 			}
 
-			// FIXME: switch to event based
-			if (next_battery_check < now)
+			if (next_battery_look < now)
 			{
+				next_battery_look = now + battery_look_interval;
 				auto status = get_battery_status();
-				network_session->send_stream(from_headset::battery{
-				        .charge = status.charge.value_or(-1),
-				        .present = status.charge.has_value(),
-				        .charging = status.charging,
-				});
+				const bool changed = not battery_sent or battery_sent->charge != status.charge or battery_sent->charging != status.charging;
+				if (changed or next_battery_check < now)
+				{
+					network_session->send_stream(from_headset::battery{
+					        .charge = status.charge.value_or(-1),
+					        .present = status.charge.has_value(),
+					        .charging = status.charging,
+					});
 
-				next_battery_check = now + battery_check_interval;
+					battery_sent = status;
+					next_battery_check = now + battery_check_interval;
+				}
 			}
 
 			if (auto fb = std::get_if<xr::fb_body_tracker>(&body_tracker); fb and fb->should_send_skeleton())
