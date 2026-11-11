@@ -305,6 +305,11 @@ private:
 	int onevr_stats_offset = 0;
 	void onevr_start();
 	void onevr_stats(XrTime now);
+	// render thread: the runtime's own refresh rate against the one asked for (WiVRn #1200)
+	XrTime onevr_rate_checked = 0;
+	int onevr_rate_mismatches = 0;
+	float onevr_rate_reported = 0;
+	void onevr_check_refresh_rate(XrTime now);
 	void onevr_report(uint32_t request_id);
 	onevr::headset_capabilities onevr_capabilities();
 	onevr::headset_config onevr_config();

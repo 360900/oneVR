@@ -1295,6 +1295,7 @@ void scenes::stream::render(const XrFrameState & frame_state)
 
 		// oneVR: may block on the control socket, so after submission, and only for rendered frames
 		onevr_stats(frame_state.predictedDisplayTime);
+		onevr_check_refresh_rate(frame_state.predictedDisplayTime);
 	}
 
 	// Network operations may be blocking, do them once everything was submitted

@@ -621,6 +621,55 @@ void scenes::stream::onevr_stats(XrTime now)
 	}
 }
 
+// A runtime can keep a rate other than the one asked for without saying so, as Quest's battery
+// saver holds 72 Hz: no change event comes, and the server rendered at the asked rate, which
+// stuttered (WiVRn #1200). Checked once a second while focused, told to the server like a change
+// the runtime made, once two checks in a row agree, as a change asked for takes a moment
+void scenes::stream::onevr_check_refresh_rate(XrTime now)
+{
+	if (now - onevr_rate_checked < 1'000'000'000)
+		return;
+	onevr_rate_checked = now;
+
+	const float asked = onevr_refresh_rate;
+	if (not focused or asked == 0 or not instance.has_extension(XR_FB_DISPLAY_REFRESH_RATE_EXTENSION_NAME))
+	{
+		onevr_rate_mismatches = 0;
+		return;
+	}
+
+	float current;
+	try
+	{
+		current = session.get_current_refresh_rate();
+	}
+	catch (std::exception & e)
+	{
+		spdlog::warn("Failed to read the refresh rate: {}", e.what());
+		return;
+	}
+
+	if (current == 0 or std::abs(current - asked) < 0.5f)
+	{
+		onevr_rate_mismatches = 0;
+		onevr_rate_reported = 0;
+		return;
+	}
+	if (++onevr_rate_mismatches < 2 or current == onevr_rate_reported)
+		return;
+
+	spdlog::warn("Asked for {} Hz, the headset runs at {} Hz", asked, current);
+	try
+	{
+		network_session->send_control(from_headset::refresh_rate_changed{.from = asked, .to = current});
+		onevr_rate_reported = current;
+	}
+	catch (std::exception & e)
+	{
+		spdlog::warn("Failed to send the refresh rate: {}", e.what());
+	}
+}
+
 void scenes::stream::operator()(onevr::set_headset_settings && request)
 {
 	// configuration is not thread safe, apply on the render thread
