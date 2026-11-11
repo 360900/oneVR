@@ -1406,9 +1406,6 @@ impl<T> OverlayWindowManager<T> {
                 let parent = OverlaySelector::Id(parent_id);
                 let _ = self.offset_spawn_from_parent(app, oid, &parent);
             }
-            SpawnPos::Parent(parent) => {
-                let _ = self.offset_spawn_from_parent(app, oid, &parent);
-            }
             SpawnPos::WlDefault(window, fallback_pid) => {
                 let Some((parent, has_app_id)) = app.wvr_server.as_ref().and_then(|wvr| {
                     wvr.wm.windows.get(window).map(|w| {
