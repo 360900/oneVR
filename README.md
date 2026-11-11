@@ -41,6 +41,7 @@ Run `onevr` (or oneVR from the app menu) to start the server in the background a
 oneVR keeps its server settings in `~/.config/onevr/wivrn-server.json`. Pairing is shared with WiVRn.
 
 - `onevr start`: the server without the window; `onevr stop`, `onevr status`, `onevr logs`
+- `onevr --tray`: the server with oneVR in the tray and no window, for a login item
 - `onevr pair`: pair another headset
 - `onevr headsets`, `onevr rename`, `onevr unpair`: manage paired headsets
 - `onevr usb`: connect the headset plugged in by USB; `onevr install APK` installs the app

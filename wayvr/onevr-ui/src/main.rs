@@ -15,9 +15,10 @@ use instance::Request;
 use tracing_subscriber::{EnvFilter, filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use winit::event_loop::EventLoop;
 
-const USAGE: &str = "usage: onevr-ui [--pair]
+const USAGE: &str = "usage: onevr-ui [--pair | --tray]
 
-Opens oneVR's window, or the running one. --pair starts pairing a new headset.";
+Opens oneVR's window, or the running one. --pair starts pairing a new headset. --tray starts
+in the tray without the window, or does nothing when oneVR's window runs already.";
 
 const NOTIFICATIONS: &str = "org.freedesktop.Notifications";
 const NOTIFICATIONS_PATH: &str = "/org/freedesktop/Notifications";
@@ -95,6 +96,7 @@ fn main() -> ExitCode {
 	let request = match std::env::args().nth(1).as_deref() {
 		None => Request::Open,
 		Some("--pair") => Request::Pair,
+		Some("--tray") => Request::Tray,
 		Some("--help" | "-h") => {
 			println!("{USAGE}");
 			return ExitCode::SUCCESS;
@@ -121,6 +123,8 @@ fn main() -> ExitCode {
 
 	let conn = match instance::claim() {
 		Ok(Some(conn)) => Some(conn),
+		// the running one has its tray
+		Ok(None) if matches!(request, Request::Tray) => return ExitCode::SUCCESS,
 		Ok(None) => {
 			return match instance::forward(request, &token.wayland.or(token.x11).unwrap_or_default()) {
 				Ok(()) => ExitCode::SUCCESS,

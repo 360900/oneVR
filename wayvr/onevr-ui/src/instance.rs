@@ -20,12 +20,14 @@ const INTERFACE: &str = "io.github.onevr.Ui";
 pub enum Request {
 	Open,
 	Pair,
+	/// The tray without the window, as at login; a running instance has its tray already
+	Tray,
 }
 
 impl Request {
 	const fn method(self) -> &'static str {
 		match self {
-			Request::Open => "Activate",
+			Request::Open | Request::Tray => "Activate",
 			Request::Pair => "Pair",
 		}
 	}

@@ -26,6 +26,7 @@ const USAGE: &str = "usage: onevr [COMMAND] [ARGS...]
 
   (none)          start the server and open oneVR's window, like the app menu does;
                   without a display, like start
+  --tray          the same with oneVR in the tray and no window, as for a login item
   start           start oneVR's server in the background, or show its status
   stop            stop the server
   status          show the server, headset and pairing state
@@ -88,6 +89,7 @@ fn main() -> ExitCode {
     }
     let result = match command.as_str() {
         "open" if args.is_empty() => open(&[]),
+        "--tray" => no_args(&command, rest).and_then(|()| open(&["--tray"])),
         "start" => no_args(&command, rest).and_then(|()| server::start()),
         "stop" => no_args(&command, rest).and_then(|()| server::stop()),
         "status" => {

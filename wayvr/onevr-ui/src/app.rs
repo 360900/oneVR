@@ -228,6 +228,14 @@ impl App {
 	}
 
 	fn open(&mut self, event_loop: &ActiveEventLoop, request: Request, token: Option<ActivationToken>) {
+		if matches!(request, Request::Tray) {
+			if self.tray.is_some() {
+				self.update_tray();
+				return;
+			}
+			// nothing would show without the window
+			log::warn!("No tray to start in, opening the window");
+		}
 		if let Some(surface) = &self.surface {
 			raise(&surface.window, event_loop, token);
 		} else if let Err(e) = self.create_surface(event_loop, token) {
