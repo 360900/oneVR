@@ -443,10 +443,13 @@ pub struct GrabData {
     /// oneVR: the panel's roll when grabbed, which the hand's twist since then turns
     pub roll: f32,
     pub twist: f32,
+    /// oneVR: how far the hand turned left or right since the grab, which turns a held set
+    pub heading: f32,
     pub last_hand: Quat,
-    /// oneVR: a held set turns about the head where the grab started, from the anchor it had
-    pub center: Vec3A,
+    /// oneVR: a held set goes where the grabbed panel goes, from the anchor it had
     pub anchor_start: Affine3A,
+    /// oneVR: the grabbed panel relative to `anchor_start`
+    pub panel_in_anchor: Affine3A,
 }
 
 #[repr(u8)]
@@ -955,13 +958,9 @@ fn start_grab(par: StartGrabParams) {
         || app.session.config.middle_grabs_single
             && pointer.interaction.mode == PointerMode::Middle);
 
-    let relative_grab_transform = if grab_anchor {
-        app.anchor
-    } else {
-        state.transform
-    };
-
-    let offset = pointer.pose.inverse() * relative_grab_transform;
+    // oneVR: from the hand to the grabbed panel, also for a set, which follows that panel.
+    // From the hand to the anchor, far off, a turn of the wrist swung the set.
+    let offset = pointer.pose.inverse() * state.transform;
 
     app.anchor_grabbed = grab_anchor;
 
@@ -976,9 +975,10 @@ fn start_grab(par: StartGrabParams) {
         hand_stretch: None,
         roll: panel_roll(&state.transform).unwrap_or(0.0),
         twist: 0.0,
+        heading: 0.0,
         last_hand: Quat::from_affine3(&pointer.pose).normalize(),
-        center: app.input_state.hmd.translation,
         anchor_start: app.anchor,
+        panel_in_anchor: app.anchor.inverse() * state.transform,
     });
 
     app.tasks.enqueue(TaskType::Overlay(OverlayTask::Modify(
@@ -1098,10 +1098,9 @@ where
 
         // oneVR: the head doesn't roll the panel, the hand's twist does
         let hand = Quat::from_affine3(&pointer.pose).normalize();
-        grab_data.twist += twist_about(
-            hand * grab_data.last_hand.inverse(),
-            pointer.pose.transform_vector3a(Vec3A::NEG_Z),
-        );
+        let turned = hand * grab_data.last_hand.inverse();
+        grab_data.twist += twist_about(turned, pointer.pose.transform_vector3a(Vec3A::NEG_Z));
+        grab_data.heading += twist_about(turned, Vec3A::Y);
         grab_data.last_hand = hand;
         let roll = snap_roll(grab_data.roll - grab_data.twist);
 
@@ -1129,15 +1128,15 @@ where
                 grab_data.offset.translation.z = grab_data.offset.translation.z.min(-0.05);
             }
             if pointer.now.click_modifier_right {
-                app.anchor = pointer.pose * grab_data.offset;
+                app.anchor = pointer.pose * grab_data.offset * grab_data.panel_in_anchor.inverse();
             } else {
-                // oneVR: the set turns about the head and comes closer or goes further, keeping
-                // where each panel is around the user. Swinging off the hand like a stick, it
-                // moved the panels around a point in front of the user.
-                app.anchor = orbit(
+                // oneVR: the set moves with the grabbed panel and turns about it only as the
+                // hand turns left or right, so moving one panel doesn't swing the others
+                app.anchor = carry(
                     &grab_data.anchor_start,
-                    grab_data.center,
+                    grab_data.panel_in_anchor.translation,
                     pointer.pose.transform_point3a(grab_data.offset.translation),
+                    grab_data.heading,
                 );
                 // oneVR: the set moves, the panel in the hand turns on its own
                 if overlay.config.name != *ANCHOR_NAME {
@@ -1249,30 +1248,12 @@ where
     }
 }
 
-/// oneVR: how far up or down a held set turns, short of overhead, where its heading is lost
-const ORBIT_MAX_PITCH: f32 = 80.0 * std::f32::consts::PI / 180.0;
-
-/// oneVR: `start` turned about `center` and moved toward or away from it, so that its origin
-/// goes to `to`. Turns only left and right about the vertical and up and down, never rolls.
-fn orbit(start: &Affine3A, center: Vec3A, to: Vec3A) -> Affine3A {
-    let (from, to) = (start.translation - center, to - center);
-    let (Some(dir_from), Some(dir_to)) = (from.try_normalize(), to.try_normalize()) else {
-        return *start;
-    };
-    let yaw = |d: Vec3A| (-d.x).atan2(-d.z);
-    let pitch = |d: Vec3A| {
-        d.y.clamp(-1.0, 1.0)
-            .asin()
-            .clamp(-ORBIT_MAX_PITCH, ORBIT_MAX_PITCH)
-    };
-    let turn = Quat::from_rotation_y(yaw(dir_to))
-        * Quat::from_rotation_x(pitch(dir_to) - pitch(dir_from))
-        * Quat::from_rotation_y(-yaw(dir_from));
-    let closer = turn * dir_from * (to.length() - from.length());
-
-    Affine3A::from_translation((center + closer).into())
-        * Affine3A::from_quat(turn)
-        * Affine3A::from_translation((-center).into())
+/// oneVR: `start` turned by `heading` about the vertical through its point `point` (in its own
+/// space) and moved so that point is at `to`. Never tilts or rolls.
+fn carry(start: &Affine3A, point: Vec3A, to: Vec3A, heading: f32) -> Affine3A {
+    Affine3A::from_translation(to.into())
+        * Affine3A::from_rotation_y(heading)
+        * Affine3A::from_translation((-start.transform_point3a(point)).into())
         * *start
 }
 
@@ -1404,7 +1385,7 @@ mod tests {
 
     use glam::{Affine3A, Quat, Vec3, Vec3A};
 
-    use super::{orbit, panel_roll, set_panel_roll, snap_roll, twist_about};
+    use super::{carry, panel_roll, set_panel_roll, snap_roll, twist_about};
 
     #[test]
     fn twist_is_the_turn_about_the_axis() {
@@ -1418,26 +1399,24 @@ mod tests {
     }
 
     #[test]
-    fn orbit_keeps_the_set_around_the_head() {
-        let center = Vec3A::new(0.0, 1.6, 0.0);
-        let start = Affine3A::from_translation(Vec3::new(0.0, 1.4, -1.3));
-        let side = Vec3A::new(0.8, 0.0, 0.0);
+    fn carry_moves_the_set_and_turns_it_only_upright() {
+        let start = Affine3A::from_rotation_translation(
+            Quat::from_rotation_y(0.4),
+            Vec3::new(0.0, 1.4, -1.3),
+        );
+        // the keyboard, below and in front of the anchor
+        let keyboard = Vec3A::new(0.0, -0.5, 0.6);
 
-        // a quarter turn left
-        let to = center + Vec3A::new(-1.3, -0.2, 0.0);
-        let turned = orbit(&start, center, to);
-        assert!(turned.translation.distance(to) < 1e-4);
-        // a panel to the set's right stays at its distance from the head
-        let before = (start.transform_point3a(side) - center).length();
-        let after = (turned.transform_point3a(side) - center).length();
-        assert!((before - after).abs() < 1e-4);
-        // no roll
-        assert!(turned.y_axis.dot(Vec3A::Y) > 0.99);
+        let to = start.transform_point3a(keyboard) + Vec3A::new(-0.3, 0.1, 0.0);
+        let carried = carry(&start, keyboard, to, 0.0);
+        assert!(carried.transform_point3a(keyboard).distance(to) < 1e-5);
+        assert!(carried.matrix3.abs_diff_eq(start.matrix3, 1e-6));
 
-        // pulled closer
-        let near = center + (start.translation - center) * 0.5;
-        let pulled = orbit(&start, center, near);
-        assert!(pulled.translation.distance(near) < 1e-4);
+        // turned left about the keyboard, still upright
+        let turned = carry(&start, keyboard, to, 0.5);
+        assert!(turned.transform_point3a(keyboard).distance(to) < 1e-5);
+        let expected = Quat::from_rotation_y(0.5) * Quat::from_affine3(&start);
+        assert!(Quat::from_affine3(&turned).abs_diff_eq(expected, 1e-5));
     }
 
     #[test]

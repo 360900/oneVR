@@ -90,7 +90,7 @@ in xrizer/TODO.md (edited in xrizer-edge).
   VRChat switches both ways with no ghost gamepad and hand models left on the hands (xrizer
   reports tracked hands on their own indices 3/4 now). A WayVR playspace drag, recenter or
   reset moves VRChat's world by the same amount instead of a jump of meters.
-- WayVR panels (2026-11-12): a set held by one hand turns about the head and keeps its layout;
+- WayVR panels (2026-11-12): a set held by one hand moves with the grabbed panel and turns only as the hand turns left or right;
   tilting the head rolls no panel; twisting the hand rolls the held panel, also the keyboard in
   a held set, and it snaps level within 6 degrees; a recenter on the headset brings the open
   panels to the head.
