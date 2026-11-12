@@ -235,9 +235,9 @@ jobs:
           name: onevr-frame
           path: target/dist/*.tar.gz
 
-  # The latest build of main as the release tagged latest, which the tag moves
-  # with, so sideload.sh and people without a GitHub login can download it:
-  # artifacts need one. Not a prerelease, so it shows as the repo's release.
+  # Each build of main as a release of its own, named by its commit, so
+  # sideload.sh and people without a GitHub login can download it: artifacts
+  # need one. Marked latest, so releases/latest/download/<file> links to it.
   publish:
     name: Publish
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -258,6 +258,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          MESSAGE: ${{ github.event.head_commit.message }}
           # An unsigned APK doesn't install
           SIGNED: ${{ secrets.APK_KEYSTORE_BASE64 != '' && secrets.APK_SIGNINGKEYPASSWORD != '' }}
         run: |
@@ -265,14 +266,14 @@ jobs:
             echo "No signing secrets, the release APK is unsigned and not published"
             exit 0
           fi
-          # Fixed names, so their download links stay the same
+          # Fixed names, so the latest release's download links stay the same
           mv apk/*.apk onevr.apk
           mv linux/*.tar.gz onevr-x86_64.tar.gz
-          notes="Built from ${GITHUB_SHA::8}."
-          if gh release view latest >/dev/null 2>&1; then
-            gh api -X PATCH "repos/$GH_REPO/git/refs/tags/latest" -f sha="$GITHUB_SHA" -F force=true
-            gh release upload latest onevr.apk onevr-x86_64.tar.gz --clobber
-            gh release edit latest --notes "$notes" --latest
+          # Not the bare hash as tag, which git would confuse with the commit
+          tag="build-${GITHUB_SHA::8}"
+          # A rerun replaces its files, and doesn't make an older build latest
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" onevr.apk onevr-x86_64.tar.gz --clobber
           else
-            gh release create latest onevr.apk onevr-x86_64.tar.gz --target "$GITHUB_SHA" --title "Latest build" --notes "$notes" --latest
+            gh release create "$tag" onevr.apk onevr-x86_64.tar.gz --target "$GITHUB_SHA" --title "Build ${GITHUB_SHA::8}" --notes "${MESSAGE%%$'\n'*}" --latest
           fi

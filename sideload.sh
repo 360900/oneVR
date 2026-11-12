@@ -56,8 +56,8 @@ if [ -z "$quests" ]; then
 fi
 
 command -v curl >/dev/null || fail "needs curl"
-# The release CI updates with each build of main
-url=https://github.com/360900/oneVR/releases/download/latest/onevr.apk
+# The latest of the releases CI makes of each build of main
+url=https://github.com/360900/oneVR/releases/latest/download/onevr.apk
 apkdir=$(mktemp -d)
 apk="$apkdir/onevr.apk"
 say "downloading the latest headset APK"
