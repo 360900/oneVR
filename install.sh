@@ -19,6 +19,23 @@ fail() { echo "install.sh: $*" >&2; exit 1; }
 
 running() { [ -x "$prefix/bin/onevr" ] && "$prefix/bin/onevr" status >/dev/null 2>&1; }
 
+# oneVR's window or tray icon, which a stop closes
+ui_open() {
+    command -v busctl >/dev/null &&
+        busctl --user call org.freedesktop.DBus /org/freedesktop/DBus \
+            org.freedesktop.DBus NameHasOwner s io.github.onevr.Ui 2>/dev/null |
+        grep -q true
+}
+
+# Starts oneVR again as it was: with the tray if it had the window or tray.
+# The server first, so its errors show here.
+start_again() {
+    "$prefix/bin/onevr" start || return
+    if [ -n "$had_ui" ]; then
+        setsid -f "$prefix/bin/onevr" --tray </dev/null >/dev/null 2>&1
+    fi
+}
+
 refresh_menu() {
     if command -v update-desktop-database >/dev/null; then
         update-desktop-database -q "$apps" || true
@@ -27,6 +44,7 @@ refresh_menu() {
 
 # What to undo if the script stops before the PC side is done
 was_running=""
+had_ui=""
 moved_old=""
 moved_new=""
 saved_links=""
@@ -50,7 +68,7 @@ rollback() {
     if [ -n "$moved_old" ]; then mv "$old" "$prefix"; fi
     if [ -n "$was_running" ] && ! running; then
         say "starting oneVR again"
-        "$prefix/bin/onevr" start || true
+        start_again || true
     fi
     if [ -e "$prefix/bin/onevr" ]; then
         say "the previous oneVR is in place"
@@ -111,6 +129,7 @@ cargo xtask install --destdir "$staging"
 if running; then
     ask_stop
     was_running=1
+    if ui_open; then had_ui=1; fi
     "$prefix/bin/onevr" stop
 fi
 
@@ -136,7 +155,7 @@ rm -rf "$old"
 say "oneVR $action in $prefix"
 if [ -n "$was_running" ]; then
     say "starting oneVR again"
-    "$prefix/bin/onevr" start || echo "install.sh: oneVR didn't start again, see onevr logs" >&2
+    start_again || echo "install.sh: oneVR didn't start again, see onevr logs" >&2
 fi
 case ":$PATH:" in
     *":$bin:"*) ;;
