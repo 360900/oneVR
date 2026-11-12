@@ -445,7 +445,9 @@ pub struct GrabData {
     pub twist: f32,
     /// oneVR: the way from the head to the grabbed panel, which a held set keeps facing along
     pub facing: Vec3A,
-    pub last_hand: Quat,
+    /// oneVR: the hand's roll from level last frame, if it pointed far enough from straight up
+    /// or down to have one
+    pub last_hand_roll: Option<f32>,
     /// oneVR: a held set goes where the grabbed panel goes, from the anchor it had
     pub anchor_start: Affine3A,
     /// oneVR: the grabbed panel relative to `anchor_start`
@@ -976,7 +978,7 @@ fn start_grab(par: StartGrabParams) {
         roll: panel_roll(&state.transform).unwrap_or(0.0),
         twist: 0.0,
         facing: (state.transform.translation - app.input_state.hmd.translation).normalize_or_zero(),
-        last_hand: Quat::from_affine3(&pointer.pose).normalize(),
+        last_hand_roll: hand_roll(&pointer.pose),
         anchor_start: app.anchor,
         panel_in_anchor: app.anchor.inverse() * state.transform,
     });
@@ -1096,13 +1098,15 @@ where
 
         let scroll_factor = 90.0 * app.delta_time;
 
-        // oneVR: the head doesn't roll the panel, the hand's twist does
-        let hand = Quat::from_affine3(&pointer.pose).normalize();
-        grab_data.twist += twist_about(
-            hand * grab_data.last_hand.inverse(),
-            pointer.pose.transform_vector3a(Vec3A::NEG_Z),
-        );
-        grab_data.last_hand = hand;
+        // oneVR: the head doesn't roll the panel, the hand's twist does. Measured against level,
+        // so turning the hand left, right, up or down doesn't twist it.
+        let hand_roll = hand_roll(&pointer.pose);
+        if let (Some(now), Some(then)) = (hand_roll, grab_data.last_hand_roll) {
+            grab_data.twist += short_way(now - then);
+        }
+        if hand_roll.is_some() {
+            grab_data.last_hand_roll = hand_roll;
+        }
         let roll = snap_roll(grab_data.roll - grab_data.twist);
 
         if grab_anchor {
@@ -1281,12 +1285,29 @@ fn carry(start: &Affine3A, point: Vec3A, to: Vec3A, head: Vec3A, facing: Vec3A) 
 /// oneVR: a grabbed panel this close to upright snaps to it, so it is easy to level again
 const ROLL_SNAP: f32 = 6.0 * std::f32::consts::PI / 180.0;
 
-/// oneVR: the angle `rotation` turns about `axis` (its twist), right-handed, in radians
-fn twist_about(rotation: Quat, axis: Vec3A) -> f32 {
-    let axis = axis.normalize_or_zero();
-    let along = Vec3A::new(rotation.x, rotation.y, rotation.z).dot(axis);
-    let angle = 2.0 * along.atan2(rotation.w);
-    // the short way round
+/// oneVR: a hand pointing this close to straight up or down has no roll to measure
+const HAND_ROLL_MIN_LEVEL: f32 = 0.2;
+
+/// oneVR: how far `hand` is rolled about where it points, right-handed, from its right side
+/// level, in radians; none when it points about straight up or down
+fn hand_roll(hand: &Affine3A) -> Option<f32> {
+    let forward = hand.transform_vector3a(Vec3A::NEG_Z).try_normalize()?;
+    let level_right = forward.cross(Vec3A::Y);
+    if level_right.length() < HAND_ROLL_MIN_LEVEL {
+        return None;
+    }
+    let level_right = level_right.normalize();
+    let right = hand.transform_vector3a(Vec3A::X);
+    Some(
+        level_right
+            .cross(right)
+            .dot(forward)
+            .atan2(level_right.dot(right)),
+    )
+}
+
+/// oneVR: `angle` the short way round, in [-PI, PI]
+fn short_way(angle: f32) -> f32 {
     if angle > std::f32::consts::PI {
         angle - std::f32::consts::TAU
     } else if angle < -std::f32::consts::PI {
@@ -1406,17 +1427,23 @@ mod tests {
 
     use glam::{Affine3A, Quat, Vec3, Vec3A};
 
-    use super::{carry, panel_roll, set_panel_roll, snap_roll, twist_about};
+    use super::{carry, hand_roll, panel_roll, set_panel_roll, short_way, snap_roll};
 
     #[test]
-    fn twist_is_the_turn_about_the_axis() {
-        let fwd = Vec3A::NEG_Z;
+    fn hand_roll_is_the_twist_from_level() {
+        let roll = |q: Quat| hand_roll(&Affine3A::from_quat(q)).unwrap();
         let twist = Quat::from_axis_angle(Vec3::NEG_Z, 0.5);
-        assert!((twist_about(twist, fwd) - 0.5).abs() < 1e-5);
-        // a swing alone doesn't twist
-        let swing = Quat::from_axis_angle(Vec3::X, 0.7);
-        assert!(twist_about(swing, fwd).abs() < 1e-5);
-        assert!((twist_about(swing * twist, fwd) - 0.5).abs() < 0.05);
+        assert!((roll(twist) - 0.5).abs() < 1e-5);
+        // pointing down at an angle, turning left or right doesn't roll it
+        let down = Quat::from_axis_angle(Vec3::X, -0.8);
+        let turned = Quat::from_rotation_y(0.9) * down;
+        assert!(roll(down).abs() < 1e-5);
+        assert!(roll(turned).abs() < 1e-5);
+        assert!((roll(Quat::from_rotation_y(0.9) * down * twist) - 0.5).abs() < 1e-5);
+        // pointing straight down has none
+        let straight_down = Quat::from_axis_angle(Vec3::X, -std::f32::consts::FRAC_PI_2);
+        assert!(hand_roll(&Affine3A::from_quat(straight_down)).is_none());
+        assert!((short_way(std::f32::consts::TAU - 0.1) + 0.1).abs() < 1e-5);
     }
 
     #[test]
