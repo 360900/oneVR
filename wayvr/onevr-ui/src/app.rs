@@ -213,7 +213,8 @@ impl App {
 			audio: Box::new(DummyAudioProvider::new()),
 			toasts,
 			surface: None,
-			size: LogicalSize::new(1180.0, 820.0),
+			// 16:9 like the panel in VR, `DASH_SIZE` at a zoom of 1.25
+			size: LogicalSize::new(1200.0, 675.0),
 			maximized: false,
 			tray,
 			tray_status: String::new(),
