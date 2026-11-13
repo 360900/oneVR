@@ -75,7 +75,7 @@ const GPU_RETRY_MAX: Duration = Duration::from_secs(30);
 const TRAY_INTERVAL: Duration = Duration::from_millis(500);
 /// Around the dashboard the desktop shows, like the world in VR
 const CLEAR: [f32; 4] = [0.0, 0.0, 0.0, 0.0];
-/// How close to the window's edge the pointer resizes it, in logical pixels: past the 4 px
+/// How close to the window's edge the pointer resizes it, in the pages' pixels: past the 4 px
 /// see-through rim, 2 px into the panel. The panel's left and top edges sit further in, past the
 /// side and title pills, and resize it too. There's no title bar or frame: the dashboard draws
 /// everything, and a press where nothing reacts moves the window.
@@ -83,6 +83,12 @@ const RESIZE_EDGE: f32 = 6.0;
 /// How far a wheel line scrolls a page, in logical pixels: `step_pixels` in wgui's
 /// `WidgetState::process_wheel`
 const WHEEL_LINE: f32 = 64.0;
+/// The size the dashboard lays out at in VR, in logical pixels: `DASH_RES` over `GUI_SCALE` in
+/// wayvr's dashboard overlay. The window zooms its pages to fill at least this, so they fill it as
+/// they fill the panel in VR, instead of keeping their size in a larger window.
+const DASH_SIZE: Vec2 = vec2(960.0, 540.0);
+/// The zoom's steps: each zoom keeps a text atlas of its own, so a resize makes a few, not one a frame
+const ZOOM_STEP: f32 = 0.125;
 
 /// What draws into the window, dropped after a GPU error and created again
 struct Gpu {
@@ -100,7 +106,11 @@ struct Surface {
 	window: Window,
 	/// The size winit last reported: on X11, asking for it waits on the X server
 	size: PhysicalSize<u32>,
+	/// The window's scale factor
 	scale: f32,
+	/// What the pages scale by: the window's scale factor and the zoom that fits them to it like
+	/// the panel in VR, see `zoom`. Set with the swapchain's size, the size the pages lay out at.
+	zoom: f32,
 	mouse: Vec2,
 	/// The pointer moved since the layout last saw it, see `App::flush_motion`
 	motion: bool,
@@ -272,13 +282,14 @@ impl App {
 		let window = event_loop.create_window(attributes)?;
 		let size = window.inner_size();
 		let scale = window.scale_factor() as f32;
-		let gpu = create_gpu(&window, scale)?;
+		let (gpu, zoom) = create_gpu(&window, scale)?;
 		self.frontend.layout.mark_redraw();
 		self.surface = Some(Surface {
 			gpu: Some(gpu),
 			window,
 			size,
 			scale,
+			zoom,
 			mouse: Vec2::ZERO,
 			motion: false,
 			cursor: CursorIcon::Default,
@@ -483,7 +494,7 @@ impl App {
 			return;
 		}
 		surface.motion = false;
-		let pos = surface.mouse / surface.scale;
+		let pos = surface.mouse / surface.zoom;
 		let device = DeviceBitmask(0);
 		self.push_event(&wgui::event::Event::MouseMotion(MouseMotionEvent { pos, device }));
 	}
@@ -510,13 +521,20 @@ impl App {
 			// even a failure retires the old swapchain, so an error drops the whole GPU state
 			gpu.swapchain = gpu.swapchain.recreate([size.width, size.height])?;
 			let [width, height] = gpu.swapchain.extent();
+			surface.zoom = zoom(gpu.swapchain.extent(), surface.scale);
 			// a resize recreates it nearly every frame
-			log::debug!("swapchain size: {width}x{height}, scale {}", surface.scale);
+			log::debug!(
+				"swapchain size: {width}x{height}, scale {}, zoom {}",
+				surface.scale,
+				surface.zoom
+			);
 			gpu
 				.render
-				.update_viewport(&mut gpu.shared, gpu.swapchain.extent(), surface.scale)?;
+				.update_viewport(&mut gpu.shared, gpu.swapchain.extent(), surface.zoom)?;
 		} else {
-			surface.gpu = Some(create_gpu(&surface.window, surface.scale)?);
+			let (gpu, zoom) = create_gpu(&surface.window, surface.scale)?;
+			surface.gpu = Some(gpu);
+			surface.zoom = zoom;
 		}
 		surface.recreate = false;
 		self.frontend.layout.mark_redraw();
@@ -533,7 +551,7 @@ impl App {
 			Some(gpu) => gpu.swapchain.extent(),
 			None => [surface.size.width, surface.size.height],
 		};
-		let scale = surface.scale;
+		let scale = surface.zoom;
 		while self.timestep.on_tick() {
 			self.frontend.layout.tick()?;
 		}
@@ -691,7 +709,7 @@ impl ApplicationHandler<UserEvent> for App {
 		let Some(surface) = &mut self.surface else {
 			return;
 		};
-		let scale = surface.scale;
+		let scale = surface.zoom;
 		let device = DeviceBitmask(0);
 		match event {
 			WindowEvent::CloseRequested => self.close(event_loop),
@@ -830,8 +848,9 @@ fn raise(window: &Window, event_loop: &ActiveEventLoop, token: Option<Activation
 	window.request_user_attention(Some(UserAttentionType::Informational));
 }
 
-/// The Vulkan device, swapchain and renderer for the window
-fn create_gpu(window: &Window, scale: f32) -> anyhow::Result<Gpu> {
+/// The Vulkan device, swapchain and renderer for the window, and the zoom the pages draw at, see
+/// `zoom`
+fn create_gpu(window: &Window, scale: f32) -> anyhow::Result<(Gpu, f32)> {
 	let gfx = WGfx::new_for_window(
 		window,
 		&WGfxCreateInfo {
@@ -844,17 +863,28 @@ fn create_gpu(window: &Window, scale: f32) -> anyhow::Result<Gpu> {
 	log::info!("Using vkPhysicalDevice: {}", gfx.device_info().name);
 	let size = window.inner_size();
 	let swapchain = gfx.create_swapchain([size.width, size.height])?;
+	let zoom = zoom(swapchain.extent(), scale);
 	let mut shared = SharedContext::new(gfx.clone())?;
-	let mut render = Context::new(&mut shared, scale)?;
-	render.update_viewport(&mut shared, swapchain.extent(), scale)?;
+	let mut render = Context::new(&mut shared, zoom)?;
+	render.update_viewport(&mut shared, swapchain.extent(), zoom)?;
 	let [width, height] = swapchain.extent();
-	log::info!("swapchain size: {width}x{height}, scale {scale}");
-	Ok(Gpu {
+	log::info!("swapchain size: {width}x{height}, scale {scale}, zoom {zoom}");
+	let gpu = Gpu {
 		render,
 		shared,
 		swapchain,
 		gfx,
-	})
+	};
+	Ok((gpu, zoom))
+}
+
+/// What the pages scale by in a window of `extent` physical pixels: its scale factor, times the
+/// zoom that fits the panel's size in VR, `DASH_SIZE`, into it, in steps of `ZOOM_STEP`. A smaller
+/// window doesn't shrink them, it shows less, as in a smaller panel.
+fn zoom(extent: [u32; 2], scale: f32) -> f32 {
+	let logical = vec2(extent[0] as f32, extent[1] as f32) / scale;
+	let fit = (logical / DASH_SIZE).min_element();
+	scale * ((fit / ZOOM_STEP).round() * ZOOM_STEP).max(1.0)
 }
 
 /// On a hybrid laptop the integrated GPU, which drives its panel, so the window doesn't keep the
@@ -888,7 +918,8 @@ fn has_battery() -> bool {
 /// or to the left and top ones of `content`, the panel
 fn resize_direction(surface: &Surface, content: Option<Boundary>) -> Option<ResizeDirection> {
 	let size = surface.size;
-	let scale = surface.scale;
+	// the rim and the panel are the pages', in their units
+	let scale = surface.zoom;
 	let edge = RESIZE_EDGE * scale;
 	let (x, y) = (surface.mouse.x, surface.mouse.y);
 	let mut left = x < edge;
