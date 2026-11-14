@@ -31,7 +31,7 @@ cd oneVR
 cd packaging/arch && makepkg -si
 ```
 
-This builds oneVR and installs it like any other package. It works alongside WiVRn or wayvr if you have them installed.
+This downloads the latest oneVR, builds it and installs it like any other package. It works alongside WiVRn or wayvr if you have them installed.
 
 **Other distributions.** First install the tools and libraries oneVR is built from. Their names differ between distributions; the `depends` and `makedepends` lists in [packaging/arch/PKGBUILD](packaging/arch/PKGBUILD) show what is needed. Then run:
 
@@ -45,6 +45,7 @@ This builds oneVR and installs it for your user only, without needing root. oneV
 
 ```sh
 sudo tar -xzf onevr-x86_64.tar.gz -C /
+mkdir -p ~/.local/bin ~/.local/share/applications
 ln -s /opt/onevr/bin/onevr ~/.local/bin/onevr
 ln -s /opt/onevr/share/applications/io.github.onevr*.desktop ~/.local/share/applications/
 ```
@@ -86,7 +87,7 @@ The same pages are in oneVR's window on the PC, so you can set things up before 
 
 Closing the window doesn't stop oneVR. It keeps running in the system tray, ready for the headset. To stop it, use Stop oneVR in the tray, the window or the menu in VR.
 
-**Starting games from Steam instead.** Games from the Library start ready for VR. If you start a VR game from Steam itself, it may need launch options: run `onevr steam` to see them, and paste them into the game's Properties in Steam. If it prints nothing, no launch options are needed.
+**Starting games from Steam instead.** Games from the Library start ready for VR. If you start a VR game from Steam itself, it may need launch options: run `onevr steam` to see them, and paste them into Launch Options in the game's Properties in Steam. If it prints nothing, no launch options are needed.
 
 Some games need a fix to work. [docs/compatibility.md](docs/compatibility.md) lists tested games.
 
@@ -112,7 +113,7 @@ oneVR keeps its settings in `~/.config/onevr/`. It shares pairing with WiVRn, so
 
 # Updating and uninstalling
 
-**Updating.** Get the latest version of this folder (for example with `git pull`) and install again the same way: `makepkg -si` on Arch, `./install.sh` elsewhere. If oneVR is running, `install.sh` asks to close it and opens it again afterwards. If the update fails, the version you had keeps working. Update the headset app too with `./sideload.sh`; the PC and headset need matching versions.
+**Updating.** On Arch, run `makepkg -si` in `packaging/arch` again; it downloads the latest version itself. Elsewhere, get the latest version of this folder with `git pull` and run `./install.sh` again. If oneVR is running, `install.sh` asks to close it and opens it again afterwards. If the update fails, the version you had keeps working. Update the headset app too with `./sideload.sh`; the PC and headset need matching versions.
 
 **Uninstalling.** On Arch, remove the `onevr-git` package. Elsewhere, run `./uninstall.sh`. Both keep your settings and pairing, in case you install oneVR again.
 
