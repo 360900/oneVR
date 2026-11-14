@@ -6,8 +6,16 @@ prefix="$HOME/.local/opt/onevr"
 bin="$HOME/.local/bin"
 apps="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 
+# A path with ~ for the home folder, for messages
+tilde() {
+    case "$1" in
+        "$HOME"/*) printf '~%s' "${1#"$HOME"}" ;;
+        *) printf '%s' "$1" ;;
+    esac
+}
+
 if [ ! -e "$prefix" ]; then
-    echo "uninstall.sh: oneVR isn't installed in $prefix" >&2
+    echo "Error: oneVR isn't installed in $(tilde "$prefix")." >&2
     exit 1
 fi
 
@@ -35,4 +43,4 @@ fi
 
 # and what an interrupted install.sh left
 rm -rf "$prefix" "$prefix.staging" "$prefix.old"
-echo "uninstall.sh: oneVR removed; settings stay in ${XDG_CONFIG_HOME:-$HOME/.config}/onevr"
+echo "oneVR removed. Your settings stay in $(tilde "${XDG_CONFIG_HOME:-$HOME/.config}/onevr")."
