@@ -545,9 +545,16 @@ case ":$PATH:" in
     *) say "add $bin to PATH to run onevr from a terminal" ;;
 esac
 
-# The headset app, if a Quest is connected
-if command -v adb >/dev/null; then
-    ./sideload.sh
+# The headset app
+if ! command -v adb >/dev/null; then
+    say "adb isn't installed, so the headset app isn't either. Install adb (often in"
+    say "a package called android-tools), then run ./sideload.sh"
 else
-    say "adb isn't installed, headset app not installed"
+    say "to install the headset app on a Quest, turn on its developer mode in the Meta Horizon"
+    say "app on your phone, plug it in by USB, put it on and allow USB debugging when it asks"
+    if confirm "Install the headset app now?"; then
+        ./sideload.sh
+    else
+        say "run ./sideload.sh to install it later"
+    fi
 fi
