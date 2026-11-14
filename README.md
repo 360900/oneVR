@@ -28,8 +28,6 @@ Other distributions: install the build dependencies of WiVRn, xrizer and wayvr, 
 
 This builds oneVR, installs it to `~/.local/opt/onevr`, links `onevr` into `~/.local/bin` and adds oneVR to the app menu. Run it again to update; it asks before stopping a running oneVR and starts it again after. If it fails, the previous install stays as it was. If a Quest is connected over adb, it also runs `./sideload.sh`. `./uninstall.sh` removes it and keeps the settings and pairing.
 
-On Plasma before 6.8, the hidden `io.github.onevr.wayvr.desktop` entry lets oneVR capture screens without a dialog and add virtual monitors.
-
 The headset APK is `onevr.apk` in the [latest release](https://github.com/360900/oneVR/releases/latest); CI releases each build of main. `./sideload.sh` installs it on each Quest connected over adb.
 
 The release also has the PC build, `onevr-x86_64.tar.gz`, built on Arch Linux for `/opt/onevr`. `sudo tar -xzf onevr-x86_64.tar.gz -C /` installs it; then link `/opt/onevr/bin/onevr` and the two entries in `/opt/onevr/share/applications` as `install.sh` does.
