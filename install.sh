@@ -50,6 +50,7 @@ moved_new=""
 saved_links=""
 linked=""
 done_pc=""
+building=""
 
 rollback() {
     say "install failed, undoing it"
@@ -80,6 +81,8 @@ rollback() {
 cleanup() {
     status=$?
     trap - EXIT INT TERM
+    # An interrupted build leaves the progress bar's line open
+    if [ -n "$building" ] && [ -t 1 ]; then echo; fi
     # Before the stop, nothing has changed
     if [ "$status" -ne 0 ] && [ -z "$done_pc" ] && [ -n "$was_running$moved_old$moved_new$linked" ]; then
         rollback
@@ -275,18 +278,6 @@ if [ -e "$debian_shaderc" ] && [ ! -e "${debian_shaderc%.so}_shared.so" ]; then
     export SHADERC_LIB_DIR
 fi
 
-# Distribution rustup packages may only ship rustup-init, which installs
-# rustup into ~/.cargo.
-if ! command -v rustup >/dev/null && command -v rustup-init >/dev/null; then
-    rustup-init -y --no-modify-path --default-toolchain none
-fi
-command -v cargo >/dev/null || fail "needs cargo (rustup)"
-# Installs the toolchain and targets in rust-toolchain.toml. Before rustup
-# 1.28 that takes running cargo.
-if command -v rustup >/dev/null; then
-    rustup toolchain install 2>/dev/null || cargo --version >/dev/null
-fi
-
 # A run killed during the swap leaves the previous install aside
 if [ -e "$old" ]; then
     if [ -e "$prefix" ]; then rm -rf "$old"; else mv "$old" "$prefix"; fi
@@ -317,8 +308,206 @@ ask_stop() {
 }
 if running; then ask_stop; fi
 
-cargo xtask build --release ${i686:+--i686} --prefix "$prefix"
-cargo xtask install --destdir "$staging"
+# Run with their output in the log, each step checked: set -e doesn't apply
+# to a function called with ||.
+build() {
+    echo "install.sh: step rust"
+    # Distribution rustup packages may only ship rustup-init, which installs
+    # rustup into ~/.cargo.
+    if ! command -v rustup >/dev/null && command -v rustup-init >/dev/null; then
+        rustup-init -y --no-modify-path --default-toolchain none || return
+    fi
+    if ! command -v cargo >/dev/null; then
+        echo "install.sh: needs cargo (rustup)"
+        return 1
+    fi
+    # Installs the toolchain and targets in rust-toolchain.toml. Before rustup
+    # 1.28 that takes running cargo.
+    if command -v rustup >/dev/null; then
+        rustup toolchain install || cargo --version || return
+    fi
+    # Cargo's progress bar, which it otherwise only shows on a terminal
+    CARGO_TERM_PROGRESS_WHEN=always
+    CARGO_TERM_PROGRESS_WIDTH=100
+    CARGO_TERM_COLOR=never
+    export CARGO_TERM_PROGRESS_WHEN CARGO_TERM_PROGRESS_WIDTH CARGO_TERM_COLOR
+    echo "install.sh: step build"
+    cargo xtask build --release ${i686:+--i686} --prefix "$prefix" || return
+    echo "install.sh: step install"
+    cargo xtask install --destdir "$staging"
+}
+
+# Turns the build's output into one progress bar on a terminal, or a line per
+# step otherwise, and writes it to the log. Its last line is the build's exit
+# status, which this exits with. The weights are each step's share of a full
+# build's time.
+progress_awk='
+BEGIN {
+    n = split("rust prep xrizer xrizer32 wivrn-config wivrn wayvr onevr install", keys, " ")
+    split("2 2 9 8 2 33 34 6 4", weights, " ")
+    split("setting up Rust|preparing the build|building xrizer|building the 32-bit xrizer|configuring WiVRn|building WiVRn|building wayvr|building oneVR|installing", labels, "|")
+    total = 0
+    for (i = 1; i <= n; i++) {
+        k = keys[i]
+        weight[k] = (k == "xrizer32" && !i686) ? 0 : weights[i]
+        start[k] = total
+        label[k] = labels[i]
+        total += weight[k]
+    }
+    cargo_steps["xrizer"] = cargo_steps["xrizer32"] = cargo_steps["wayvr"] = cargo_steps["onevr"] = 1
+    stage = "rust"; frac = 0; pct = 0; detail = ""; status = 1; warnings = 0; notes = ""
+    if (utf8) { full = "\342\226\210"; empty = "\342\226\221" } else { full = "#"; empty = "-" }
+    barw = 24
+}
+
+function set_stage(s) {
+    if (s != stage && s in weight) { stage = s; frac = 0; detail = "" }
+}
+
+function draw(   p, text, room, filled, bar, i, line) {
+    if (!tty) {
+        if (stage != shown) { print "install.sh: " label[stage]; shown = stage }
+        return
+    }
+    p = int(100 * (start[stage] + weight[stage] * frac) / total)
+    if (p > 100) p = 100
+    if (p > pct) pct = p
+    text = toupper(substr(label[stage], 1, 1)) substr(label[stage], 2)
+    if (detail != "") text = text ": " detail
+    room = cols - barw - 8
+    if (room < 0) room = 0
+    if (length(text) > room) text = substr(text, 1, room)
+    filled = int(barw * pct / 100)
+    bar = ""
+    for (i = 0; i < barw; i++) bar = bar (i < filled ? full : empty)
+    line = sprintf("%s %3d%%  %s", bar, pct, text)
+    if (line != last) { printf "\r%s\033[K", line; fflush(); last = line }
+}
+
+/^install\.sh: status [0-9]+$/ { status = $3 + 0; next }
+
+# Cargo redraws its progress bar, which would fill the log
+!/^ +Building \[/ { print > logfile }
+
+/^warning: / { if (!/generated [0-9]+ warnings?/ && !/^warning: build failed/) warnings++ }
+/: warning: / || /^CMake Warning/ { warnings++ }
+
+/^install\.sh: step / { s = $3; if (s == "build") s = "prep"; set_stage(s); draw(); next }
+/^xtask: building / { s = $3; if (s == "wivrn") s = "wivrn-config"; set_stage(s); draw(); next }
+/^xtask: / { if (!/^xtask: (installed to|removed) /) notes = notes $0 "\n"; next }
+
+# The commands xtask runs: the second xrizer is the 32-bit one
+/^\+ / {
+    if (stage == "xrizer" && index($0, "\"--target\"")) set_stage("xrizer32")
+    else if (stage == "wivrn-config" && index($0, "\"--build\"")) set_stage("wivrn")
+    draw(); next
+}
+
+/^ +Building \[/ && stage in cargo_steps {
+    if (match($0, /[0-9]+\/[0-9]+/)) {
+        split(substr($0, RSTART, RLENGTH), nm, "/")
+        if (nm[2] > 0) frac = nm[1] / nm[2]
+        d = substr($0, RSTART + RLENGTH)
+        sub(/^: */, "", d)
+        sub(/[,( ].*/, "", d)
+        sub("\342\200\246.*", "", d)
+        if (d != "") detail = d
+    }
+    draw(); next
+}
+/^ +Compiling / && stage in cargo_steps { detail = $2; draw(); next }
+
+# Ninja: [done/total] description
+/^\[[0-9]+\/[0-9]+\] / && stage == "wivrn" {
+    split(substr($1, 2, length($1) - 2), nm, "/")
+    if (nm[2] > 0) frac = nm[1] / nm[2]
+    d = $NF
+    sub(/.*\//, "", d)
+    sub(/\.o$/, "", d)
+    if ($2 == "Linking") d = "linking " d
+    detail = d
+    draw(); next
+}
+
+/^info: (downloading|installing) component / {
+    d = $0
+    sub(/^info: /, "", d)
+    gsub(/\047/, "", d)
+    detail = d
+    draw(); next
+}
+/^-- Installing: / { d = $NF; sub(/.*\//, "", d); detail = d; draw(); next }
+
+END {
+    close(logfile)
+    if (tty) {
+        if (status == 0) { stage = "install"; frac = 1; detail = "done"; draw() }
+        printf "\n"
+    }
+    if (status == 0) {
+        printf "%s", notes
+        if (warnings == 1) print "install.sh: the build printed a warning, see " logfile
+        else if (warnings > 1) print "install.sh: the build printed " warnings " warnings, see " logfile
+    }
+    exit status
+}
+'
+
+progress() {
+    tty=""
+    cols=80
+    if [ -t 1 ]; then
+        tty=1
+        size=$({ stty size </dev/tty; } 2>/dev/null) || size=""
+        case "${size#* }" in
+            "" | *[!0-9]*) ;;
+            *) if [ "${size#* }" -ge 40 ]; then cols=${size#* }; fi ;;
+        esac
+    fi
+    utf8=""
+    if [ "$(locale charmap 2>/dev/null)" = UTF-8 ]; then utf8=1; fi
+    # Cargo ends its progress lines with a carriage return. tr and mawk hold
+    # their output and input in a buffer, which would hold the bar back.
+    unbuffered=""
+    if command -v stdbuf >/dev/null; then unbuffered="stdbuf -o0"; fi
+    awk_flags=""
+    case "$(awk -W version 2>&1 | sed -n 1p)" in
+        mawk*) awk_flags="-W interactive" ;;
+    esac
+    # shellcheck disable=SC2086
+    $unbuffered tr '\r' '\n' | awk $awk_flags -v tty="$tty" -v cols="$cols" -v utf8="$utf8" \
+        -v i686="$i686" -v logfile="$build_log" "$progress_awk"
+}
+
+# The errors in a failed build's log: compiler and linker errors, CMake's and
+# Ninja's failed steps, and what xtask and this script said.
+show_errors() {
+    found=$(awk '
+        # Ninja follows FAILED with the command line, which is long and of no help
+        skip { skip = 0; next }
+        /^FAILED: / { print; block = 1; skip = 1; next }
+        /^(error(\[[A-Z0-9]+\])?|CMake Error)[: ]/ { block = 1 }
+        /^(xtask|install\.sh): / && !/^(xtask: building|install\.sh: step) / { print; block = 0; next }
+        /^\[[0-9]+\/[0-9]+\] / || /^ninja: build stopped/ || /^-- / { block = 0 }
+        /^ +(Compiling|Finished|Running|Fresh) / || /^warning/ { block = 0 }
+        block { print }
+    ' "$build_log")
+    if [ -z "$found" ]; then found=$(tail -n 30 "$build_log"); fi
+    lines=$(printf '%s\n' "$found" | wc -l)
+    printf '%s\n' "$found" | head -n 80 >&2
+    if [ "$lines" -gt 80 ]; then echo "..." >&2; fi
+}
+
+mkdir -p target
+build_log="$PWD/target/install.log"
+# Without a terminal for the questions, the build doesn't wait on one either
+building=1
+if ! { rc=0; build </dev/null || rc=$?; echo "install.sh: status $rc"; } 2>&1 | progress; then
+    building=""
+    show_errors
+    fail "the build failed, its full log is in $build_log"
+fi
+building=""
 
 if running; then
     ask_stop
