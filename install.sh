@@ -14,8 +14,15 @@ links="$bin/onevr=$prefix/bin/onevr
 $apps/io.github.onevr.desktop=$prefix/share/applications/io.github.onevr.desktop
 $apps/io.github.onevr.wayvr.desktop=$prefix/share/applications/io.github.onevr.wayvr.desktop"
 
-say() { echo "install.sh: $*"; }
-fail() { echo "install.sh: $*" >&2; exit 1; }
+say() { echo "$*"; }
+fail() { echo "Error: $*" >&2; exit 1; }
+# A path with ~ for the home folder, for messages
+tilde() {
+    case "$1" in
+        "$HOME"/*) printf '~%s' "${1#"$HOME"}" ;;
+        *) printf '%s' "$1" ;;
+    esac
+}
 
 running() { [ -x "$prefix/bin/onevr" ] && "$prefix/bin/onevr" status >/dev/null 2>&1; }
 
@@ -53,7 +60,7 @@ done_pc=""
 building=""
 
 rollback() {
-    say "install failed, undoing it"
+    say "The install failed, undoing it."
     if [ -n "$linked" ]; then
         printf '%s\n' "$links" | while IFS='=' read -r link target; do
             saved=$(printf '%s\n' "$saved_links" | sed -n "s|^$link=||p")
@@ -68,13 +75,13 @@ rollback() {
     if [ -n "$moved_new" ]; then rm -rf "$prefix"; fi
     if [ -n "$moved_old" ]; then mv "$old" "$prefix"; fi
     if [ -n "$was_running" ] && ! running; then
-        say "starting oneVR again"
+        say "Starting oneVR again."
         start_again || true
     fi
     if [ -e "$prefix/bin/onevr" ]; then
-        say "the previous oneVR is in place"
+        say "The previous oneVR is still in place."
     else
-        say "nothing was installed"
+        say "Nothing was installed."
     fi
 }
 
@@ -130,7 +137,7 @@ i686=1
 # it, the answer is no.
 confirm() {
     [ -t 0 ] || return 1
-    printf "install.sh: %s [Y/n] " "$1"
+    printf "%s [Y/n] " "$1"
     read -r answer || answer=""
     case "$answer" in
         "" | [yY] | [yY][eE][sS]) return 0 ;;
@@ -147,7 +154,7 @@ as_root() {
     elif command -v doas >/dev/null; then
         doas "$@"
     else
-        fail "needs sudo or doas to install: $missing"
+        fail "installing $missing needs sudo or doas."
     fi
 }
 
@@ -199,9 +206,9 @@ install_deps() {
             if [ -n "$missing" ]; then
                 case "$missing" in
                     *lib32-*) pacman -Si lib32-glibc >/dev/null 2>&1 ||
-                        fail "needs the multilib repository for 32-bit games, enable it in /etc/pacman.conf" ;;
+                        fail "32-bit games need the multilib repository. Enable it in /etc/pacman.conf." ;;
                 esac
-                say "installing build dependencies: $missing"
+                say "Installing build dependencies: $missing"
                 # shellcheck disable=SC2086
                 as_root pacman -S --needed ${yes:+--noconfirm} $missing
             fi
@@ -213,7 +220,7 @@ install_deps() {
                 if confirm "Enable i386?"; then
                     as_root dpkg --add-architecture i386
                 else
-                    say "building for 64-bit games only"
+                    say "Building for 64-bit games only."
                     i686=""
                 fi
             fi
@@ -224,7 +231,7 @@ install_deps() {
             done
             missing="$missing${rustup:+ rustup}"
             if [ -n "$missing" ]; then
-                say "installing build dependencies:$missing"
+                say "Installing build dependencies:$missing"
                 as_root apt-get update
                 # shellcheck disable=SC2086
                 as_root apt-get install ${yes:+-y} $missing
@@ -250,17 +257,17 @@ install_deps() {
                 if has_x264_repo; then
                     missing="$missing pkgconfig(x264)"
                 else
-                    say "building without CPU encoding (x264)"
+                    say "Building without CPU encoding (x264)."
                 fi
             fi
             if [ -n "$missing" ]; then
-                say "installing build dependencies:$missing"
+                say "Installing build dependencies:$missing"
                 # shellcheck disable=SC2086
                 as_root dnf install ${yes:+-y} $missing
             fi
             ;;
         *)
-            say "unknown distribution, install the build dependencies of WiVRn, xrizer and wayvr yourself"
+            say "Unknown distribution: install the build dependencies of WiVRn, xrizer and wayvr yourself."
             ;;
     esac
 }
@@ -287,7 +294,7 @@ rm -rf "$staging"
 # Links can be restored, files in their place can't
 printf '%s\n' "$links" | while IFS='=' read -r link target; do
     if [ -e "$link" ] && [ ! -L "$link" ]; then
-        fail "$link is in the way, it isn't a link"
+        fail "$link is in the way and isn't a link."
     fi
 done
 
@@ -298,12 +305,12 @@ if [ -e "$prefix/bin/onevr" ]; then action=updated; else action=installed; fi
 stop_ok=""
 ask_stop() {
     [ -n "$stop_ok" ] && return
-    [ -t 0 ] || fail "oneVR is running, stop it to update"
-    printf "install.sh: oneVR is running and has to stop to update. Stop it? [y/N] "
+    [ -t 0 ] || fail "oneVR is running. Stop it to update."
+    printf "oneVR is running and has to stop to update. Stop it? [y/N] "
     read -r answer || answer=""
     case "$answer" in
         [yY] | [yY][eE][sS]) stop_ok=1 ;;
-        *) fail "oneVR not updated" ;;
+        *) fail "oneVR wasn't updated." ;;
     esac
 }
 if running; then ask_stop; fi
@@ -318,7 +325,7 @@ build() {
         rustup-init -y --no-modify-path --default-toolchain none || return
     fi
     if ! command -v cargo >/dev/null; then
-        echo "install.sh: needs cargo (rustup)"
+        echo "Error: building oneVR needs cargo (rustup)."
         return 1
     fi
     # Installs the toolchain and targets in rust-toolchain.toml. Before rustup
@@ -366,7 +373,7 @@ function set_stage(s) {
 
 function draw(   p, text, room, filled, bar, i, line) {
     if (!tty) {
-        if (stage != shown) { print "install.sh: " label[stage]; shown = stage }
+        if (stage != shown) { print toupper(substr(label[stage], 1, 1)) substr(label[stage], 2) "..."; shown = stage }
         return
     }
     p = int(100 * (start[stage] + weight[stage] * frac) / total)
@@ -394,7 +401,13 @@ function draw(   p, text, room, filled, bar, i, line) {
 
 /^install\.sh: step / { s = $3; if (s == "build") s = "prep"; set_stage(s); draw(); next }
 /^xtask: building / { s = $3; if (s == "wivrn") s = "wivrn-config"; set_stage(s); draw(); next }
-/^xtask: / { if (!/^xtask: (installed to|removed) /) notes = notes $0 "\n"; next }
+/^xtask: / {
+    if (!/^xtask: (installed to|removed) /) {
+        d = substr($0, 8)
+        notes = notes toupper(substr(d, 1, 1)) substr(d, 2) "\n"
+    }
+    next
+}
 
 # The commands xtask runs: the second xrizer is the 32-bit one
 /^\+ / {
@@ -441,13 +454,13 @@ function draw(   p, text, room, filled, bar, i, line) {
 END {
     close(logfile)
     if (tty) {
-        if (status == 0) { stage = "install"; frac = 1; detail = "done"; draw() }
+        if (status == 0) { stage = "install"; frac = 1; label[stage] = "done"; detail = ""; draw() }
         printf "\n"
     }
     if (status == 0) {
+        if (warnings == 1) print "Built with 1 warning, see " logname "."
+        else if (warnings > 1) print "Built with " warnings " warnings, see " logname "."
         printf "%s", notes
-        if (warnings == 1) print "install.sh: the build printed a warning, see " logfile
-        else if (warnings > 1) print "install.sh: the build printed " warnings " warnings, see " logfile
     }
     exit status
 }
@@ -476,7 +489,7 @@ progress() {
     esac
     # shellcheck disable=SC2086
     $unbuffered tr '\r' '\n' | awk $awk_flags -v tty="$tty" -v cols="$cols" -v utf8="$utf8" \
-        -v i686="$i686" -v logfile="$build_log" "$progress_awk"
+        -v i686="$i686" -v logfile="$build_log" -v logname="$(tilde "$build_log")" "$progress_awk"
 }
 
 # The errors in a failed build's log: compiler and linker errors, CMake's and
@@ -487,7 +500,7 @@ show_errors() {
         skip { skip = 0; next }
         /^FAILED: / { print; block = 1; skip = 1; next }
         /^(error(\[[A-Z0-9]+\])?|CMake Error)[: ]/ { block = 1 }
-        /^(xtask|install\.sh): / && !/^(xtask: building|install\.sh: step) / { print; block = 0; next }
+        /^(xtask: |Error: )/ && !/^xtask: building / { print; block = 0; next }
         /^\[[0-9]+\/[0-9]+\] / || /^ninja: build stopped/ || /^-- / { block = 0 }
         /^ +(Compiling|Finished|Running|Fresh) / || /^warning/ { block = 0 }
         block { print }
@@ -505,7 +518,7 @@ building=1
 if ! { rc=0; build </dev/null || rc=$?; echo "install.sh: status $rc"; } 2>&1 | progress; then
     building=""
     show_errors
-    fail "the build failed, its full log is in $build_log"
+    fail "the build failed. Its full log is in $(tilde "$build_log")."
 fi
 building=""
 
@@ -535,26 +548,28 @@ refresh_menu
 
 done_pc=1
 rm -rf "$old"
-say "oneVR $action in $prefix"
+say "oneVR $action in $(tilde "$prefix")."
 if [ -n "$was_running" ]; then
-    say "starting oneVR again"
-    start_again || echo "install.sh: oneVR didn't start again, see onevr logs" >&2
+    say "Starting oneVR again."
+    start_again || echo "Warning: oneVR didn't start again, see onevr logs." >&2
 fi
 case ":$PATH:" in
     *":$bin:"*) ;;
-    *) say "add $bin to PATH to run onevr from a terminal" ;;
+    *) say "To run onevr from a terminal, add $(tilde "$bin") to your PATH." ;;
 esac
 
 # The headset app
+echo
 if ! command -v adb >/dev/null; then
-    say "adb isn't installed, so the headset app isn't either. Install adb (often in"
-    say "a package called android-tools), then run ./sideload.sh"
+    say "To install the headset app on a Quest, install adb (often in a package"
+    say "called android-tools), then run ./sideload.sh."
 else
-    say "to install the headset app on a Quest, turn on its developer mode in the Meta Horizon"
-    say "app on your phone, plug it in by USB, put it on and allow USB debugging when it asks"
-    if confirm "Install the headset app now?"; then
-        ./sideload.sh
+    say "To install the headset app on a Quest:"
+    say "  1. Turn on developer mode in the Meta Horizon app on your phone."
+    say "  2. Plug the Quest in by USB, put it on and allow USB debugging."
+    if ! confirm "Install the headset app now?"; then
+        say "Run ./sideload.sh to install it later."
     else
-        say "run ./sideload.sh to install it later"
+        ./sideload.sh
     fi
 fi
