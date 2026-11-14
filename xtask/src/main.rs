@@ -240,6 +240,15 @@ fn build_xrizer(b: &Build, ver: &str) -> Result {
         }
         if let Some(t) = t {
             cmd.args(["--target", t]);
+            // cc looks for i686-linux-gnu-gcc or x86_64-linux-gnu-gcc, which
+            // Fedora has neither of; the host compiler builds 32-bit with -m32.
+            let var = t.replace('-', "_");
+            for (cc, tool) in [("CC", "gcc"), ("CXX", "g++")] {
+                let key = format!("{cc}_{var}");
+                if env::var_os(&key).is_none() {
+                    cmd.env(key, tool);
+                }
+            }
         }
         run(cmd)?;
     }
@@ -281,11 +290,29 @@ fn build_wivrn(b: &Build, ver: &str) -> Result {
         // server and APK on the same string.
         .arg(format!("-DGIT_DESC={ver}"))
         .arg(format!("-DGIT_COMMIT={}", git(&["rev-parse", "HEAD"])?))
-        .arg(format!("-DOVR_COMPAT_SEARCH_PATH={compat}"));
+        .arg(format!("-DOVR_COMPAT_SEARCH_PATH={compat}"))
+        .arg(format!(
+            "-DWIVRN_USE_X264={}",
+            if have_x264() { "ON" } else { "OFF" }
+        ));
     run(cmd)?;
     let mut cmd = Command::new("cmake");
     cmd.arg("--build").arg(&dir);
     run(cmd)
+}
+
+/// Fedora ships x264 only in RPM Fusion, so without
+/// it the server is built with the hardware encoders alone. Set every build,
+/// as CMake would otherwise keep an OFF from before x264 was installed.
+fn have_x264() -> bool {
+    let found = Command::new("pkg-config")
+        .args(["--exists", "x264"])
+        .status()
+        .is_ok_and(|s| s.success());
+    if !found {
+        eprintln!("xtask: x264 not found, building the server without the x264 encoder");
+    }
+    found
 }
 
 /// The upstream default of OVR_COMPAT_SEARCH_PATH, read from WiVRn's CMakeLists.txt.
