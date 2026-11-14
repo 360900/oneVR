@@ -290,7 +290,8 @@ if (WIVRN_BUILD_SERVER)
 		add_executable(onevr-test onevr_test.cpp onevr_dbus.cpp onevr_offline.cpp)
 		target_compile_features(onevr-test PRIVATE cxx_std_20)
 		target_include_directories(onevr-test PRIVATE .)
-		target_link_libraries(onevr-test PRIVATE wivrn-server-dbus wivrn-common wivrn-common-server wivrn-external nlohmann_json::nlohmann_json)
+		# Monado's OpenXR headers, as the server: the system ones may be older
+		target_link_libraries(onevr-test PRIVATE wivrn-server-dbus wivrn-common wivrn-common-server wivrn-external xrt-external-openxr nlohmann_json::nlohmann_json)
 	endif()
 
 	configure_file(dist/wivrn.service.in wivrn.service)
