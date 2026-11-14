@@ -47,7 +47,12 @@ where
 
     pub fn from_stream(stream: KdeStream) -> Self {
         Self {
-            inner: PipewireCapture::new(stream.name.clone(), stream.node),
+            inner: match stream.size {
+                Some((width, height)) => {
+                    PipewireCapture::with_size(stream.name.clone(), stream.node, width, height)
+                }
+                None => PipewireCapture::new(stream.name.clone(), stream.node),
+            },
             stream,
         }
     }
@@ -58,6 +63,9 @@ where
 pub struct KdeStream {
     name: Arc<str>,
     node: u32,
+    /// oneVR: the frame size to ask for. KWin offers a virtual output's stream at any size
+    /// and sends the one the consumer picks, which was our default 256x256 square.
+    size: Option<(u32, u32)>,
     stream: ZkdeScreencastStreamUnstableV1,
     /// turns into an error once the compositor closes the stream
     result: KdeStreamResult,
@@ -106,7 +114,10 @@ impl KdeStream {
             &client.queue_handle,
             result.clone(),
         );
-        Self::wait(client, name, stream, &result)
+        Self::wait(client, name, stream, &result).map(|mut me| {
+            me.size = Some((width, height));
+            me
+        })
     }
 
     fn wait(
@@ -144,6 +155,7 @@ impl KdeStream {
                 Some(Self {
                     name,
                     node,
+                    size: None,
                     stream,
                     result: result.clone(),
                     client,
