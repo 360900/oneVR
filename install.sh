@@ -91,7 +91,162 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+# Build dependencies. Arch takes the PKGBUILD's; Fedora's are files and
+# pkgconfig() names, so they don't depend on package names.
+deps_fedora="/usr/bin/cmake /usr/bin/ninja /usr/bin/git /usr/bin/g++ /usr/bin/pkg-config
+/usr/bin/python3 /usr/bin/glslc /usr/bin/glslangValidator /usr/bin/spirv-opt
+/usr/bin/gdbus-codegen clang-devel boost-devel eigen3-devel pkgconfig(nlohmann_json)
+pkgconfig(CLI11) pkgconfig(glib-2.0) pkgconfig(alsa) pkgconfig(avahi-client) pkgconfig(avahi-glib)
+pkgconfig(dav1d) pkgconfig(dbus-1) pkgconfig(gl) pkgconfig(libarchive) pkgconfig(libavcodec)
+pkgconfig(libavfilter) pkgconfig(libavutil) pkgconfig(libbsd) pkgconfig(libcap)
+pkgconfig(libcjson) pkgconfig(libdrm) pkgconfig(libinput) pkgconfig(libnotify)
+pkgconfig(libpipewire-0.3) pkgconfig(libpng) pkgconfig(librsvg-2.0) pkgconfig(libswscale)
+pkgconfig(libsystemd) pkgconfig(libudev) pkgconfig(libva) pkgconfig(openssl) pkgconfig(openxr)
+pkgconfig(shaderc) pkgconfig(vulkan) pkgconfig(wayland-client) pkgconfig(wayland-protocols)
+pkgconfig(wayland-scanner) pkgconfig(x11) pkgconfig(x11-xcb) pkgconfig(xcb) pkgconfig(xcb-randr)
+pkgconfig(xcursor) pkgconfig(xext) pkgconfig(xi) pkgconfig(xkbcommon) pkgconfig(xkbcommon-x11)
+pkgconfig(xrandr) glibc-devel(x86-32) libstdc++-devel(x86-32) libatomic(x86-32)
+libX11-devel(x86-32)"
+deps_debian="build-essential gcc-multilib g++-multilib cmake ninja-build git pkg-config python3
+bsdextrautils clang libclang-dev glslang-tools glslc spirv-tools libshaderc-dev libboost-dev
+libboost-locale-dev libboost-url-dev libboost-iostreams-dev libeigen3-dev nlohmann-json3-dev
+libcli11-dev libglib2.0-dev libglib2.0-dev-bin libvulkan-dev libasound2-dev libavahi-client-dev
+libavahi-glib-dev libdav1d-dev libdbus-1-dev libgl-dev libglx-dev libegl-dev libopengl-dev
+mesa-common-dev libarchive-dev libavcodec-dev libavfilter-dev libavutil-dev libbsd-dev libcap-dev
+libcjson-dev libdrm-dev libinput-dev libnotify-dev libpipewire-0.3-dev libpng-dev librsvg2-dev
+libswscale-dev libsystemd-dev libudev-dev libva-dev libssl-dev libopenxr-dev libx264-dev
+libwayland-dev wayland-protocols libx11-dev libx11-xcb-dev libxcb1-dev libxcb-randr0-dev
+libxcursor-dev libxext-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libxrandr-dev
+libx11-dev:i386"
+
+# Root for the package manager
+as_root() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    elif command -v sudo >/dev/null; then
+        sudo "$@"
+    elif command -v doas >/dev/null; then
+        doas "$@"
+    else
+        fail "needs sudo or doas to install: $missing"
+    fi
+}
+
+# Installs the missing build dependencies with the distribution's package
+# manager. Prompts are left to it, unless there is no terminal to answer them.
+install_deps() {
+    distro=""
+    if [ -r /etc/os-release ]; then
+        # shellcheck disable=SC1091
+        distro=$(. /etc/os-release && echo "${ID:-} ${ID_LIKE:-}")
+    fi
+    family=""
+    for id in $distro; do
+        case "$id" in
+            arch) family=arch ;;
+            debian | ubuntu) family=debian ;;
+            fedora) family=fedora ;;
+            *) continue ;;
+        esac
+        break
+    done
+    yes=""
+    [ -t 0 ] || yes=1
+    missing=""
+    # Also from rustup.rs, in ~/.cargo/bin
+    rustup=rustup
+    if command -v rustup >/dev/null; then rustup=""; fi
+    case "$family" in
+        arch)
+            command -v pacman >/dev/null || family=""
+            ;;
+        debian)
+            command -v apt-get >/dev/null || family=""
+            ;;
+        fedora)
+            command -v dnf >/dev/null || family=""
+            ;;
+    esac
+    case "$family" in
+        arch)
+            # makepkg expects base-devel; the lib32 packages are in multilib
+            missing=$(bash -c '. packaging/arch/PKGBUILD && pacman -T base-devel "${makedepends[@]}" "${depends[@]}"' |
+                grep -vx rustup | tr '\n' ' ') || true
+            missing="$missing$rustup"
+            if [ -n "$missing" ]; then
+                case "$missing" in
+                    *lib32-*) pacman -Si lib32-glibc >/dev/null 2>&1 ||
+                        fail "needs the multilib repository for 32-bit games, enable it in /etc/pacman.conf" ;;
+                esac
+                say "installing build dependencies: $missing"
+                # shellcheck disable=SC2086
+                as_root pacman -S --needed ${yes:+--noconfirm} $missing
+            fi
+            ;;
+        debian)
+            for p in $deps_debian; do
+                dpkg-query -W -f='${db:Status-Abbrev}' "$p" 2>/dev/null | grep -q '^ii' ||
+                    missing="$missing $p"
+            done
+            missing="$missing${rustup:+ rustup}"
+            if [ -n "$missing" ]; then
+                say "installing build dependencies:$missing"
+                # The 32-bit xrizer's OpenXR loader needs the i386 X11
+                # package, Steam needs i386 too
+                if ! dpkg --print-foreign-architectures | grep -qx i386; then
+                    as_root dpkg --add-architecture i386
+                fi
+                as_root apt-get update
+                # shellcheck disable=SC2086
+                as_root apt-get install ${yes:+-y} $missing
+            fi
+            ;;
+        fedora)
+            for p in $deps_fedora; do
+                rpm -q --whatprovides "$p" >/dev/null 2>&1 || missing="$missing $p"
+            done
+            missing="$missing${rustup:+ rustup}"
+            # x264 is in RPM Fusion, if enabled
+            if ! rpm -q --whatprovides 'pkgconfig(x264)' >/dev/null 2>&1 &&
+                dnf -q repoquery --whatprovides 'pkgconfig(x264)' 2>/dev/null | grep -q .; then
+                missing="$missing pkgconfig(x264)"
+            fi
+            if [ -n "$missing" ]; then
+                say "installing build dependencies:$missing"
+                # shellcheck disable=SC2086
+                as_root dnf install ${yes:+-y} $missing
+            fi
+            ;;
+        *)
+            say "unknown distribution, install the build dependencies of WiVRn, xrizer and wayvr yourself"
+            ;;
+    esac
+}
+PATH="$HOME/.cargo/bin:$PATH"
+install_deps
+
+# The shaderc crate looks for libshaderc_shared.so, which Debian names
+# libshaderc.so, and otherwise links Debian's libshaderc_combined.a, which
+# lacks glslang.
+debian_shaderc=/usr/lib/x86_64-linux-gnu/libshaderc.so
+if [ -e "$debian_shaderc" ] && [ ! -e "${debian_shaderc%.so}_shared.so" ]; then
+    mkdir -p target/shaderc
+    ln -sfn "$debian_shaderc" target/shaderc/libshaderc_shared.so
+    SHADERC_LIB_DIR="$PWD/target/shaderc"
+    export SHADERC_LIB_DIR
+fi
+
+# Distribution rustup packages may only ship rustup-init, which installs
+# rustup into ~/.cargo.
+if ! command -v rustup >/dev/null && command -v rustup-init >/dev/null; then
+    rustup-init -y --no-modify-path --default-toolchain none
+fi
 command -v cargo >/dev/null || fail "needs cargo (rustup)"
+# Installs the toolchain and targets in rust-toolchain.toml. Before rustup
+# 1.28 that takes running cargo.
+if command -v rustup >/dev/null; then
+    rustup toolchain install 2>/dev/null || cargo --version >/dev/null
+fi
 
 # A run killed during the swap leaves the previous install aside
 if [ -e "$old" ]; then
