@@ -397,7 +397,8 @@ function draw(   p, text, room, filled, bar, i, line) {
 !/^ +Building \[/ { print > logfile }
 
 /^warning: / { if (!/generated [0-9]+ warnings?/ && !/^warning: build failed/) warnings++ }
-/: warning: / || /^CMake Warning/ { warnings++ }
+# CMake warnings are for the developers of the projects
+/: warning: / { warnings++ }
 
 /^install\.sh: step / { s = $3; if (s == "build") s = "prep"; set_stage(s); draw(); next }
 /^xtask: building / { s = $3; if (s == "wivrn") s = "wivrn-config"; set_stage(s); draw(); next }
