@@ -343,7 +343,6 @@ foreach(TARGET_NAME wivrn wivrn-server wivrn-dashboard wivrn-common wivrn-dissec
         target_compile_options(${TARGET_NAME} PRIVATE
             -fdiagnostics-color -Wall -Wextra -pedantic
             -ffast-math
-            -Wundef
             -Wno-missing-field-initializers
             -Wno-unused-parameter
             -Wno-comment
@@ -351,6 +350,17 @@ foreach(TARGET_NAME wivrn wivrn-server wivrn-dashboard wivrn-common wivrn-dissec
             $<$<COMPILE_LANG_AND_ID:CXX,GNU>:-Wno-volatile -Wno-array-bounds>
             $<$<COMPILE_LANG_AND_ID:CXX,Clang>:-Wno-deprecated-volatile -Wno-unneeded-internal-declaration -Wno-c99-extensions -Wno-unused-private-field>
         )
+
+        # -Wundef goes on the sources, not the target: CMake builds the `import std`
+        # module with the target's options, and GCC 16's std.cc trips -Wundef.
+        get_target_property(_src_dir ${TARGET_NAME} SOURCE_DIR)
+        get_target_property(_sources ${TARGET_NAME} SOURCES)
+        foreach(_src IN LISTS _sources)
+            if(NOT _src MATCHES "\\$<")
+                cmake_path(ABSOLUTE_PATH _src BASE_DIRECTORY ${_src_dir})
+                set_property(SOURCE ${_src} TARGET_DIRECTORY ${TARGET_NAME} APPEND PROPERTY COMPILE_OPTIONS -Wundef)
+            endif()
+        endforeach()
 
         if (WIVRN_WERROR)
             target_compile_options(${TARGET_NAME} PRIVATE -Werror)
