@@ -107,7 +107,7 @@ pkgconfig(wayland-scanner) pkgconfig(x11) pkgconfig(x11-xcb) pkgconfig(xcb) pkgc
 pkgconfig(xcursor) pkgconfig(xext) pkgconfig(xi) pkgconfig(xkbcommon) pkgconfig(xkbcommon-x11)
 pkgconfig(xrandr) glibc-devel(x86-32) libstdc++-devel(x86-32) libatomic(x86-32)
 libX11-devel(x86-32)"
-deps_debian="build-essential gcc-multilib g++-multilib cmake ninja-build git pkg-config python3
+deps_debian="build-essential cmake ninja-build git pkg-config python3
 bsdextrautils clang libclang-dev glslang-tools glslc spirv-tools libshaderc-dev libboost-dev
 libboost-locale-dev libboost-url-dev libboost-iostreams-dev libeigen3-dev nlohmann-json3-dev
 libcli11-dev libglib2.0-dev libglib2.0-dev-bin libvulkan-dev libasound2-dev libavahi-client-dev
@@ -116,8 +116,24 @@ mesa-common-dev libarchive-dev libavcodec-dev libavfilter-dev libavutil-dev libb
 libcjson-dev libdrm-dev libinput-dev libnotify-dev libpipewire-0.3-dev libpng-dev librsvg2-dev
 libswscale-dev libsystemd-dev libudev-dev libva-dev libssl-dev libopenxr-dev libx264-dev
 libwayland-dev wayland-protocols libx11-dev libx11-xcb-dev libxcb1-dev libxcb-randr0-dev
-libxcursor-dev libxext-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libxrandr-dev
-libx11-dev:i386"
+libxcursor-dev libxext-dev libxi-dev libxkbcommon-dev libxkbcommon-x11-dev libxrandr-dev"
+# For the 32-bit xrizer; its OpenXR loader needs the i386 X11 package
+deps_debian_i686="gcc-multilib g++-multilib libx11-dev:i386"
+
+# Builds the 32-bit xrizer too, for 32-bit games
+i686=1
+
+# Asks a yes or no question, yes by default. Without a terminal to answer
+# it, the answer is no.
+confirm() {
+    [ -t 0 ] || return 1
+    printf "install.sh: %s [Y/n] " "$1"
+    read -r answer || answer=""
+    case "$answer" in
+        "" | [yY] | [yY][eE][sS]) return 0 ;;
+        *) return 1 ;;
+    esac
+}
 
 # Root for the package manager
 as_root() {
@@ -130,6 +146,10 @@ as_root() {
     else
         fail "needs sudo or doas to install: $missing"
     fi
+}
+
+has_x264_repo() {
+    dnf -q repoquery --whatprovides 'pkgconfig(x264)' 2>/dev/null | grep -q .
 }
 
 # Installs the missing build dependencies with the distribution's package
@@ -184,6 +204,17 @@ install_deps() {
             fi
             ;;
         debian)
+            if ! dpkg --print-foreign-architectures | grep -qx i386; then
+                say "32-bit games, such as Half-Life 2: VR Mod, need 32-bit packages from apt's i386"
+                say "architecture, which Steam also uses. Without it, only 64-bit games work in VR."
+                if confirm "Enable i386?"; then
+                    as_root dpkg --add-architecture i386
+                else
+                    say "building for 64-bit games only"
+                    i686=""
+                fi
+            fi
+            if [ -n "$i686" ]; then deps_debian="$deps_debian $deps_debian_i686"; fi
             for p in $deps_debian; do
                 dpkg-query -W -f='${db:Status-Abbrev}' "$p" 2>/dev/null | grep -q '^ii' ||
                     missing="$missing $p"
@@ -191,11 +222,6 @@ install_deps() {
             missing="$missing${rustup:+ rustup}"
             if [ -n "$missing" ]; then
                 say "installing build dependencies:$missing"
-                # The 32-bit xrizer's OpenXR loader needs the i386 X11
-                # package, Steam needs i386 too
-                if ! dpkg --print-foreign-architectures | grep -qx i386; then
-                    as_root dpkg --add-architecture i386
-                fi
                 as_root apt-get update
                 # shellcheck disable=SC2086
                 as_root apt-get install ${yes:+-y} $missing
@@ -206,10 +232,23 @@ install_deps() {
                 rpm -q --whatprovides "$p" >/dev/null 2>&1 || missing="$missing $p"
             done
             missing="$missing${rustup:+ rustup}"
-            # x264 is in RPM Fusion, if enabled
-            if ! rpm -q --whatprovides 'pkgconfig(x264)' >/dev/null 2>&1 &&
-                dnf -q repoquery --whatprovides 'pkgconfig(x264)' 2>/dev/null | grep -q .; then
-                missing="$missing pkgconfig(x264)"
+            # x264 is in RPM Fusion
+            if ! rpm -q --whatprovides 'pkgconfig(x264)' >/dev/null 2>&1; then
+                if ! has_x264_repo; then
+                    rpmfusion=https://mirrors.rpmfusion.org/free/fedora
+                    rpmfusion="$rpmfusion/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm"
+                    say "CPU encoding (x264) needs the RPM Fusion repository. It's highly"
+                    say "recommended: it streams when the GPU can't encode the video. Enabling it runs:"
+                    say "  sudo dnf install $rpmfusion"
+                    if confirm "Enable RPM Fusion?"; then
+                        as_root dnf install ${yes:+-y} "$rpmfusion"
+                    fi
+                fi
+                if has_x264_repo; then
+                    missing="$missing pkgconfig(x264)"
+                else
+                    say "building without CPU encoding (x264)"
+                fi
             fi
             if [ -n "$missing" ]; then
                 say "installing build dependencies:$missing"
@@ -278,7 +317,7 @@ ask_stop() {
 }
 if running; then ask_stop; fi
 
-cargo xtask build --release --i686 --prefix "$prefix"
+cargo xtask build --release ${i686:+--i686} --prefix "$prefix"
 cargo xtask install --destdir "$staging"
 
 if running; then

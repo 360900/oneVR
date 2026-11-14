@@ -39,7 +39,7 @@ This downloads the latest oneVR, builds it and installs it like any other packag
 ./install.sh
 ```
 
-This installs the tools and libraries oneVR is built from, asking for your password, then builds oneVR and installs it for your user only. oneVR then appears in your app menu. If a Quest is plugged in, it also installs the headset app (see below). On Fedora, CPU encoding (x264) needs [RPM Fusion](https://rpmfusion.org/Configuration) enabled first.
+This installs the tools and libraries oneVR is built from, asking for your password, then builds oneVR and installs it for your user only. oneVR then appears in your app menu. If a Quest is plugged in, it also installs the headset app (see below). On Debian and Ubuntu, it asks to enable 32-bit packages, which 32-bit games need. On Fedora, it asks to enable [RPM Fusion](https://rpmfusion.org/), which CPU encoding (x264) needs.
 
 **Other distributions.** First install the tools and libraries oneVR is built from. Their names differ between distributions; the `depends` and `makedepends` lists in [packaging/arch/PKGBUILD](packaging/arch/PKGBUILD) show what is needed. Then run `./install.sh`.
 
