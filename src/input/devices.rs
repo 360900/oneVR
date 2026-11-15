@@ -158,6 +158,9 @@ pub struct ProfileData {
     /// or thumbstick is being touched, so just use the skeletal input actions to
     /// determine the curl value for the thumb.
     pub force_estimated_thumb: bool,
+    /// HACK: SteamVR's OpenXR runtime rotates the wrist bone of these controllers wrong.
+    /// See https://steamcommunity.com/app/250820/discussions/8/596282871323451307/
+    pub steamvr_wrist_bone_hack: bool,
     pub skeletal_tracking_level: Option<vr::EVRSkeletalTrackingLevel>,
     /// See [`InteractionProfile::SENSES_FINGERS`].
     pub senses_fingers: bool,
@@ -178,6 +181,7 @@ impl ProfileData {
             get_pose_transformation: P::pose_transformation,
             force_estimated_thumb: TypeId::of::<P>() == TypeId::of::<Knuckles>()
                 || TypeId::of::<P>() == TypeId::of::<FrameController>(),
+            steamvr_wrist_bone_hack: TypeId::of::<P>() == TypeId::of::<FrameController>(),
             skeletal_tracking_level: P::SKELETAL_TRACKING_LEVEL,
             senses_fingers: P::SENSES_FINGERS,
             legacy_trigger_click: P::LEGACY_TRIGGER_CLICK,
@@ -200,6 +204,7 @@ impl ProfileData {
             senses_fingers: self.senses_fingers,
             legacy_trigger_click: self.legacy_trigger_click,
             legacy_grip_click: self.legacy_grip_click,
+            steamvr_wrist_bone_hack: self.steamvr_wrist_bone_hack,
             ..emulated
         }
     }
@@ -699,6 +704,7 @@ impl TrackedDevice {
         base: &xr::Space,
     ) -> Option<HandSkeleton> {
         let TrackedDeviceType::Controller {
+            hand,
             hand_tracker,
             skeleton_cache,
             ..
@@ -712,7 +718,7 @@ impl TrackedDevice {
         }
 
         let display_time = xr_data.get_display_time();
-        let r = if xr_data.enabled_extensions.ext_hand_tracking_data_source {
+        let mut r = if xr_data.enabled_extensions.ext_hand_tracking_data_source {
             get_joints_with_data_source(base, hand_tracker.as_ref()?, display_time)
                 .unwrap_or_default()
         } else {
@@ -723,6 +729,28 @@ impl TrackedDevice {
                     data_source: xr::HandTrackingDataSourceEXT::UNOBSTRUCTED,
                 })
         };
+
+        if xr_data.steamvr_runtime
+            && self
+                .profile_data
+                .as_ref()
+                .is_some_and(|p| p.steamvr_wrist_bone_hack)
+            && let Some(HandSkeleton { joints, .. }) = &mut r
+        {
+            let angle = match hand {
+                Hand::Left => 30.0_f32,
+                Hand::Right => -30.0_f32,
+            };
+            let wrist = &mut joints[xr::HandJoint::WRIST].pose.orientation;
+            let corrected = Quat::from_xyzw(wrist.x, wrist.y, wrist.z, wrist.w)
+                * Quat::from_rotation_y(angle.to_radians());
+            *wrist = xr::Quaternionf {
+                x: corrected.x,
+                y: corrected.y,
+                z: corrected.z,
+                w: corrected.w,
+            };
+        }
 
         skeleton_cache.insert(base.as_raw().into_raw(), r.clone());
         r

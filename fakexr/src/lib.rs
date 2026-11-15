@@ -282,6 +282,12 @@ pub fn set_default_interaction_profile(hand: UserPath, profile: Option<&str>) {
 thread_local! {
     static CREATE_INSTANCE_RESULT: Cell<xr::Result> = const { Cell::new(xr::Result::SUCCESS) };
     static GET_SYSTEM_RESULT: Cell<xr::Result> = const { Cell::new(xr::Result::SUCCESS) };
+    static RUNTIME_NAME: Cell<&'static CStr> = const { Cell::new(c"fakexr") };
+}
+
+/// Makes xrGetInstanceProperties on this thread report `name` as the runtime's name.
+pub fn set_runtime_name(name: &'static CStr) {
+    RUNTIME_NAME.set(name);
 }
 
 /// Makes xrCreateInstance on this thread fail with `result`, or succeed again with SUCCESS.
@@ -756,7 +762,7 @@ pub unsafe extern "system" fn get_instance_proc_addr(
                     RequestExitSession,
                     (ResultToString),
                     (StructureTypeToString),
-                    (GetInstanceProperties),
+                    GetInstanceProperties,
                     GetSystemProperties,
                     CreateSwapchain,
                     DestroySwapchain,
@@ -1918,6 +1924,23 @@ extern "system" fn get_system(
 }
 
 const MAX_LAYER_COUNT: u32 = 16;
+
+extern "system" fn get_instance_properties(
+    _: xr::Instance,
+    properties: *mut xr::InstanceProperties,
+) -> xr::Result {
+    let properties = unsafe { properties.as_mut() }.unwrap();
+    properties.runtime_version = xr::Version::new(0, 1, 0);
+    properties.runtime_name = [0; xr::MAX_RUNTIME_NAME_SIZE];
+    for (dst, src) in properties
+        .runtime_name
+        .iter_mut()
+        .zip(RUNTIME_NAME.get().to_bytes_with_nul())
+    {
+        *dst = *src as _;
+    }
+    xr::Result::SUCCESS
+}
 
 extern "system" fn get_system_properties(
     _: xr::Instance,
