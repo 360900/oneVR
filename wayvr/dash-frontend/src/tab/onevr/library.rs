@@ -36,7 +36,7 @@ use crate::{
 	tab::{
 		Tab, TabType,
 		onevr::{
-			Page, started,
+			started,
 			ui::{self, Text, Ui},
 		},
 	},
@@ -179,10 +179,6 @@ pub struct TabOneVrLibrary<T> {
 }
 
 impl<T: 'static> Tab<T> for TabOneVrLibrary<T> {
-	fn get_type(&self) -> TabType {
-		TabType::OneVr(Page::Library)
-	}
-
 	fn update(&mut self, frontend: &mut Frontend<T>, _time_ms: u32, data: &mut T) -> anyhow::Result<()> {
 		// before the clicks below, so a start the server refused can be tried again at once
 		started::note_failed(
@@ -374,8 +370,8 @@ impl<T: 'static> Tab<T> for TabOneVrLibrary<T> {
 impl<T: 'static> TabOneVrLibrary<T> {
 	pub fn new(frontend: &mut Frontend<T>, parent: WidgetID, data: &mut T) -> anyhow::Result<Self> {
 		let globals = frontend.layout.state.globals.clone();
-		let mut state = wgui::parser::parse_from_assets(&ui::doc_params(&globals), &mut frontend.layout, parent)?;
-		let mut ui = Ui::new(&mut frontend.layout, &mut state, &globals);
+		let mut state = wgui::parser::parse_from_assets(&ui::DOC_PARAMS, &mut frontend.layout, parent)?;
+		let mut ui = Ui::new(&mut frontend.layout, &mut state);
 		let group = ui.group(parent, "ONEVR.LIBRARY.VR_APPS", "@/dashboard/games.svg")?;
 		let toolbar = ui.row(group)?;
 		let list = ui.list(group)?;
@@ -506,15 +502,16 @@ impl<T: 'static> TabOneVrLibrary<T> {
 			.enumerate()
 			.map(|(index, option)| (option.key.clone(), option_label(option, index)))
 			.collect();
-		let globals = frontend.layout.state.globals.clone();
-		let message = globals
+		let message = frontend
+			.layout
+			.state
+			.globals
 			.i18n()
 			.translate_and_replace("ONEVR.LIBRARY.LAUNCH_OPTION_QUESTION", ("{NAME}", &name));
 		let tasks = self.tasks.clone();
 		mount_launch_popup(
 			&frontend.tasks,
 			self.launch_popup.clone(),
-			globals,
 			message,
 			options,
 			move |key| {
@@ -573,9 +570,8 @@ impl<T: 'static> TabOneVrLibrary<T> {
 
 	fn render_toolbar(&mut self, frontend: &mut Frontend<T>) -> anyhow::Result<()> {
 		frontend.layout.remove_children(self.toolbar);
-		let globals = frontend.layout.state.globals.clone();
-		let mut widgets = wgui::parser::parse_from_assets(&ui::doc_params(&globals), &mut frontend.layout, self.toolbar)?;
-		let mut ui = Ui::new(&mut frontend.layout, &mut widgets, &globals);
+		let mut widgets = wgui::parser::parse_from_assets(&ui::DOC_PARAMS, &mut frontend.layout, self.toolbar)?;
+		let mut ui = Ui::new(&mut frontend.layout, &mut widgets);
 		let row = self.toolbar;
 
 		let tasks = self.tasks.clone();
@@ -646,10 +642,9 @@ impl<T: 'static> TabOneVrLibrary<T> {
 		self.badged = started::pending();
 		frontend.layout.remove_children(self.list);
 		self.covers.clear();
-		let globals = frontend.layout.state.globals.clone();
 		let executor = frontend.executor.clone();
-		let mut widgets = wgui::parser::parse_from_assets(&ui::doc_params(&globals), &mut frontend.layout, self.list)?;
-		let mut ui = Ui::new(&mut frontend.layout, &mut widgets, &globals);
+		let mut widgets = wgui::parser::parse_from_assets(&ui::DOC_PARAMS, &mut frontend.layout, self.list)?;
+		let mut ui = Ui::new(&mut frontend.layout, &mut widgets);
 		let group = self.list;
 
 		let Some(applications) = applications else {
@@ -1015,7 +1010,6 @@ fn option_label(option: &LaunchOption, index: usize) -> String {
 pub(super) fn mount_launch_popup(
 	frontend_tasks: &FrontendTasks,
 	popup: PopupHolder<ui::PopupContent>,
-	globals: WguiGlobals,
 	message: String,
 	options: Vec<(String, String)>,
 	on_pick: impl Fn(String) + 'static,
@@ -1023,10 +1017,10 @@ pub(super) fn mount_launch_popup(
 	frontend_tasks.push(FrontendTask::MountPopupOnce(MountPopupOnceParams::new(
 		Translation::from_translation_key("ONEVR.LIBRARY.LAUNCH_OPTION_TITLE"),
 		Box::new(move |data| {
-			let mut state = wgui::parser::parse_from_assets(&ui::doc_params(&globals), data.layout, data.id_content)?;
+			let mut state = wgui::parser::parse_from_assets(&ui::DOC_PARAMS, data.layout, data.id_content)?;
 			let close = popup.get_close_handler(data.layout);
 			let on_pick = Rc::new(on_pick);
-			let mut ui = Ui::new(data.layout, &mut state, &globals);
+			let mut ui = Ui::new(data.layout, &mut state);
 			let dialog = ui.dialog(data.id_content)?;
 			ui.text(dialog, Text::Raw(&message))?;
 			let list = ui.list(dialog)?;

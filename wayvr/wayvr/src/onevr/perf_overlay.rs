@@ -137,12 +137,8 @@ mod tests {
     use std::{path::PathBuf, rc::Rc};
 
     use wgui::{
-        assets::{AssetPathRef, AssetProvider},
-        font_config::WguiFontConfig,
-        globals::WguiGlobals,
-        layout::LayoutParams,
-        parser::ParseDocumentParams,
-        theme::WguiTheme,
+        assets::AssetProvider, font_config::WguiFontConfig, globals::WguiGlobals,
+        layout::LayoutParams, parser::ParseDocumentParams, theme::WguiTheme,
     };
     use wlx_common::locale::WayVRLangProvider;
 
@@ -162,11 +158,8 @@ mod tests {
         )
         .unwrap();
         let (_layout, state) = wgui::parser::new_layout_from_assets(
-            &ParseDocumentParams {
-                globals,
-                path: AssetPathRef::BuiltIn(TEMPLATE),
-                extra: Default::default(),
-            },
+            &globals,
+            &ParseDocumentParams::builtin(TEMPLATE),
             LayoutParams {
                 resize_to_parent: false,
                 theme: Rc::new(WguiTheme::default()),

@@ -89,7 +89,7 @@ impl<T: 'static> Frontend<T> {
 
 	/// The open page, for [`Self::onevr_open`]
 	fn onevr_page(&self) -> Option<String> {
-		Some(match self.current_tab.as_ref()?.get_type() {
+		Some(match self.current_tab_type? {
 			TabType::Home => "home".into(),
 			TabType::Apps => "apps".into(),
 			TabType::Settings => "settings".into(),
@@ -235,7 +235,6 @@ impl<T: 'static> Frontend<T> {
 			self.popup_dialog_box.clone(),
 			self.tasks.clone(),
 			views::dialog_box::Params {
-				globals: self.globals.clone(),
 				message,
 				entries: views::dialog_box::get_entries_yes_no(),
 				on_action_click: Box::new(move |action| {

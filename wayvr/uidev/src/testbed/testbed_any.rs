@@ -41,14 +41,16 @@ impl TestbedAny {
 			PathBuf::new(), // cwd
 		)?;
 
+		let extra = ParseDocumentExtra {
+			root_dir: Some(path.to_rc().strip_filename()),
+			..Default::default()
+		};
+
 		let (layout, state) = wgui::parser::new_layout_from_assets(
+			&globals,
 			&ParseDocumentParams {
-				globals,
 				path,
-				extra: ParseDocumentExtra {
-					root_dir: Some(path.to_rc().strip_filename()),
-					..Default::default()
-				},
+				extra: Some(&extra),
 			},
 			LayoutParams::default(),
 		)?;

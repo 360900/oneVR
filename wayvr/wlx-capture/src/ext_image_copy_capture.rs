@@ -380,7 +380,7 @@ impl Buffer {
     fn frame(&self, transform: frame::Transform) -> WlxFrame {
         match &self.data {
             // the callback takes the exporter's current image
-            BufData::Dma { .. } => WlxFrame::Implicit(transform),
+            BufData::Dma { .. } => WlxFrame::Implicit,
             BufData::Shm { fd, .. } => WlxFrame::MemFd(MemFdFrame {
                 format: FrameFormat {
                     width: self.width,

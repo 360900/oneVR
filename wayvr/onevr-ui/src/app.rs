@@ -24,7 +24,8 @@ use wgui::{
 		TextInputEvent,
 	},
 	gfx::{
-		CommandBufferUsage, DevicePreference, PresentStatus, Swapchain, SwapchainError, WGfx, WGfxClearMode, WGfxCreateInfo,
+		CommandBufferUsage, CommandPool, DevicePreference, PresentStatus, QueueType, Swapchain, SwapchainError, WGfx,
+		WGfxClearMode, WGfxCreateInfo,
 	},
 	i18n::{Locale, Translation},
 	renderer_vk::context::{Context, SharedContext},
@@ -95,6 +96,7 @@ struct Gpu {
 	// dropped in this order: the renderer before the swapchain and device
 	render: Context,
 	shared: SharedContext,
+	pool: CommandPool,
 	swapchain: Arc<Swapchain>,
 	gfx: Arc<WGfx>,
 }
@@ -619,7 +621,7 @@ impl App {
 			}
 			Err(e) => anyhow::bail!("failed to acquire the next image: {e}"),
 		};
-		let mut cmd = gpu.gfx.create_gfx_command_buffer(CommandBufferUsage::OneTimeSubmit)?;
+		let mut cmd = gpu.pool.create_command_buffer(CommandBufferUsage::OneTimeSubmit)?;
 		cmd.begin_rendering(frame.image_view().clone(), WGfxClearMode::Clear(CLEAR))?;
 		let layout = &mut self.frontend.layout;
 		let globals = layout.state.globals.clone();
@@ -865,7 +867,8 @@ fn create_gpu(window: &Window, scale: f32) -> anyhow::Result<(Gpu, f32)> {
 	let size = window.inner_size();
 	let swapchain = gfx.create_swapchain([size.width, size.height])?;
 	let zoom = zoom(swapchain.extent(), scale);
-	let mut shared = SharedContext::new(gfx.clone())?;
+	let pool = gfx.create_command_pool(QueueType::Graphics)?;
+	let mut shared = SharedContext::new(pool.clone())?;
 	let mut render = Context::new(&mut shared, zoom)?;
 	render.update_viewport(&mut shared, swapchain.extent(), zoom)?;
 	let [width, height] = swapchain.extent();
@@ -873,6 +876,7 @@ fn create_gpu(window: &Window, scale: f32) -> anyhow::Result<(Gpu, f32)> {
 	let gpu = Gpu {
 		render,
 		shared,
+		pool,
 		swapchain,
 		gfx,
 	};

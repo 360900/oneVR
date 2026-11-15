@@ -238,6 +238,10 @@ impl DashInterface<()> for DashInterfaceEmulated {
 			.map_or_else(|| Ok(Vec::new()), |gfx| gfx.enumerate_devices())
 	}
 
+	fn get_version_string(&self, _: &mut ()) -> String {
+		String::from("WayVR v. 99.99")
+	}
+
 	fn window_list(&mut self, _: &mut ()) -> anyhow::Result<Vec<WvrWindow>> {
 		Ok(self.windows.iter().map(|(handle, w)| w.to(handle)).collect())
 	}

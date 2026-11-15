@@ -17,7 +17,6 @@ use onevr_common::{
 };
 use serde_json::{Value, json};
 use wgui::{
-	assets::AssetPathRef,
 	components::{
 		bar_graph::{ComponentBarGraph, ValueCell},
 		editbox::ComponentEditBox,
@@ -36,10 +35,7 @@ use crate::{
 	frontend::{Frontend, FrontendTask},
 	tab::{
 		Tab, TabType,
-		onevr::{
-			Page,
-			ui::{self, Text, Ui},
-		},
+		onevr::ui::{self, Text, Ui},
 	},
 };
 
@@ -283,10 +279,6 @@ pub struct TabOneVrPc<T> {
 }
 
 impl<T: 'static> Tab<T> for TabOneVrPc<T> {
-	fn get_type(&self) -> TabType {
-		TabType::OneVr(Page::Pc)
-	}
-
 	fn update(&mut self, frontend: &mut Frontend<T>, _time_ms: u32, data: &mut T) -> anyhow::Result<()> {
 		for task in self.tasks.drain() {
 			match task {
@@ -558,13 +550,8 @@ fn format_time(seconds: i64) -> String {
 
 impl<T: 'static> TabOneVrPc<T> {
 	pub fn new(frontend: &mut Frontend<T>, parent: WidgetID, _data: &mut T) -> anyhow::Result<Self> {
-		let globals = frontend.layout.state.globals.clone();
 		let state = wgui::parser::parse_from_assets(
-			&ParseDocumentParams {
-				globals,
-				path: AssetPathRef::BuiltIn("gui/onevr/pc.xml"),
-				extra: Default::default(),
-			},
+			&ParseDocumentParams::builtin("gui/onevr/pc.xml"),
 			&mut frontend.layout,
 			parent,
 		)?;
@@ -693,10 +680,8 @@ impl<T: 'static> TabOneVrPc<T> {
 		let desktop = frontend.interface.onevr_desktop();
 
 		frontend.layout.remove_children(self.id_content);
-		let globals = frontend.layout.state.globals.clone();
-		let mut widgets =
-			wgui::parser::parse_from_assets(&ui::doc_params(&globals), &mut frontend.layout, self.id_content)?;
-		let mut ui = Ui::new(&mut frontend.layout, &mut widgets, &globals);
+		let mut widgets = wgui::parser::parse_from_assets(&ui::DOC_PARAMS, &mut frontend.layout, self.id_content)?;
+		let mut ui = Ui::new(&mut frontend.layout, &mut widgets);
 
 		// Without the server, Headsets and Server would show stale values and controls that only
 		// fail; Diagnostics can tell why it isn't running. Pair headset starts it.

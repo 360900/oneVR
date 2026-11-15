@@ -22,7 +22,7 @@ use wgui::{
     layout::{LayoutUpdateParams, WidgetID},
     log::LogErr,
     palette::WguiColorPalette,
-    parser::{Fetchable, ParseDocumentParams, TemplateParams},
+    parser::{Fetchable, ParseDocumentExtra, ParseDocumentParams, TemplateParams},
     renderer::util,
     taffy::{self, prelude::length},
     widget::{
@@ -38,14 +38,13 @@ use super::{
 
 const PIXELS_PER_UNIT: f32 = 60.;
 
-fn new_doc_params(panel: &mut GuiPanel<KeyboardState>) -> ParseDocumentParams<'static> {
+const fn doc_params(extra: Option<&ParseDocumentExtra>) -> ParseDocumentParams<'_> {
     ParseDocumentParams {
-        globals: panel.layout.state.globals.clone(),
         path: AssetPathRef::FileOrBuiltIn {
             path: "gui/keyboard.xml",
             fallback: None,
         },
-        extra: panel.doc_extra.take().unwrap_or_default(),
+        extra,
     }
 }
 
@@ -75,14 +74,14 @@ pub(super) fn create_keyboard_panel(
 
     let mut panel = GuiPanel::new_from_template(app, "gui/keyboard.xml", state, params)?;
 
-    let doc_params = new_doc_params(&mut panel);
-
     let root = panel
         .parser_state
         .get_widget_id("keyboard_root")
         .context("Element with id 'keyboard_root' not found; keyboard.xml may be out of date.")?;
 
     let has_altgr = keymap.as_ref().is_some_and(|m| XkbKeymap::has_altgr(m));
+
+    let keymap_switch_layouts = super::keymap_layouts(&app.session.config, layout);
 
     for row in 0..layout.key_sizes.len() {
         let (div, _) = panel.layout.add_child(
@@ -105,13 +104,9 @@ pub(super) fn create_keyboard_panel(
                 height: length(PIXELS_PER_UNIT),
             };
 
-            let Some(key) = layout.get_key_data(
-                keymap,
-                has_altgr,
-                col,
-                row,
-                &app.session.config.keyboard_layouts,
-            ) else {
+            let Some(key) =
+                layout.get_key_data(keymap, has_altgr, col, row, &keymap_switch_layouts)
+            else {
                 let _ = panel.layout.add_child(
                     div.id,
                     WidgetDiv::create(),
@@ -167,7 +162,7 @@ pub(super) fn create_keyboard_panel(
 
             let template_key = format!("Key{:?}", key.cap_type);
             panel.parser_state.instantiate_template(
-                &doc_params,
+                &doc_params(panel.doc_extra.as_ref()),
                 &template_key,
                 &mut panel.layout,
                 div.id,
@@ -280,6 +275,7 @@ pub(super) fn create_keyboard_panel(
     panel.on_notify = Some(Box::new({
         let name = "kbd";
         move |panel, app, event_data| {
+            let doc_params = doc_params(panel.doc_extra.as_ref());
             let mut elems_changed = panel.state.overlay_list.on_notify(
                 &mut panel.layout,
                 &mut panel.parser_state,

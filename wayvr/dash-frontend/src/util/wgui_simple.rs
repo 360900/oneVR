@@ -18,11 +18,14 @@ use wgui::{
 	taffy::{self, prelude::length},
 	widget::{
 		ConstructEssentials,
+		div::WidgetDiv,
 		label::{WidgetLabel, WidgetLabelParams},
 		sprite::{WidgetSprite, WidgetSpriteParams},
 	},
 	windowing::context_menu,
 };
+
+use crate::util::wgui_simple;
 
 pub struct CreateButtonParams<'a> {
 	pub id_parent: WidgetID,
@@ -50,7 +53,6 @@ pub fn create_button(par: CreateButtonParams) -> anyhow::Result<()> {
 	Ok(())
 }
 
-#[allow(dead_code)]
 pub fn create_label(layout: &mut Layout, id_parent: WidgetID, content: Translation) -> anyhow::Result<()> {
 	let label = WidgetLabel::create(
 		&mut layout.state,
@@ -127,12 +129,7 @@ pub struct CreateLoadingParams<'a> {
 }
 
 pub fn create_loading(par: CreateLoadingParams) -> anyhow::Result<WidgetID> {
-	let doc_params = ParseDocumentParams {
-		globals: par.layout.state.globals.clone(),
-		path: AssetPathRef::BuiltIn("gui/t_loading.xml"),
-		extra: Default::default(),
-	};
-
+	let doc_params = ParseDocumentParams::builtin("gui/t_loading.xml");
 	let mut parser_state = wgui::parser::parse_from_assets(&doc_params, par.layout, par.parent_id)?;
 
 	let data = parser_state.realize_template(
@@ -182,11 +179,16 @@ pub struct MountDropdownParams<'a> {
 	pub current_text: Translation,
 	pub cells: Vec<context_menu::Cell>,
 	pub on_open: Box<dyn Fn(context_menu::Position, Vec<context_menu::Cell>)>,
+	pub sprite_src: Option<AssetPathRef<'a>>,
 }
 
 pub fn mount_dropdown(par: MountDropdownParams) -> anyhow::Result<()> {
 	let mut params = par.params;
 	params.insert("id", &par.id);
+
+	if let Some(src) = par.sprite_src {
+		wgui_simple::create_icon(par.layout, par.parent, Vec2::splat(24.0), src)?;
+	}
 
 	par
 		.parser_state
@@ -206,4 +208,21 @@ pub fn mount_dropdown(par: MountDropdownParams) -> anyhow::Result<()> {
 	}));
 
 	Ok(())
+}
+
+pub fn create_flex_down(layout: &mut Layout, parent: WidgetID) -> anyhow::Result<WidgetID> {
+	Ok(
+		layout
+			.add_child(
+				parent,
+				WidgetDiv::create(),
+				taffy::Style {
+					flex_direction: taffy::FlexDirection::Column,
+					gap: length(4.0_f32),
+					..Default::default()
+				},
+			)?
+			.0
+			.id,
+	)
 }

@@ -4,7 +4,6 @@ use std::rc::Rc;
 
 use onevr_common::state::Link;
 use wgui::{
-	assets::AssetPathRef,
 	color::WguiColorName,
 	components::{
 		bar_graph::ComponentBarGraph,
@@ -13,7 +12,6 @@ use wgui::{
 		editbox::ComponentEditBox,
 		slider::{self, ComponentSlider},
 	},
-	globals::WguiGlobals,
 	i18n::Translation,
 	layout::{Layout, WidgetID},
 	parser::{Fetchable, ParseDocumentParams, ParserState, TemplateParams},
@@ -33,13 +31,7 @@ use crate::{
 
 pub const WIDGETS: &str = "gui/onevr/widgets.xml";
 
-pub fn doc_params(globals: &WguiGlobals) -> ParseDocumentParams<'_> {
-	ParseDocumentParams {
-		globals: globals.clone(),
-		path: AssetPathRef::BuiltIn(WIDGETS),
-		extra: Default::default(),
-	}
-}
+pub const DOC_PARAMS: ParseDocumentParams = ParseDocumentParams::builtin(WIDGETS);
 
 /// Text that is either a translation key or shown as is
 #[derive(Clone, Copy)]
@@ -65,11 +57,11 @@ pub struct Ui<'a> {
 }
 
 impl<'a> Ui<'a> {
-	pub fn new(layout: &'a mut Layout, state: &'a mut ParserState, globals: &'a WguiGlobals) -> Self {
+	pub fn new(layout: &'a mut Layout, state: &'a mut ParserState) -> Self {
 		Self {
 			layout,
 			state,
-			doc: doc_params(globals),
+			doc: DOC_PARAMS,
 			next_id: 0,
 		}
 	}
@@ -534,6 +526,7 @@ impl<'a> Ui<'a> {
 			current_text: current,
 			cells,
 			on_open: Box::new(on_open),
+			sprite_src: None,
 		})
 	}
 }

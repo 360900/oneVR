@@ -13,10 +13,7 @@ use smithay_client_toolkit::reexports::{
         zxdg_output_manager_v1::ZxdgOutputManagerV1,
         zxdg_output_v1::{self, ZxdgOutputV1},
     },
-    protocols_wlr::{
-        export_dmabuf::v1::client::zwlr_export_dmabuf_manager_v1::ZwlrExportDmabufManagerV1,
-        screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1,
-    },
+    protocols_wlr::screencopy::v1::client::zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1,
 };
 
 use wayland_client::{
@@ -78,7 +75,6 @@ pub struct WlxOutput {
 pub struct WlxClient {
     pub connection: Arc<Connection>,
     pub xdg_output_mgr: ZxdgOutputManagerV1,
-    pub maybe_wlr_dmabuf_mgr: Option<ZwlrExportDmabufManagerV1>,
     pub maybe_wlr_screencopy_mgr: Option<ZwlrScreencopyManagerV1>,
     /// oneVR: KWin streams an output over PipeWire on request, without the portal's picker
     pub maybe_kde_screencast_mgr: Option<ZkdeScreencastUnstableV1>,
@@ -115,7 +111,6 @@ impl WlxClient {
                 .bind(&qh, 4..=9, ())
                 .expect(WlSeat::interface().name),
             wl_shm: globals.bind(&qh, 1..=1, ()).expect(WlShm::interface().name),
-            maybe_wlr_dmabuf_mgr: globals.bind(&qh, 1..=1, ()).ok(),
             maybe_wlr_screencopy_mgr: globals.bind(&qh, 3..=3, ()).ok(),
             maybe_kde_screencast_mgr: globals.bind(&qh, 1..=4, ()).ok(),
             maybe_ext_image_copy_capture_mgr: globals.bind(&qh, 1..=1, ()).ok(),
@@ -454,18 +449,6 @@ impl Dispatch<ZxdgOutputManagerV1, ()> for WlxClient {
         _state: &mut Self,
         _proxy: &ZxdgOutputManagerV1,
         _event: <ZxdgOutputManagerV1 as Proxy>::Event,
-        _data: &(),
-        _conn: &Connection,
-        _qhandle: &QueueHandle<Self>,
-    ) {
-    }
-}
-
-impl Dispatch<ZwlrExportDmabufManagerV1, ()> for WlxClient {
-    fn event(
-        _state: &mut Self,
-        _proxy: &ZwlrExportDmabufManagerV1,
-        _event: <ZwlrExportDmabufManagerV1 as Proxy>::Event,
         _data: &(),
         _conn: &Connection,
         _qhandle: &QueueHandle<Self>,

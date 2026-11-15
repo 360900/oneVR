@@ -10,7 +10,7 @@ use crate::{
 	tab::{
 		Tab, TabType,
 		onevr::{
-			Page, started,
+			started,
 			ui::{self, Text, Ui},
 		},
 	},
@@ -36,10 +36,6 @@ pub struct TabOneVrRunning<T> {
 }
 
 impl<T: 'static> Tab<T> for TabOneVrRunning<T> {
-	fn get_type(&self) -> TabType {
-		TabType::OneVr(Page::Running)
-	}
-
 	fn update(&mut self, frontend: &mut Frontend<T>, _time_ms: u32, data: &mut T) -> anyhow::Result<()> {
 		let mut refresh = self.ticks.is_multiple_of(REFRESH_TICKS);
 		self.ticks += 1;
@@ -97,9 +93,8 @@ impl<T: 'static> TabOneVrRunning<T> {
 		self.shown = Some(shown);
 
 		frontend.layout.remove_children(self.parent);
-		let globals = frontend.layout.state.globals.clone();
-		let mut widgets = wgui::parser::parse_from_assets(&ui::doc_params(&globals), &mut frontend.layout, self.parent)?;
-		let mut ui = Ui::new(&mut frontend.layout, &mut widgets, &globals);
+		let mut widgets = wgui::parser::parse_from_assets(&ui::DOC_PARAMS, &mut frontend.layout, self.parent)?;
+		let mut ui = Ui::new(&mut frontend.layout, &mut widgets);
 
 		let group = ui.group(self.parent, "ONEVR.RUNNING.APPS", "@/dashboard/play.svg")?;
 		if clients.is_empty() {

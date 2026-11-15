@@ -1,4 +1,4 @@
-use std::os::fd::RawFd;
+use std::{os::fd::RawFd, sync::Arc};
 
 use drm_fourcc::{DrmFormat, DrmFourcc, DrmModifier};
 
@@ -16,7 +16,7 @@ pub enum WlxFrame {
     Dmabuf(DmabufFrame),
     MemFd(MemFdFrame),
     MemPtr(MemPtrFrame),
-    Implicit(Transform),
+    Implicit,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -69,6 +69,7 @@ pub struct DmabufFrame {
     pub num_planes: usize,
     pub planes: [FramePlane; 4],
     pub mouse: Option<MouseMeta>,
+    pub lease: Option<FrameLease>,
 }
 
 impl DmabufFrame {
@@ -179,5 +180,22 @@ pub trait DmaExporter {
     /// unknown or when there is no exporter.
     fn drm_render_node(&self) -> Option<(u32, u32)> {
         None
+    }
+}
+
+#[derive(Clone)]
+pub struct FrameLease(Arc<FrameLeaseInner>);
+
+struct FrameLeaseInner(Box<dyn Fn() + Send + Sync>);
+
+impl FrameLease {
+    pub fn new(f: impl Fn() + Send + Sync + 'static) -> Self {
+        Self(Arc::new(FrameLeaseInner(Box::new(f))))
+    }
+}
+
+impl Drop for FrameLeaseInner {
+    fn drop(&mut self) {
+        (self.0)();
     }
 }

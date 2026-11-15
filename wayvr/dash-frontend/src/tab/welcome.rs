@@ -1,9 +1,7 @@
 use std::{marker::PhantomData, rc::Rc};
 
 use wgui::{
-	assets::AssetPathRef,
 	components::button::ComponentButton,
-	globals::WguiGlobals,
 	layout::{Layout, WidgetID},
 	parser::{Fetchable, ParseDocumentParams, ParserState, TemplateParams},
 	task::Tasks,
@@ -23,15 +21,13 @@ enum Task {
 }
 
 pub struct TabWelcome<T> {
-	#[allow(dead_code)]
-	pub state: ParserState,
+	state: ParserState,
 	marker: PhantomData<T>,
 	tasks: Tasks<Task>,
 	current_page: u8,
 	id_pips: WidgetID,
 	id_content: WidgetID,
 	frontend_tasks: FrontendTasks,
-
 	state_tab: Option<ParserState>,
 }
 
@@ -48,10 +44,6 @@ const PAGES: [&str; 7] = [
 const PAGE_COUNT: u8 = PAGES.len() as u8;
 
 impl<T> Tab<T> for TabWelcome<T> {
-	fn get_type(&self) -> TabType {
-		TabType::Welcome
-	}
-
 	fn update(&mut self, frontend: &mut Frontend<T>, _time_ms: u32, _user_data: &mut T) -> anyhow::Result<()> {
 		for task in self.tasks.drain() {
 			match task {
@@ -75,17 +67,11 @@ impl<T> Tab<T> for TabWelcome<T> {
 	}
 }
 
-fn doc_params(globals: &WguiGlobals) -> ParseDocumentParams<'_> {
-	ParseDocumentParams {
-		globals: globals.clone(),
-		path: AssetPathRef::BuiltIn("gui/tab/welcome.xml"),
-		extra: Default::default(),
-	}
-}
+const DOC_PARAMS: ParseDocumentParams = ParseDocumentParams::builtin("gui/tab/welcome.xml");
 
 impl<T> TabWelcome<T> {
 	pub fn new(frontend: &mut Frontend<T>, parent_id: WidgetID, _data: &mut T) -> anyhow::Result<Self> {
-		let state = wgui::parser::parse_from_assets(&doc_params(&frontend.globals), &mut frontend.layout, parent_id)?;
+		let state = wgui::parser::parse_from_assets(&DOC_PARAMS, &mut frontend.layout, parent_id)?;
 
 		let tasks = Tasks::<Task>::new();
 
@@ -115,8 +101,6 @@ impl<T> TabWelcome<T> {
 	fn refresh_pips(&mut self, layout: &mut Layout) -> anyhow::Result<()> {
 		layout.remove_children(self.id_pips);
 
-		let globals = layout.state.globals.clone();
-
 		for i in 0..PAGE_COUNT {
 			let mut params = TemplateParams::new();
 			let is_selected = i == self.current_page;
@@ -124,7 +108,7 @@ impl<T> TabWelcome<T> {
 
 			self
 				.state
-				.instantiate_template(&doc_params(&globals), "Pip", layout, self.id_pips, params)?
+				.instantiate_template(&DOC_PARAMS, "Pip", layout, self.id_pips, params)?
 		}
 
 		Ok(())
@@ -133,14 +117,8 @@ impl<T> TabWelcome<T> {
 	fn fill_page(&mut self, layout: &mut Layout) -> anyhow::Result<()> {
 		layout.remove_children(self.id_content);
 
-		let globals = layout.state.globals.clone();
-
 		let state = wgui::parser::parse_from_assets(
-			&ParseDocumentParams {
-				globals,
-				path: AssetPathRef::BuiltIn(&format!("gui/tab/{}.xml", PAGES[usize::from(self.current_page)])),
-				extra: Default::default(),
-			},
+			&ParseDocumentParams::builtin(&format!("gui/tab/{}.xml", PAGES[usize::from(self.current_page)])),
 			layout,
 			self.id_content,
 		)?;
@@ -181,12 +159,7 @@ impl<T> TabWelcome<T> {
 mod tests {
 	use std::{rc::Rc, sync::Mutex};
 
-	use wgui::{
-		assets::{AssetPathRef, AssetProvider},
-		i18n::Locale,
-		parser::ParseDocumentParams,
-		theme::WguiTheme,
-	};
+	use wgui::{assets::AssetProvider, i18n::Locale, parser::ParseDocumentParams, theme::WguiTheme};
 	use wlx_common::{dash_interface_emulated::DashInterfaceEmulated, locale::WayVRLangProvider};
 
 	use super::PAGES;
@@ -234,11 +207,7 @@ mod tests {
 		let parent = frontend.layout.content_root_widget;
 		for page in PAGES {
 			let path = format!("gui/tab/{page}.xml");
-			let params = ParseDocumentParams {
-				globals: frontend.globals.clone(),
-				path: AssetPathRef::BuiltIn(&path),
-				extra: Default::default(),
-			};
+			let params = ParseDocumentParams::builtin(&path);
 			if let Err(e) = wgui::parser::parse_from_assets(&params, &mut frontend.layout, parent) {
 				panic!("{page}: {e:?}");
 			}

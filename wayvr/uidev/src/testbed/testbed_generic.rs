@@ -6,13 +6,13 @@ use crate::{
 };
 use glam::Vec2;
 use wgui::{
-	assets::AssetPathRef,
 	components::{
 		Component,
-		button::{ButtonClickCallback, ComponentButton},
+		button::{ButtonClickCallback, ButtonClickEvent, ComponentButton},
 		checkbox::ComponentCheckbox,
 	},
 	drawing::Color,
+	event::CallbackDataCommon,
 	font_config::WguiFontConfig,
 	globals::WguiGlobals,
 	i18n::Translation,
@@ -32,7 +32,10 @@ use wlx_common::locale::WayVRLangProvider;
 #[derive(Clone)]
 pub enum TestbedTask {
 	ShowPopup,
-	ShowContextMenu(context_menu::Position),
+	ShowContextMenu {
+		pos: context_menu::Position,
+		large: bool, /* large */
+	},
 }
 
 struct Data {
@@ -76,12 +79,8 @@ fn handle_button_click(button: Rc<ComponentButton>, label: Widget, text: &'stati
 }
 
 impl TestbedGeneric {
-	fn doc_params(globals: &'_ WguiGlobals, extra: ParseDocumentExtra) -> ParseDocumentParams<'_> {
-		ParseDocumentParams {
-			globals: globals.clone(),
-			path: AssetPathRef::BuiltIn("gui/various_widgets.xml"),
-			extra,
-		}
+	fn doc_params<'a>(extra: &'a ParseDocumentExtra) -> ParseDocumentParams<'a> {
+		ParseDocumentParams::builtin_extra("gui/various_widgets.xml", extra)
 	}
 
 	pub fn new(assets: Box<assets::Asset>) -> anyhow::Result<Self> {
@@ -122,7 +121,8 @@ impl TestbedGeneric {
 		};
 
 		let (layout, parser_state) = wgui::parser::new_layout_from_assets(
-			&TestbedGeneric::doc_params(&globals, extra),
+			&globals,
+			&TestbedGeneric::doc_params(&extra),
 			LayoutParams {
 				resize_to_parent: true,
 				theme: Rc::new(WguiTheme::default()),
@@ -143,6 +143,8 @@ impl TestbedGeneric {
 
 		let button_context_menu =
 			parser_state.fetch_component_as::<ComponentButton>("button_context_menu")?;
+		let button_context_menu_large =
+			parser_state.fetch_component_as::<ComponentButton>("button_context_menu_large")?;
 		let button_click_me = parser_state.fetch_component_as::<ComponentButton>("button_click_me")?;
 		let button = button_click_me.clone();
 		button_click_me.on_click(Rc::new(move |common, _e| {
@@ -190,13 +192,21 @@ impl TestbedGeneric {
 			})
 		});
 
-		button_context_menu.on_click({
+		let get_callback = |large: bool| {
 			let tasks = testbed.tasks.clone();
-			Rc::new(move |_common, m| {
-				tasks.push(TestbedTask::ShowContextMenu(m.boundary.into()));
-				Ok(())
-			})
-		});
+			Rc::new(
+				move |_common: &mut CallbackDataCommon, m: ButtonClickEvent| -> anyhow::Result<()> {
+					tasks.push(TestbedTask::ShowContextMenu {
+						pos: m.boundary.into(),
+						large,
+					});
+					Ok(())
+				},
+			)
+		};
+
+		button_context_menu.on_click(get_callback(false));
+		button_context_menu_large.on_click(get_callback(true));
 
 		Ok(testbed)
 	}
@@ -209,8 +219,8 @@ impl TestbedGeneric {
 	) -> anyhow::Result<()> {
 		match task {
 			TestbedTask::ShowPopup => self.show_popup(params, data)?,
-			TestbedTask::ShowContextMenu(position) => {
-				self.show_context_menu(params, data, position.clone())
+			TestbedTask::ShowContextMenu { pos, large } => {
+				self.show_context_menu(params, data, *pos, *large)
 			}
 		}
 
@@ -251,13 +261,19 @@ impl TestbedGeneric {
 		_params: &mut TestbedUpdateParams,
 		data: &mut Data,
 		position: context_menu::Position,
+		large: bool,
 	) {
 		data.context_menu.open(context_menu::OpenParams {
 			on_custom_attribs: Some(Rc::new(move |custom_attribs| {
 				log::info!("custom attribs {:?}", custom_attribs.pairs);
 			})),
 			blueprint: context_menu::Blueprint::Template {
-				template_name: "my_context_menu".into(),
+				template_name: (if large {
+					"my_context_menu_large"
+				} else {
+					"my_context_menu"
+				})
+				.into(),
 				template_params: Default::default(),
 			},
 			position,

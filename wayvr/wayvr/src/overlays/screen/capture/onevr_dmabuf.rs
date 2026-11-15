@@ -9,34 +9,31 @@
 
 use std::{sync::Arc, time::Duration, time::Instant};
 
-use wgui::gfx::{CommandBufferUsage, Image, ImageUsage};
+use wgui::gfx::{CommandBufferUsage, Image, ImageUsage, QueueType};
 use wlx_capture::frame::DmabufFrame;
 
-use super::{CAPTURE_QUEUE_MUTEX, WlxCaptureIn};
+use super::{CAPTURE_QUEUE_MUTEX, CAPTURE_XFER_POOL, WlxCaptureIn};
 use crate::graphics::dmabuf::WGfxDmabuf;
 
 /// Longest wait for the compositor to finish drawing a frame
 const WRITE_TIMEOUT: Duration = Duration::from_millis(100);
 
-/// The frame as an image the compositor can't change. When the driver can't copy from this
-/// format and modifier, the frame is used in place, as before.
-pub(super) fn frame_image(me: &WlxCaptureIn, frame: DmabufFrame) -> anyhow::Result<Arc<Image>> {
-    wait_for_writes(me, &frame);
+/// The frame as an image the compositor can't change, and whether it is a copy. When the driver
+/// can't copy from this format and modifier, the frame is used in place, as before.
+pub(super) fn frame_image(
+    me: &WlxCaptureIn,
+    frame: &DmabufFrame,
+) -> anyhow::Result<(Arc<Image>, bool)> {
+    wait_for_writes(me, frame);
     // the fds stay owned by the capture; the import duplicates them
-    let in_place = DmabufFrame {
-        format: frame.format,
-        num_planes: frame.num_planes,
-        planes: frame.planes,
-        mouse: frame.mouse.clone(),
-    };
     match me
         .gfx
         .dmabuf_texture_with_usage(frame, ImageUsage::SAMPLED | ImageUsage::TRANSFER_SRC)
     {
-        Ok(imported) => copy(me, &imported),
+        Ok(imported) => Ok((copy(me, &imported)?, true)),
         Err(e) => {
             log::debug!("{}: DMA-buf frame used in place: {e:?}", me.name);
-            me.gfx.dmabuf_texture(in_place)
+            Ok((me.gfx.dmabuf_texture(frame)?, false))
         }
     }
 }
@@ -49,9 +46,14 @@ fn copy(me: &WlxCaptureIn, imported: &Arc<Image>) -> anyhow::Result<Arc<Image>> 
         imported.format(),
         ImageUsage::TRANSFER_DST | ImageUsage::TRANSFER_SRC | ImageUsage::SAMPLED,
     )?;
-    let mut cmd = me
-        .gfx
-        .create_capture_command_buffer(CommandBufferUsage::OneTimeSubmit)?;
+    let mut cmd = CAPTURE_XFER_POOL.with(|cell| {
+        if cell.get().is_none() {
+            let _ = cell.set(me.gfx.create_command_pool(QueueType::Transfer)?);
+        }
+        cell.get()
+            .unwrap()
+            .create_command_buffer(CommandBufferUsage::OneTimeSubmit)
+    })?;
     cmd.copy_image(imported, [0, 0, 0], &image, [0, 0, 0], None)?;
     // waits until the copy is done, so the buffer goes back only afterwards
     let _guard = CAPTURE_QUEUE_MUTEX.lock().unwrap(); // mutex poison only

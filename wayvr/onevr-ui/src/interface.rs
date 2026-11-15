@@ -192,6 +192,10 @@ impl DashInterface<()> for UiInterface {
 			.collect()
 	}
 
+	fn get_version_string(&self, _: &mut ()) -> String {
+		format!("{} v. {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"))
+	}
+
 	fn onevr_desktop(&self) -> bool {
 		true
 	}

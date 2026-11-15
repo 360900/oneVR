@@ -8,7 +8,6 @@ use onevr_common::{
 };
 use serde_json::{Value, json};
 use wgui::{
-	assets::AssetPathRef,
 	components::{slider::ComponentSlider, tabs::ComponentTabs},
 	i18n::Translation,
 	layout::WidgetID,
@@ -20,11 +19,8 @@ use wgui::{
 use crate::{
 	frontend::{Frontend, FrontendTask},
 	tab::{
-		Tab, TabType,
-		onevr::{
-			Page,
-			ui::{self, Text, Ui},
-		},
+		Tab,
+		onevr::ui::{self, Text, Ui},
 	},
 };
 
@@ -615,10 +611,6 @@ pub struct TabOneVrHeadset<T> {
 }
 
 impl<T: 'static> Tab<T> for TabOneVrHeadset<T> {
-	fn get_type(&self) -> TabType {
-		TabType::OneVr(Page::Headset)
-	}
-
 	fn update(&mut self, frontend: &mut Frontend<T>, _time_ms: u32, data: &mut T) -> anyhow::Result<()> {
 		for task in self.tasks.drain() {
 			match task {
@@ -695,13 +687,8 @@ fn parse_action(name: &str) -> Option<(&'static str, Value)> {
 
 impl<T: 'static> TabOneVrHeadset<T> {
 	pub fn new(frontend: &mut Frontend<T>, parent: WidgetID, _data: &mut T) -> anyhow::Result<Self> {
-		let globals = frontend.layout.state.globals.clone();
 		let state = wgui::parser::parse_from_assets(
-			&ParseDocumentParams {
-				globals,
-				path: AssetPathRef::BuiltIn("gui/onevr/headset.xml"),
-				extra: Default::default(),
-			},
+			&ParseDocumentParams::builtin("gui/onevr/headset.xml"),
 			&mut frontend.layout,
 			parent,
 		)?;
@@ -772,10 +759,8 @@ impl<T: 'static> TabOneVrHeadset<T> {
 		let desktop = frontend.interface.onevr_desktop();
 
 		frontend.layout.remove_children(self.id_content);
-		let globals = frontend.layout.state.globals.clone();
-		let mut widgets =
-			wgui::parser::parse_from_assets(&ui::doc_params(&globals), &mut frontend.layout, self.id_content)?;
-		let mut ui = Ui::new(&mut frontend.layout, &mut widgets, &globals);
+		let mut widgets = wgui::parser::parse_from_assets(&ui::DOC_PARAMS, &mut frontend.layout, self.id_content)?;
+		let mut ui = Ui::new(&mut frontend.layout, &mut widgets);
 		let parent = self.id_content;
 		self.sliders.clear();
 

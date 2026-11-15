@@ -67,10 +67,11 @@ pub struct Frontend<T> {
 	// single-threaded async runtime executor
 	pub executor: AsyncExecutor,
 
-	#[allow(dead_code)]
 	state: ParserState,
 
 	current_tab: Option<Box<dyn Tab<T>>>,
+	// oneVR: the type of current_tab, see onevr_page
+	current_tab_type: Option<TabType>,
 	side_buttons: Vec<(TabType, Rc<ComponentButton>)>,
 
 	pub tasks: FrontendTasks,
@@ -154,11 +155,8 @@ impl<T: 'static> Frontend<T> {
 		)?;
 
 		let (layout, state) = wgui::parser::new_layout_from_assets(
-			&ParseDocumentParams {
-				globals: globals.clone(),
-				path: AssetPathRef::BuiltIn("gui/dashboard.xml"),
-				extra: Default::default(),
-			},
+			&globals,
+			&ParseDocumentParams::builtin("gui/dashboard.xml"),
 			LayoutParams {
 				resize_to_parent: true,
 				theme: params.theme,
@@ -192,6 +190,7 @@ impl<T: 'static> Frontend<T> {
 			layout,
 			state,
 			current_tab: None,
+			current_tab_type: None,
 			side_buttons: Vec::with_capacity(TabType::COUNT),
 			globals,
 			tasks,
@@ -293,7 +292,6 @@ impl<T: 'static> Frontend<T> {
 			self.popup_dialog_box.clone(),
 			self.tasks.clone(),
 			views::dialog_box::Params {
-				globals: self.globals.clone(),
 				message: Translation::from_translation_key(translation_key),
 				entries: views::dialog_box::get_entries_yes_no(),
 				on_action_click: Box::new(move |action| {
@@ -516,6 +514,7 @@ impl<T: 'static> Frontend<T> {
 		};
 
 		self.current_tab = Some(tab);
+		self.current_tab_type = Some(tab_type);
 
 		let mut common = CallbackDataCommon {
 			state: &self.layout.state,

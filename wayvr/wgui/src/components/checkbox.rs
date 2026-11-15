@@ -31,8 +31,10 @@ use crate::{
 	},
 };
 
-pub struct Params {
+pub struct Params<'a> {
 	pub text: Translation,
+	pub sprite_src: Option<AssetPathRef<'a>>,
+	pub sprite_color: Option<WguiColor>,
 	pub style: taffy::Style,
 	pub color_checked: Option<WguiColor>,
 	pub box_size: f32,
@@ -42,10 +44,12 @@ pub struct Params {
 	pub tooltip: Option<tooltip::TooltipInfo>,
 }
 
-impl Default for Params {
+impl Default for Params<'_> {
 	fn default() -> Self {
 		Self {
 			text: Translation::from_raw_text(""),
+			sprite_src: None,
+			sprite_color: None,
 			style: Default::default(),
 			color_checked: None,
 			box_size: 20.0,
@@ -344,19 +348,21 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 	style.flex_wrap = taffy::FlexWrap::NoWrap;
 	style.align_items = Some(AlignItems::CENTER);
 
+	const MARGIN: f32 = 4.0;
+
 	// make checkbox interaction box larger by setting padding and negative margin
 	style.padding = taffy::Rect {
-		left: length(4.0_f32),
-		right: length(8.0_f32),
-		top: length(4.0_f32),
-		bottom: length(4.0_f32),
+		left: length(MARGIN),
+		right: length(MARGIN),
+		top: length(MARGIN),
+		bottom: length(MARGIN),
 	};
 
 	style.margin = taffy::Rect {
-		left: length(-4.0_f32),
-		right: length(-8.0_f32),
-		top: length(-4.0_f32),
-		bottom: length(-4.0_f32),
+		left: length(-MARGIN),
+		right: length(-MARGIN),
+		top: length(-MARGIN),
+		bottom: length(-MARGIN),
 	};
 	//style.align_self = Some(taffy::AlignSelf::Start); // do not stretch self to the parent
 	style.gap = length(8.0_f32);
@@ -443,6 +449,25 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 		check.id
 	};
 
+	// sprite
+	if let Some(sprite_src) = params.sprite_src {
+		ess.layout.add_child(
+			id_container,
+			WidgetSprite::create(WidgetSpriteParams {
+				color: params.sprite_color,
+				glyph_data: Some(CustomGlyphData::from_assets(&ess.layout.state.globals, sprite_src)?),
+				..Default::default()
+			}),
+			taffy::Style {
+				min_size: taffy::Size {
+					width: length(20.0_f32),
+					height: length(20.0_f32),
+				},
+				..Default::default()
+			},
+		)?;
+	}
+
 	let widget_label = WidgetLabel::create(
 		&mut ess.layout.state,
 		WidgetLabelParams {
@@ -455,7 +480,8 @@ pub fn construct(ess: &mut ConstructEssentials, params: Params) -> anyhow::Resul
 			..Default::default()
 		},
 	);
-	let (label, _node_label) = ess.layout.add_child(id_container, widget_label, Default::default())?;
+
+	let (label, _) = ess.layout.add_child(id_container, widget_label, Default::default())?;
 
 	let data = Rc::new(Data {
 		id_container,

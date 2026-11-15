@@ -237,7 +237,6 @@ mod tests {
 			library::mount_launch_popup(
 				&frontend.tasks,
 				popup.clone(),
-				frontend.globals.clone(),
 				"How should Game start?".to_owned(),
 				vec![("0".to_owned(), "VR".to_owned()), ("7".to_owned(), long.clone())],
 				move |key| picked.borrow_mut().push(key),
@@ -365,6 +364,9 @@ mod tests {
 		}
 		fn enumerate_vulkan_devices(&mut self, data: &mut ()) -> anyhow::Result<Vec<String>> {
 			self.0.enumerate_vulkan_devices(data)
+		}
+		fn get_version_string(&self, data: &mut ()) -> String {
+			self.0.get_version_string(data)
 		}
 	}
 
