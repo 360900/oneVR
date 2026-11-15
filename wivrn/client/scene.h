@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include "battery.h"
 #include "render/image_loader.h"
 #include "render/scene_loader.h"
 #include "render/scene_renderer.h"
@@ -220,6 +221,7 @@ public:
 	virtual void on_xr_event(const xr::event &);
 	// oneVR: called instead of render(), about every 250 ms, while the XR session is not running
 	virtual void onevr_idle() {}
+	virtual void on_battery_update(battery::device device, const battery::battery_status &);
 
 	virtual bool on_input_key_down(uint8_t key_code);
 	virtual bool on_input_key_up(uint8_t key_code);

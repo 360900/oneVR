@@ -102,6 +102,8 @@ int create_listen_socket()
 	sockaddr_un addr{};
 
 	auto sock_file = socket_path();
+	if (sock_file.native().size() >= std::size(addr.sun_path))
+		throw std::runtime_error("Socket file name too long");
 
 	addr.sun_family = AF_UNIX;
 	// oneVR: a longer path would overflow sun_path

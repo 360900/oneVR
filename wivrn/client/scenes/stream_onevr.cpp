@@ -570,7 +570,7 @@ void scenes::stream::onevr_stats(XrTime now)
 		return;
 	onevr_last_stats = now;
 
-	const auto battery = get_battery_status();
+	const auto head_battery = application::get_battery_monitor().get_battery_status(battery::device::head);
 	onevr::headset_stats stats{
 	        .cpu_time_ms = compact_cpu_time * 1000,
 	        .gpu_time_ms = compact_gpu_time * 1000,
@@ -579,8 +579,8 @@ void scenes::stream::onevr_stats(XrTime now)
 	        // the runtime's period: the last frame interval doubles after a missed frame
 	        .display_hz = display_time_period ? 1e9f / float(display_time_period) : 0.f,
 	        .motion_to_photon_ms = float(tracking_control.lock()->motions_to_photons) / 1e6f,
-	        .battery = battery.charge,
-	        .charging = battery.charging,
+	        .battery = head_battery.charge,
+	        .charging = head_battery.charging,
 	};
 
 	// Average the frames measured since the last report

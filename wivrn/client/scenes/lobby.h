@@ -310,6 +310,7 @@ public:
 	void on_focused() override;
 	void on_xr_event(const xr::event &) override;
 	void onevr_idle() override; // oneVR: see lobby_onevr.cpp
+	void on_battery_update(battery::device device, const battery::battery_status &) override;
 
 	static meta & get_meta_scene();
 };
