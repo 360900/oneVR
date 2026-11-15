@@ -16,7 +16,7 @@ Effort: S under a day, M a few days, L a week or more. "WiVRn" notes describe wh
    - PSVR2 Sense: `XR_MNDX_psvr2_interaction` is a preview in Monado main only, WiVRn builds without it; works as Touch today
    - Cosmos registered device type, serials and render model names unverified; Focus 3 tracking system may be `vive_eyes` like the Cosmos; `vive_tracker_*` default bindings still ignored (trackers: 21)
    - gamepad has no tracked device or binding variant; untested on a headset
-   - Frame: model numbers and serials are guesses (upstream PR 464 reports `Roy_Left`/`Roy_Right`, found in no SteamVR file); its 30° wrist rotation isn't taken: SteamVR 2.12 changed the wrist to match the OpenXR spec, which the skeleton follows, and one report calls the new one 30° off; needs a Frame test
+   - Frame: serials are guesses, model names (`Roy_Left`/`Roy_Right`, from upstream PR 464) found in no SteamVR file; the 30° wrist turn on SteamVR's runtime is from the same PR: SteamVR 2.12 changed the wrist to match the OpenXR spec and one report calls the new one 30° off; needs a Frame test on both runtimes
 3. Frame timing (S)
    - `XR_META_performance_metrics` unused (no Linux runtime has it)
 4. Haptics (S)

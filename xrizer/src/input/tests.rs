@@ -4846,12 +4846,13 @@ fn skeletal_summary_from_hand_tracking() {
     fakexr::set_hand_tracked(f.raw_session(), LeftHand, None);
     assert_eq!(curls(&mut f), [0.0; 5]);
 
-    // Joints derived from the Touch's inputs are estimated too, unlike the Frame's.
+    // Joints derived from the Touch's inputs are estimated too, unlike the Frame's, whose thumb
+    // still follows the inputs like the Index's (see force_estimated_thumb).
     f.set_interaction_profile::<OculusTouch>(LeftHand);
     fakexr::set_hand_tracked(f.raw_session(), LeftHand, Some(Source::CONTROLLER));
     assert_eq!(curls(&mut f), [0.0; 5]);
     f.set_interaction_profile::<FrameController>(LeftHand);
-    assert_eq!(curls(&mut f), [1.0; 5]);
+    assert_eq!(curls(&mut f), [0.0, 1.0, 1.0, 1.0, 1.0]);
 }
 
 #[test]

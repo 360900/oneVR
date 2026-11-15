@@ -93,6 +93,8 @@ pub struct OpenXrData<C: Compositor> {
     logged_errors: Mutex<HashSet<(&'static str, i32)>>,
     /// Whether the runtime tells us when the user puts on or takes off the headset.
     pub supports_user_presence: bool,
+    /// Whether the runtime is SteamVR's, for workarounds of its bugs.
+    pub steamvr_runtime: bool,
     user_present: AtomicBool,
     /// Since when the user hasn't been present, for [STANDBY_TIMEOUT].
     absent_since: parking_lot::Mutex<Option<Instant>>,
@@ -401,6 +403,9 @@ impl<C: Compositor> OpenXrData<C> {
             .map_err(InitError::SystemCreationFailed)?;
         let supports_user_presence =
             exts.ext_user_presence && supports_user_presence(&instance, system_id);
+        let steamvr_runtime = instance
+            .properties()
+            .is_ok_and(|p| p.runtime_name.starts_with("SteamVR"));
 
         let probed_profiles =
             crate::input::probe_interaction_profiles(&instance, system_id, &exts, application_type);
@@ -442,6 +447,7 @@ impl<C: Compositor> OpenXrData<C> {
             max_layer_count,
             logged_errors: Mutex::default(),
             supports_user_presence,
+            steamvr_runtime,
             user_present: true.into(),
             absent_since: parking_lot::Mutex::new(None),
             standby: false.into(),

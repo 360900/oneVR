@@ -1866,8 +1866,8 @@ mod tests {
                     let bones = skeletons.bones(f, hand, Space::Model, range);
                     assert_bones_eq(&bones, &model, &format!("{what}, model space"));
                 }
-                // So do the curls, except for the Index's thumb (see force_estimated_thumb). The
-                // fist barely bends the thumb.
+                // So do the curls, except for the Index and Frame thumbs (see
+                // force_estimated_thumb). The fist barely bends the thumb.
                 let curls = skeletons.curls(f, hand);
                 match pose_name {
                     "fist" => assert!(curls[1..].iter().all(|c| *c > 0.8), "{what}: {curls:?}"),
@@ -1888,6 +1888,41 @@ mod tests {
         let level = vr::EVRSkeletalTrackingLevel::Partial;
         check_tracked_bones::<Knuckles>(&mut f, &skeletons, source, level);
         check_tracked_bones::<FrameController>(&mut f, &skeletons, source, level);
+    }
+
+    /// The wrist of SteamVR's Frame controller skeletons is turned 30° around its Y axis, only
+    /// with SteamVR's runtime.
+    #[test]
+    fn steamvr_frame_wrist_is_turned() {
+        use crate::input::profiles::frame_controller::FrameController;
+        use vr::{EVRSkeletalMotionRange as Range, EVRSkeletalTransformSpace as Space};
+        let wrists = |runtime: &'static std::ffi::CStr| {
+            fakexr::set_runtime_name(runtime);
+            let (mut f, skeletons) = Skeletons::new();
+            [Hand::Left, Hand::Right].map(|hand| {
+                f.set_interaction_profile::<FrameController>(user_path(hand));
+                let source = Some(xr::HandTrackingDataSourceEXT::CONTROLLER);
+                fakexr::set_hand_tracked(f.raw_session(), user_path(hand), source);
+                let pose = match hand {
+                    Hand::Left => &generated::left_hand::OPENHAND,
+                    Hand::Right => &generated::right_hand::OPENHAND,
+                };
+                place_joints::<FrameController>(&f, hand, pose);
+                skeletons.frame(&mut f);
+                let bones = skeletons.bones(&f, hand, Space::Model, Range::WithoutController);
+                bone_transform_to_glam(bones[Wrist as usize]).1.normalize()
+            })
+        };
+        let plain = wrists(c"Monado(XRT) by Collabora et al");
+        let steamvr = wrists(c"SteamVR/OpenXR");
+        for (hand, (plain, steamvr)) in [Hand::Left, Hand::Right]
+            .iter()
+            .zip(plain.iter().zip(steamvr))
+        {
+            let angle = plain.angle_between(steamvr).to_degrees();
+            assert!((angle - 30.0).abs() < 0.01, "{hand:?}: {angle}");
+        }
+        fakexr::set_runtime_name(c"fakexr");
     }
 
     #[test]

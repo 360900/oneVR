@@ -76,8 +76,8 @@ impl InteractionProfile for FrameController {
     fn properties() -> &'static ProfileProperties {
         static DEVICE_PROPERTIES: ProfileProperties = ProfileProperties {
             model: Property::PerHand {
-                left: c"Frame Controller Left",
-                right: c"Frame Controller Right",
+                left: c"Roy_Left",
+                right: c"Roy_Right",
             },
             openvr_controller_type: c"frame_controller",
             render_model_name: Property::PerHand {

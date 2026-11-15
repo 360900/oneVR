@@ -90,7 +90,7 @@ Status: `pending` | `merged` | `superseded-by-<n>` | `blocked` | `dropped` | `re
 | PR | Title | Status | Notes |
 |----|-------|--------|-------|
 | 463 | Upgrade Dependencies | merged | glam 0.34, lz4_flex 0.14, miniquad 0.4.11, bindgen 0.72; only these updated in the lockfile |
-| 464 | input: Frame controller support | merged | draft, supersedes 440 on top of 338; grip offset and bumper, view and menu touches ported by hand in `114f58b`, with the pose components of SteamVR's render models; its wrist rotation hack for SteamVR's OpenXR runtime and its model names not taken |
+| 464 | input: Frame controller support | merged | draft, supersedes 440 on top of 338; grip offset and bumper, view and menu touches ported by hand in `114f58b`, with the pose components of SteamVR's render models; head `6fbf90e` (2026-11-14): thumb from the inputs in `7efaf5f`, wrist hack in `0b748ff`, on SteamVR's runtime only, model names in `b45c76a`; custom bindings for controllers without defaults already in the fork |
 
 ## Upstream issues (2026-11-10)
 
