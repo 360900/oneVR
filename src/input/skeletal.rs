@@ -1866,8 +1866,8 @@ mod tests {
                     let bones = skeletons.bones(f, hand, Space::Model, range);
                     assert_bones_eq(&bones, &model, &format!("{what}, model space"));
                 }
-                // So do the curls, except for the Index's thumb (see force_estimated_thumb). The
-                // fist barely bends the thumb.
+                // So do the curls, except for the Index and Frame thumbs (see
+                // force_estimated_thumb). The fist barely bends the thumb.
                 let curls = skeletons.curls(f, hand);
                 match pose_name {
                     "fist" => assert!(curls[1..].iter().all(|c| *c > 0.8), "{what}: {curls:?}"),

@@ -17,6 +17,7 @@ use openxr::sys::Handle;
 
 use crate::input::BoundPoseType;
 use crate::input::action_manifest::ControllerType;
+use crate::input::profiles::frame_controller::FrameController;
 use crate::input::profiles::knuckles::Knuckles;
 use crate::input::profiles::oculus_touch::OculusTouch;
 #[cfg(feature = "monado")]
@@ -175,7 +176,8 @@ impl ProfileData {
             headset: P::properties(),
             get_hand_offset: P::offset_grip_pose,
             get_pose_transformation: P::pose_transformation,
-            force_estimated_thumb: TypeId::of::<P>() == TypeId::of::<Knuckles>(),
+            force_estimated_thumb: TypeId::of::<P>() == TypeId::of::<Knuckles>()
+                || TypeId::of::<P>() == TypeId::of::<FrameController>(),
             skeletal_tracking_level: P::SKELETAL_TRACKING_LEVEL,
             senses_fingers: P::SENSES_FINGERS,
             legacy_trigger_click: P::LEGACY_TRIGGER_CLICK,
