@@ -2,6 +2,7 @@ use crate::{
     clientcore::{Injected, Injector},
     compositor::{Compositor, is_usable_swapchain, is_valid_swapchain_info},
     graphics_backends::{GraphicsBackend, SupportedBackend, supported_apis_enum},
+    keyboard::{self, Keyboard},
     openxr_data::{GraphicalSession, OpenXrData, Session, SessionData, SessionGuard},
     system::{QueuedEvent, System},
 };
@@ -37,9 +38,7 @@ pub struct OverlayMan {
     overlays: RwLock<SlotMap<OverlayKey, Overlay>>,
     key_to_overlay: RwLock<HashMap<CString, OverlayKey>>,
     skybox: RwLock<Vec<OverlayKey>>,
-    /// Text returned by GetKeyboardText. There is no keyboard, so this is whatever the app
-    /// passed in as the existing text.
-    keyboard_text: Mutex<CString>,
+    keyboard: Keyboard,
 }
 
 #[derive(derive_more::Deref)]
@@ -55,7 +54,7 @@ impl OverlayMan {
             overlays: Default::default(),
             key_to_overlay: Default::default(),
             skybox: Default::default(),
-            keyboard_text: Default::default(),
+            keyboard: Keyboard::default(),
         }
     }
 
@@ -536,61 +535,87 @@ impl OverlayMan {
         Some(key.data().as_ffi())
     }
 
-    /// We have no keyboard, so report it as done and closed immediately with the existing text
-    /// unchanged. This lets games that wait for the keyboard continue instead of hanging.
+    /// Shows the keyboard for an overlay, or for the scene app without one.
+    #[allow(clippy::too_many_arguments)]
     fn show_keyboard(
         &self,
         overlay: Option<vr::VROverlayHandle_t>,
+        input_mode: vr::EGamepadTextInputMode,
+        line_mode: vr::EGamepadTextInputLineMode,
         flags: u32,
+        description: *const c_char,
+        char_max: u32,
         existing_text: *const c_char,
         user_value: u64,
     ) -> vr::EVROverlayError {
-        let text = if existing_text.is_null() {
-            CString::default()
-        } else {
-            unsafe { CStr::from_ptr(existing_text) }.to_owned()
-        };
-        debug!("no keyboard available, reporting done with existing text {text:?}");
-        *self.keyboard_text.lock().unwrap() = text;
-
-        let done = vr::VREvent_t {
-            eventType: vr::EVREventType::KeyboardDone.0,
-            trackedDeviceIndex: vr::k_unTrackedDeviceIndex_Hmd,
-            eventAgeSeconds: 0.0,
-            data: vr::VREvent_Data_t {
-                keyboard: vr::VREvent_Keyboard_t {
-                    cNewInput: [0; 8],
-                    uUserValue: user_value,
-                    overlayHandle: overlay.unwrap_or(0),
-                },
-            },
-        };
-
-        let closed = vr::VREvent_t {
-            eventType: vr::EVREventType::KeyboardClosed.0,
-            ..done
-        };
-        // Closed follows whatever closed the keyboard; there's no Done key to press if it's hidden.
-        let events = if flags & vr::EKeyboardFlags::HideDoneKey.0 != 0 {
-            &[closed][..]
-        } else {
-            &[done, closed]
-        };
-
-        if let Some(handle) = overlay {
-            let mut overlays = self.overlays.write().unwrap();
-            let Some(overlay) = overlays.get_mut(OverlayKey::from(KeyData::from_ffi(handle)))
-            else {
-                return vr::EVROverlayError::UnknownOverlay;
-            };
-            overlay
-                .events
-                .extend(events.iter().copied().map(QueuedEvent::new));
-        } else {
-            let system = self.system.force(|i| System::new(self.openxr.clone(), i));
-            events.iter().for_each(|e| system.push_event(*e));
+        if let Some(handle) = overlay
+            && !self
+                .overlays
+                .read()
+                .unwrap()
+                .contains_key(OverlayKey::from(KeyData::from_ffi(handle)))
+        {
+            return vr::EVROverlayError::UnknownOverlay;
         }
-        vr::EVROverlayError::None
+        let string = |text: *const c_char| {
+            if text.is_null() {
+                String::new()
+            } else {
+                unsafe { CStr::from_ptr(text) }
+                    .to_string_lossy()
+                    .into_owned()
+            }
+        };
+        let request = keyboard::protocol::Request {
+            description: string(description),
+            text: string(existing_text),
+            max_chars: char_max,
+            password: input_mode == vr::EGamepadTextInputMode::Password,
+            multiline: line_mode == vr::EGamepadTextInputLineMode::MultipleLines,
+            minimal: flags & vr::EKeyboardFlags::Minimal.0 != 0,
+            done_key: flags & vr::EKeyboardFlags::HideDoneKey.0 == 0,
+        };
+        debug!("showing keyboard for {overlay:?}: {request:?}");
+        // A keyboard that closed since the app last polled is gone.
+        self.pump_keyboard();
+        match self.keyboard.show(overlay, request, user_value) {
+            Ok(events) => {
+                self.queue_keyboard_events(events);
+                vr::EVROverlayError::None
+            }
+            Err(e) => e,
+        }
+    }
+
+    /// Queues what the keyboard reported, for the app to poll.
+    pub fn pump_keyboard(&self) {
+        self.queue_keyboard_events(self.keyboard.pump());
+    }
+
+    fn queue_keyboard_events(&self, events: Vec<(keyboard::Target, vr::VREvent_t)>) {
+        if events.is_empty() {
+            return;
+        }
+        let mut system = None;
+        let mut overlays = None;
+        for (target, event) in events {
+            match target {
+                keyboard::Target::Global => system
+                    .get_or_insert_with(|| {
+                        self.system.force(|i| System::new(self.openxr.clone(), i))
+                    })
+                    .push_event(event),
+                keyboard::Target::Overlay(handle) => {
+                    let overlays = overlays.get_or_insert_with(|| self.overlays.write().unwrap());
+                    // An overlay destroyed while its keyboard was up gets nothing.
+                    if let Some(overlay) =
+                        overlays.get_mut(OverlayKey::from(KeyData::from_ffi(handle)))
+                    {
+                        overlay.events.push_back(QueuedEvent::new(event));
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1776,9 +1801,13 @@ impl vr::IVROverlay028_Interface for OverlayMan {
     ) {
         crate::warn_unimplemented!("SetKeyboardTransformAbsolute");
     }
-    fn HideKeyboard(&self) {}
+    fn HideKeyboard(&self) {
+        self.keyboard.hide();
+    }
     fn GetKeyboardText(&self, buf: *mut c_char, size: u32) -> u32 {
-        let text = self.keyboard_text.lock().unwrap();
+        // The text as of the keyboard's last report, as apps read it while it's up.
+        self.pump_keyboard();
+        let text = self.keyboard.text();
         let data = text.as_bytes_with_nul();
         if !buf.is_null() && size > 0 {
             let len = data.len().min(size as usize);
@@ -1792,27 +1821,45 @@ impl vr::IVROverlay028_Interface for OverlayMan {
     fn ShowKeyboardForOverlay(
         &self,
         handle: vr::VROverlayHandle_t,
-        _: vr::EGamepadTextInputMode,
-        _: vr::EGamepadTextInputLineMode,
+        input_mode: vr::EGamepadTextInputMode,
+        line_mode: vr::EGamepadTextInputLineMode,
         flags: u32,
-        _: *const c_char,
-        _: u32,
+        description: *const c_char,
+        char_max: u32,
         existing_text: *const c_char,
         user_value: u64,
     ) -> vr::EVROverlayError {
-        self.show_keyboard(Some(handle), flags, existing_text, user_value)
+        self.show_keyboard(
+            Some(handle),
+            input_mode,
+            line_mode,
+            flags,
+            description,
+            char_max,
+            existing_text,
+            user_value,
+        )
     }
     fn ShowKeyboard(
         &self,
-        _: vr::EGamepadTextInputMode,
-        _: vr::EGamepadTextInputLineMode,
+        input_mode: vr::EGamepadTextInputMode,
+        line_mode: vr::EGamepadTextInputLineMode,
         flags: u32,
-        _: *const c_char,
-        _: u32,
+        description: *const c_char,
+        char_max: u32,
         existing_text: *const c_char,
         user_value: u64,
     ) -> vr::EVROverlayError {
-        self.show_keyboard(None, flags, existing_text, user_value)
+        self.show_keyboard(
+            None,
+            input_mode,
+            line_mode,
+            flags,
+            description,
+            char_max,
+            existing_text,
+            user_value,
+        )
     }
     fn GetPrimaryDashboardDevice(&self) -> vr::TrackedDeviceIndex_t {
         crate::warn_unimplemented!("GetPrimaryDashboardDevice");
@@ -2050,6 +2097,7 @@ impl vr::IVROverlay028_Interface for OverlayMan {
             return false;
         }
         self.upload_pending_raw();
+        self.pump_keyboard();
         let mut overlays = self.overlays.write().unwrap();
         let Some(queued) = overlays
             .get_mut(OverlayKey::from(KeyData::from_ffi(handle)))
@@ -3378,8 +3426,14 @@ mod tests {
             ),
             vr::EVROverlayError::None
         );
-        keyboard_event(vr::EVREventType::KeyboardDone, 1234)(&poll().unwrap());
-        keyboard_event(vr::EVREventType::KeyboardClosed, 1234)(&poll().unwrap());
+        for ty in [
+            vr::EVREventType::KeyboardOpened_Global,
+            vr::EVREventType::KeyboardDone,
+            vr::EVREventType::KeyboardClosed,
+            vr::EVREventType::KeyboardClosed_Global,
+        ] {
+            keyboard_event(ty, 1234)(&poll().unwrap());
+        }
         assert!(poll().is_none());
 
         let mut buf = [0 as c_char; 32];
@@ -4192,6 +4246,193 @@ mod tests {
             handle,
             (&raw mut event).cast()
         ));
+    }
+
+    /// What a keyboard was asked, its replies and how it's hidden.
+    type Shown = (
+        keyboard::protocol::Request,
+        std::sync::mpsc::Sender<keyboard::protocol::Reply>,
+        Arc<keyboard::Hide>,
+    );
+
+    thread_local! {
+        /// The keyboard a test showed.
+        static SHOWN: std::cell::RefCell<Option<Shown>> = const { std::cell::RefCell::new(None) };
+    }
+
+    /// A keyboard the test types on, see [SHOWN].
+    fn scripted_keyboard(
+        request: keyboard::protocol::Request,
+        replies: std::sync::mpsc::Sender<keyboard::protocol::Reply>,
+        hide: Arc<keyboard::Hide>,
+    ) {
+        SHOWN.with(|shown| *shown.borrow_mut() = Some((request, replies, hide)));
+    }
+
+    fn keyboard_input(event: &vr::VREvent_t) -> &str {
+        assert_eq!(event.eventType, vr::EVREventType::KeyboardCharInput.0);
+        let input = unsafe { &event.data.keyboard.cNewInput };
+        let len = input.iter().position(|&c| c == 0).unwrap();
+        std::str::from_utf8(unsafe { &*(&input[..len] as *const [c_char] as *const [u8]) }).unwrap()
+    }
+
+    #[test]
+    fn keyboard_streams_keys_and_text() {
+        use keyboard::protocol::{Reply, Request};
+        use vr::IVRSystem026_Interface;
+        let mut man = overlay_man();
+        man.keyboard = Keyboard::new(scripted_keyboard);
+        let system = man.system.force(|i| System::new(man.openxr.clone(), i));
+        let size = std::mem::size_of::<vr::VREvent_t>() as u32;
+        let poll = || {
+            // The app's poll pumps the keyboard through the overlay interface.
+            man.pump_keyboard();
+            let mut event: vr::VREvent_t = unsafe { std::mem::zeroed() };
+            system.PollNextEvent(&mut event, size).then_some(event)
+        };
+        while poll().is_some() {}
+        let text = || {
+            let mut buf = [0 as c_char; 64];
+            man.GetKeyboardText(buf.as_mut_ptr(), buf.len() as u32);
+            unsafe { CStr::from_ptr(buf.as_ptr()) }.to_owned()
+        };
+
+        assert_eq!(
+            man.ShowKeyboard(
+                vr::EGamepadTextInputMode::Password,
+                vr::EGamepadTextInputLineMode::MultipleLines,
+                vr::EKeyboardFlags::Minimal.0,
+                c"Name".as_ptr(),
+                20,
+                c"ab".as_ptr(),
+                9,
+            ),
+            vr::EVROverlayError::None
+        );
+        let (request, replies, hide) = SHOWN.with(|s| s.borrow_mut().take()).unwrap();
+        assert_eq!(
+            request,
+            Request {
+                description: "Name".into(),
+                text: "ab".into(),
+                max_chars: 20,
+                password: true,
+                multiline: true,
+                minimal: true,
+                done_key: true,
+            }
+        );
+        keyboard_event(vr::EVREventType::KeyboardOpened_Global, 9)(&poll().unwrap());
+        assert!(poll().is_none());
+        assert_eq!(text(), c"ab");
+
+        // One at a time.
+        assert_eq!(
+            man.ShowKeyboard(
+                vr::EGamepadTextInputMode::Normal,
+                vr::EGamepadTextInputLineMode::SingleLine,
+                0,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                10,
+            ),
+            vr::EVROverlayError::KeyboardAlreadyInUse
+        );
+
+        // Keys longer than an event's input come in pieces; the text is what GetKeyboardText says.
+        replies
+            .send(Reply::Input {
+                key: "c d e f g".into(),
+                text: "abc d e f g".into(),
+            })
+            .unwrap();
+        replies
+            .send(Reply::Input {
+                key: "\x08".into(),
+                text: "abc d e f ".into(),
+            })
+            .unwrap();
+        let events: Vec<_> = std::iter::from_fn(poll).collect();
+        let inputs: Vec<_> = events.iter().map(keyboard_input).collect();
+        assert_eq!(inputs, ["c d e f", " g", "\x08"]);
+        for event in &events {
+            keyboard_event(vr::EVREventType::KeyboardCharInput, 9)(event);
+        }
+        assert_eq!(text(), c"abc d e f ");
+
+        // HideKeyboard closes it, which ends the session.
+        let (closed, was_closed) = std::sync::mpsc::channel::<()>();
+        assert!(hide.on_hide(move || drop((replies, closed))));
+        man.HideKeyboard();
+        assert!(hide.is_hidden());
+        drop(was_closed);
+        for ty in [
+            vr::EVREventType::KeyboardClosed,
+            vr::EVREventType::KeyboardClosed_Global,
+        ] {
+            keyboard_event(ty, 9)(&poll().unwrap());
+        }
+        assert!(poll().is_none());
+        // The text stays for the app to read.
+        assert_eq!(text(), c"abc d e f ");
+
+        // Free again; a Done before the close.
+        assert_eq!(
+            man.ShowKeyboard(
+                vr::EGamepadTextInputMode::Normal,
+                vr::EGamepadTextInputLineMode::SingleLine,
+                vr::EKeyboardFlags::HideDoneKey.0,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                11,
+            ),
+            vr::EVROverlayError::None
+        );
+        let (request, replies, _) = SHOWN.with(|s| s.borrow_mut().take()).unwrap();
+        assert!(!request.done_key && !request.minimal && !request.password);
+        assert_eq!(text(), c"");
+        replies.send(Reply::Done).unwrap();
+        drop(replies);
+        for ty in [
+            vr::EVREventType::KeyboardOpened_Global,
+            vr::EVREventType::KeyboardDone,
+            vr::EVREventType::KeyboardClosed,
+            vr::EVREventType::KeyboardClosed_Global,
+        ] {
+            keyboard_event(ty, 11)(&poll().unwrap());
+        }
+        assert!(poll().is_none());
+    }
+
+    #[test]
+    fn keyboard_for_destroyed_overlay() {
+        let mut man = overlay_man();
+        man.keyboard = Keyboard::new(scripted_keyboard);
+        let handle = create(&man, c"key", c"name");
+        let show = |handle| {
+            man.ShowKeyboardForOverlay(
+                handle,
+                vr::EGamepadTextInputMode::Normal,
+                vr::EGamepadTextInputLineMode::SingleLine,
+                0,
+                std::ptr::null(),
+                0,
+                std::ptr::null(),
+                3,
+            )
+        };
+        assert_eq!(show(handle), vr::EVROverlayError::None);
+        let (_, replies, _) = SHOWN.with(|s| s.borrow_mut().take()).unwrap();
+        assert_eq!(man.DestroyOverlay(handle), vr::EVROverlayError::None);
+        replies.send(keyboard::protocol::Reply::Done).unwrap();
+        drop(replies);
+        // Its events are dropped, the session still ends.
+        man.pump_keyboard();
+        assert_eq!(show(handle), vr::EVROverlayError::UnknownOverlay);
+        let other = create(&man, c"other", c"other");
+        assert_eq!(show(other), vr::EVROverlayError::None);
     }
 
     #[test]
