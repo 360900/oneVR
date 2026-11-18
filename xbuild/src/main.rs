@@ -28,8 +28,9 @@ enum Message {
     Unknown,
 }
 
-/// The crash dialog's executable, see the library's `show_crash_dialog`.
-const CRASH_DIALOG: &str = "xrizer-crash-dialog";
+/// Executables the library starts from its own directory: the crash dialog (see the library's
+/// `show_crash_dialog`) and the desktop keyboard.
+const HELPERS: [&str; 2] = ["xrizer-crash-dialog", "xrizer-keyboard"];
 
 fn main() {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
@@ -50,7 +51,7 @@ fn main() {
     let mut stdout = BufReader::new(stdout);
 
     let mut lib_path: Option<String> = None;
-    let mut crash_dialog_path: Option<String> = None;
+    let mut helper_paths: [Option<String>; HELPERS.len()] = Default::default();
     let mut platform_dir: Option<String> = None;
     let mut vrclient_name: Option<String> = None;
     let mut line = String::new();
@@ -62,8 +63,10 @@ fn main() {
         match msg {
             Message::CompilerArtifact(a) => {
                 let target = a.target;
-                if target.name == CRASH_DIALOG && target.crate_types.contains(&"bin".into()) {
-                    crash_dialog_path = a.filenames.into_iter().next();
+                if let Some(i) = HELPERS.iter().position(|h| *h == target.name)
+                    && target.crate_types.contains(&"bin".into())
+                {
+                    helper_paths[i] = a.filenames.into_iter().next();
                     continue;
                 }
                 if !(target.name == "xrizer_edge" && target.crate_types.contains(&"cdylib".into()))
@@ -123,12 +126,14 @@ fn main() {
         std::process::exit(1);
     }
 
-    // The library starts the crash dialog from its own directory.
-    let crash_dialog_path = PathBuf::from(crash_dialog_path.expect("crash dialog path missing"));
-    let crash_dialog_link = platform_path.join(CRASH_DIALOG);
-    if let Err(e) = link_build(&crash_dialog_path, &crash_dialog_link) {
-        eprintln!("Failed to create crash dialog symlink {crash_dialog_link:?}: {e}");
-        std::process::exit(1);
+    // The library starts its helpers from its own directory.
+    for (helper, path) in HELPERS.iter().zip(helper_paths) {
+        let path = PathBuf::from(path.unwrap_or_else(|| panic!("{helper} path missing")));
+        let link = platform_path.join(helper);
+        if let Err(e) = link_build(&path, &link) {
+            eprintln!("Failed to create {helper} symlink {link:?}: {e}");
+            std::process::exit(1);
+        }
     }
 
     // Generate openvrpaths.vrpath file from template

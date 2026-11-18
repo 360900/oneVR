@@ -123,7 +123,7 @@ The output directory is the runtime directory.
 ```
 rustup target add i686-unknown-linux-gnu
 cargo xbuild --release --target i686-unknown-linux-gnu
-cp -L target/i686-unknown-linux-gnu/release/bin/{vrclient.so,xrizer-crash-dialog} target/release/bin/
+cp -L target/i686-unknown-linux-gnu/release/bin/{vrclient.so,xrizer-crash-dialog,xrizer-keyboard} target/release/bin/
 ```
 
 These builds load the system OpenXR loader, so 32-bit games also need a 32-bit one (e.g. `lib32-openxr`). Releases bundle the loader with `--features static-openxr` instead, which also needs cmake, a C++ compiler and, for 32-bit, C++ multilib and 32-bit X11 headers. That loader also reads OpenXR config from its build directory and fails if that exists but isn't readable, so build packages in a path that won't exist on users' machines.

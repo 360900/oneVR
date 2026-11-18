@@ -1,7 +1,11 @@
 //! OpenVR's virtual keyboard (`IVROverlay::ShowKeyboard`). WayVR's keyboard in the headset when
-//! WayVR runs. Without it, the keyboard is done at once with the existing text, so games waiting
-//! for it carry on.
+//! WayVR runs, a desktop window otherwise. Without either, the keyboard is done at once with the
+//! existing text, so games waiting for it carry on.
 
+#[cfg(test)]
+mod edit;
+#[cfg_attr(test, allow(dead_code))]
+mod popup;
 pub mod protocol;
 #[cfg_attr(test, allow(dead_code))]
 mod wayvr;
@@ -244,14 +248,15 @@ fn start(request: Request, replies: Sender<Reply>, _: Arc<Hide>) {
     no_keyboard(&request, &replies);
 }
 
-/// Tries WayVR's keyboard, on a thread of its own, as it waits for the user.
+/// Tries WayVR's keyboard, then the desktop window, on a thread of their own, as both wait for
+/// the user.
 #[cfg(not(test))]
 fn start(request: Request, replies: Sender<Reply>, hide: Arc<Hide>) {
     let spawned = std::thread::Builder::new()
         .name("xrizer-keyboard".into())
         .spawn(move || {
             type Run = fn(&Request, &Sender<Reply>, &Hide) -> std::io::Result<()>;
-            let keyboards: [(&str, Run); 1] = [("WayVR", wayvr::run)];
+            let keyboards: [(&str, Run); 2] = [("WayVR", wayvr::run), ("desktop", popup::run)];
             for (name, run) in keyboards {
                 if hide.is_hidden() {
                     return;
