@@ -92,6 +92,12 @@ Status: `pending` | `merged` | `superseded-by-<n>` | `blocked` | `dropped` | `re
 | 463 | Upgrade Dependencies | merged | glam 0.34, lz4_flex 0.14, miniquad 0.4.11, bindgen 0.72; only these updated in the lockfile |
 | 464 | input: Frame controller support | merged | draft, supersedes 440 on top of 338; grip offset and bumper, view and menu touches ported by hand in `114f58b`, with the pose components of SteamVR's render models; head `6fbf90e` (2026-11-14): thumb from the inputs in `7efaf5f`, wrist hack in `0b748ff`, on SteamVR's runtime only, model names in `b45c76a`; custom bindings for controllers without defaults already in the fork |
 
+## Upstream sync (2026-11-18)
+
+| PR | Title | Status | Notes |
+|----|-------|--------|-------|
+| 469 | [Input]: ShowKeyboard Support | merged | ported by hand as the fallback to WayVR's keyboard in `92e43b0`: its egui window runs in `xrizer-keyboard`, next to `vrclient.so`, instead of a fork of the game's process, reports each edit as keys and takes the flags; WayVR's keyboard (oneVR) over its IPC first, in `66481dd`, with `KeyboardCharInput` per key, a live `GetKeyboardText`, `HideKeyboard` and the `*_Global` events |
+
 ## Upstream issues (2026-11-10)
 
 All open upstream issues checked against the fork. What needed a change:

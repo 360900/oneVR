@@ -23,6 +23,8 @@ OpenVR games need to be pointed at xrizer-edge instead of SteamVR. Either:
 
 With WiVRn, you can instead set the xrizer-edge path as the OpenVR compatibility library in the WiVRn settings.
 
+When a game asks for text, xrizer-edge shows [oneVR](https://github.com/360900/oneVR)'s WayVR keyboard in the headset if it's running, and a text entry window on the desktop otherwise.
+
 ## openvrpaths.vrpath
 
 A JSON file OpenVR games read to find the runtime. If you've run SteamVR before, add the xrizer-edge path to the `runtime` list. Otherwise, create `$XDG_CONFIG_HOME/openvr/openvrpaths.vrpath`:
