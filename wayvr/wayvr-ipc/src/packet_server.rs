@@ -87,6 +87,15 @@ pub struct WlxInputState {
 	pub right: WlxInputStatePointer,
 }
 
+/// oneVR: a key typed into a text entry
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct WlxKeyboardInput {
+	/// In SteamVR's minimal mode encoding: the typed text, "\x08" for backspace, "\n" for enter
+	pub key: String,
+	/// The whole text after it
+	pub text: String,
+}
+
 // "Wvr" prefixes are WayVR-specific
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,6 +111,14 @@ pub enum PacketServer {
 	WlxWindowAttribGetResponse(Serial, Result<packet_client::WlxWindowAttribValue, String>),
 	WlxWindowAttribSetResponse(Serial, Result<(), String>),
 	WvrStateChanged(WvrStateChanged),
+	/// oneVR: whether the text entry is shown
+	WlxKeyboardShowResponse(Serial, Result<(), String>),
+	/// oneVR: the text entry's keys
+	WlxKeyboardInput(WlxKeyboardInput),
+	/// oneVR: the text entry's Done key was pressed
+	WlxKeyboardDone,
+	/// oneVR: the text entry was closed, it reports nothing more
+	WlxKeyboardClosed,
 }
 
 impl PacketServer {
@@ -118,6 +135,10 @@ impl PacketServer {
 			PacketServer::WlxWindowAttribGetResponse(serial, _) => Some(serial),
 			PacketServer::WlxWindowAttribSetResponse(serial, _) => Some(serial),
 			PacketServer::WvrStateChanged(_) => None,
+			PacketServer::WlxKeyboardShowResponse(serial, _) => Some(serial),
+			PacketServer::WlxKeyboardInput(_) => None,
+			PacketServer::WlxKeyboardDone => None,
+			PacketServer::WlxKeyboardClosed => None,
 		}
 	}
 }
