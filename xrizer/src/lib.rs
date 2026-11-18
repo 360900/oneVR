@@ -10,6 +10,7 @@ mod extended_display;
 mod graphics_backends;
 mod headset_view;
 mod input;
+mod keyboard;
 mod misc_unknown;
 mod openxr_data;
 mod overlay;

@@ -17,6 +17,12 @@ name = "xrizer-crash-dialog"
 path = "src/bin/xrizer-crash-dialog.rs"
 test = false
 
+# The desktop keyboard, started by the library for games' text entries.
+[[bin]]
+name = "xrizer-keyboard"
+path = "src/bin/xrizer-keyboard.rs"
+test = false
+
 [features]
 default = ["monado", "git-version"]
 static-openxr = ["openxr/static"]

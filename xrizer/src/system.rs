@@ -549,6 +549,9 @@ impl System {
     fn pump(&self) {
         self.input.force(|_| Input::new(self.openxr.clone()));
         self.openxr.pump();
+        if let Some(overlay) = self.overlay.get() {
+            overlay.pump_keyboard();
+        }
     }
 
     /// Drops the cached views. Those in LOCAL and STAGE are relative to the tracking origin, so
