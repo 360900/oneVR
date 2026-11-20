@@ -242,9 +242,13 @@ public:
 #if WIVRN_USE_VULKAN_ENCODE
 		if (config.name.empty() or config.name == encoder_vulkan)
 		{
+			// Vulkan AV1 has no image on NVIDIA and loses the device on RDNA3.5. The headset's
+			// codec list starts with AV1, so use it only when the configuration asks for it;
+			// automatic encoding skips it too.
+			const bool requested = vulkan_av1_requested(config.name, config.codec);
 			for (auto codec: codecs)
 			{
-				if (codec == video_codec::av1 and config.name.empty())
+				if (codec == video_codec::av1 and not requested)
 					continue;
 
 				if (has_vk(codec))

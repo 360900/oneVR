@@ -200,9 +200,10 @@ belong to Monado, a driver or a headset runtime.
 
 Bugs, server:
 - Vulkan + AV1 (WiVRn #1087, merged): requesting Vulkan with AV1 gives no image on NVIDIA
-  and a device lost on RDNA3.5. Automatic never picks that pair; oneVR hides AV1 on the
-  Headset page while the encoder is Vulkan and warns on PC > Server. Remove the filter once
-  upstream fixes it.
+  and loses the device on RDNA3.5. The server uses Vulkan AV1 only when the config sets
+  `codec: av1` explicitly, never from the headset's codec list, and oneVR hides AV1 on the
+  Headset page while the encoder is Vulkan and warns on PC > Server. Remove the guard,
+  filter and warnings once upstream fixes it.
 - VA-API device offload (WiVRn #1223): the `device` setting is ignored when probing and the
   maintainer wants it gone; oneVR's inherited docs still advertise it.
 

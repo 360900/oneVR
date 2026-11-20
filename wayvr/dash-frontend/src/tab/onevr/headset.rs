@@ -1057,6 +1057,8 @@ mod tests {
 		};
 		assert!(options(&h, false).contains(&av1));
 		assert!(!options(&h, true).contains(&av1));
+		// automatic is left to the server, which skips AV1 for Vulkan
+		assert!(options(&h, true).contains(&json!(Codec::Automatic.key())));
 		// one already picked stays visible, so the warning names it
 		h.config.codec = Codec::Av1;
 		assert!(options(&h, true).contains(&av1));
