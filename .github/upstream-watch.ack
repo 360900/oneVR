@@ -6,4 +6,5 @@ pr 338 ffc4e53b53e3fb9bec056f94586c5a34ee6eeec4 # ffc4e53 ported by hand
 pr 168 494501c11b2b5feb7d156b2e6e061107d870e822 # 494501c already in the fork
 pr 338 4d51c8dcd3d704f36b499bcc22598bdde7ccf972 # per-hand level and CONTROLLER-source synthesis already in the fork
 pr 464 6fbf90ef3b6d46efe44563b106e9f714a07942dc # ported by hand, see CHANGES.md
-pr 469 b63fbc57dc1e4ec6629c7a973ce921f22ad2afa8 # ported by hand, see CHANGES.md
+pr 469 b63fbc57dc1e4ec6629c7a973ce921f22ad2afa8 # keyboard ported by hand, see CHANGES.md
+pr 469 01c937f8ce6b80f41f8fc82a2ae1f3dd094a7a60 # Index->Vive compat ported by hand, see CHANGES.md
