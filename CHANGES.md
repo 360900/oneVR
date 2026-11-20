@@ -102,7 +102,7 @@ Status: `pending` | `merged` | `superseded-by-<n>` | `blocked` | `dropped` | `re
 
 | PR | Title | Status | Notes |
 |----|-------|--------|-------|
-| 469 | [Input]: ShowKeyboard Support | merged | head `01c937f` (2026-11-19), after the keyboard: Index->Vive compatibility layer for legacy-only games, ported by hand. Skyrim VR, `sksevr_loader`, `XRIZER_INDEX_AS_VIVE=1` or `~/.config/xrizer/index_as_vive_apps` show Index controllers as Vive wands: Vive identity and poses, the stick as a trackpad touched past 25% deflection and clicked by the stick click, A as its own button instead of another grip, and the trigger clicking at 85%/70% of the pull. Other apps and controllers are unchanged |
+| 469 | [Input]: ShowKeyboard Support | merged | head `01c937f` (2026-11-19), after the keyboard: Index->Vive compatibility layer for legacy-only games, ported by hand. Skyrim VR and `sksevr_loader` show Index controllers as Vive wands automatically, unless the game has chosen legacy bindings; `XRIZER_INDEX_AS_VIVE=1` or `~/.config/xrizer/index_as_vive_apps` force it. The controllers get Vive identity and poses, the stick as a trackpad touched past 25% deflection and clicked by the stick click, A as its own button instead of another grip, and the trigger clicking at 85%/70% of the pull. The headset keeps its Index identity, and games with chosen legacy bindings keep Index controllers |
 
 ## Upstream issues (2026-11-10)
 

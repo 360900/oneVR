@@ -106,7 +106,7 @@ Effort: S under a day, M a few days, L a week or more. "WiVRn" notes describe wh
 23. Legacy input without chosen bindings (S)
     - fixed mappings match SteamVR's per-controller legacy files (no DPad there, the system button is the runtime's); Focus 3 bumper (`Axis3`) isn't in its OpenXR profile
     - WMR legacy mapping unverified: SteamVR's WMR driver isn't shipped on Linux
-    - Index->Vive compatibility mode (`XRIZER_INDEX_AS_VIVE`, Skyrim VR) unverified on a headset
+    - Index->Vive compatibility mode (`XRIZER_INDEX_AS_VIVE`, Skyrim VR) unverified on a headset; automatic mode skips games with chosen legacy bindings
     - `vive_tracker_handed` legacy bindings (trackers: 21)
 24. Dominant hand (S)
     - a change through `SetDominantHand` restarts the session to load the bindings again, where SteamVR applies it at the next `UpdateActionState`
