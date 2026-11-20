@@ -1654,13 +1654,44 @@ mod tests {
         check(|a| a.app_menu.as_raw(), &["b/click"]);
         check(|a| a.app_menu_touch.as_raw(), &[]);
 
-        let properties = Knuckles::properties();
-        assert_eq!(properties.openvr_controller_type, c"vive_controller");
+        let data = f.input.openxr.session_data.get();
+        let devices = data.input_data.devices.read().unwrap();
+        let profile = devices
+            .get_controller(Hand::Left)
+            .and_then(|controller| controller.profile_data.as_ref())
+            .unwrap();
+        assert!(profile.legacy_index_as_vive);
+        assert_eq!(
+            profile.properties.openvr_controller_type,
+            c"vive_controller"
+        );
         assert!(matches!(
-            properties.main_axis,
+            profile.properties.main_axis,
             crate::input::profiles::MainAxisType::Trackpad
         ));
-        assert_eq!(properties.legacy_buttons_mask, 0x3_0000_0087);
+        assert_eq!(profile.properties.legacy_buttons_mask, 0x3_0000_0087);
+        // The headset keeps its own identity.
+        assert_eq!(profile.headset.manufacturer_name, c"Valve");
+        assert_eq!(Knuckles::properties().openvr_controller_type, c"knuckles");
+    }
+
+    #[test]
+    fn index_as_vive_keeps_the_index_headset_identity() {
+        crate::input::tests::set_test_env("XRIZER_INDEX_AS_VIVE", "1");
+        use vr::ETrackedDeviceProperty as Prop;
+        let (f, _) = legacy_fixture(|actions| actions.a.as_raw());
+        let hmd = |prop| {
+            f.input
+                .get_device_string_tracked_property(vr::k_unTrackedDeviceIndex_Hmd, prop)
+                .map(|value| value.to_str().unwrap().to_owned())
+        };
+
+        assert_eq!(hmd(Prop::ManufacturerName_String).as_deref(), Some("Valve"));
+        assert_eq!(hmd(Prop::ModelNumber_String).as_deref(), Some("Index"));
+        assert_eq!(
+            hmd(Prop::ControllerType_String).as_deref(),
+            Some("indexhmd")
+        );
     }
 
     #[test]

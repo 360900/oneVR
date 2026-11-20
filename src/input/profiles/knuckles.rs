@@ -6,7 +6,6 @@ use crate::button_mask_from_ids;
 use crate::input::BoundPoseType;
 use crate::input::legacy::{self, LegacyBindings, button_mask_from_id};
 use crate::input::profiles::DynInputPath;
-use crate::input::profiles::vive_controller::ViveWands;
 use crate::openxr_data::Hand;
 use glam::{EulerRot, Mat4, Quat, Vec3};
 use openvr::EVRButtonId;
@@ -14,26 +13,22 @@ use std::iter::Iterator;
 
 pub struct Knuckles;
 
-/// Games that only speak the legacy `GetControllerState` API and only understand HTC Vive
-/// wands. Matched by executable name, with or without `.exe`.
-const INDEX_AS_VIVE_APPS: &[&str] = &["SkyrimVR", "sksevr_loader"];
-
 /// Whether Index controllers should present as Vive wands to this app.
 ///
-/// On by default for [`INDEX_AS_VIVE_APPS`] and for the names in
+/// On by default for the games in [`crate::quirks`] and for the names in
 /// `$XDG_CONFIG_HOME/xrizer/index_as_vive_apps` (one executable name per line, `#` comments),
 /// or for every app with `XRIZER_INDEX_AS_VIVE=1`. `XRIZER_INDEX_AS_VIVE=0` turns the
-/// automatic list off.
+/// automatic list off. Automatic mode is skipped when the app has chosen legacy bindings, so
+/// those keep the controller identity they were made for.
 pub(crate) fn index_as_vive() -> bool {
     #[cfg(test)]
-    let enabled = crate::input::action_manifest::env_var("XRIZER_INDEX_AS_VIVE")
+    let enabled = crate::input::isolated_env_var("XRIZER_INDEX_AS_VIVE")
         .is_some_and(|value| env_enabled(&value));
     #[cfg(not(test))]
     let enabled = {
         static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
         *ENABLED.get_or_init(|| {
-            if let Some(value) = crate::input::action_manifest::env_var("XRIZER_INDEX_AS_VIVE") {
-                let enabled = env_enabled(&value);
+            if let Some(enabled) = crate::quirks::env_override("XRIZER_INDEX_AS_VIVE") {
                 if enabled {
                     log::info!(
                         "XRIZER_INDEX_AS_VIVE is set: Index controllers will present as Vive wands"
@@ -45,22 +40,32 @@ pub(crate) fn index_as_vive() -> bool {
             let apps = crate::input::xrizer_config_dir()
                 .and_then(|dir| std::fs::read_to_string(dir.join("index_as_vive_apps")).ok())
                 .unwrap_or_default();
-            let app = crate::openxr_data::get_app_name();
-            let matched = app
+            let app = crate::quirks::game_exe_name();
+            let listed = app
                 .as_deref()
-                .is_some_and(|app| index_as_vive_app(app, &apps));
-            if matched {
+                .is_some_and(|app| index_as_vive_listed(app, &apps));
+            let builtin = crate::quirks::get().index_as_vive;
+            let chosen = builtin && !listed && has_chosen_legacy_bindings();
+            let enabled = index_as_vive_auto(listed, builtin, chosen);
+
+            if enabled {
                 log::info!(
                     "{} is on the Index->Vive list: Index controllers will present as Vive wands",
                     app.as_deref().unwrap_or_default()
                 );
+            } else if builtin && chosen {
+                log::info!(
+                    "{} is on the Index->Vive list but has chosen legacy bindings: keeping Index controllers",
+                    app.as_deref().unwrap_or_default()
+                );
             }
-            matched
+            enabled
         })
     };
     enabled
 }
 
+#[cfg(test)]
 fn env_enabled(value: &std::ffi::OsStr) -> bool {
     value.to_str().is_some_and(|value| {
         let value = value.trim();
@@ -68,18 +73,32 @@ fn env_enabled(value: &std::ffi::OsStr) -> bool {
     })
 }
 
-/// Whether the app with the executable name `app` is on the list.
-fn index_as_vive_app(app: &str, extra: &str) -> bool {
+fn index_as_vive_auto(listed: bool, builtin: bool, chosen_legacy_bindings: bool) -> bool {
+    listed || (builtin && !chosen_legacy_bindings)
+}
+
+#[cfg(not(test))]
+fn has_chosen_legacy_bindings() -> bool {
+    has_chosen_legacy_bindings_for(crate::applications::identified_app_key())
+}
+
+fn has_chosen_legacy_bindings_for(app_key: Option<String>) -> bool {
+    let sources = crate::input::binding_sources::BindingSources::new(
+        app_key,
+        crate::input::steamvr_bindings::Category::Legacy,
+    );
+    crate::input::action_manifest::ControllerType::known()
+        .into_iter()
+        .any(|controller_type| sources.file_for(&controller_type).is_some())
+}
+
+/// Whether the app with the executable name `app` is in the extra list.
+fn index_as_vive_listed(app: &str, extra: &str) -> bool {
     let app = app_stem(app.trim());
-    INDEX_AS_VIVE_APPS
-        .iter()
-        .copied()
-        .chain(
-            extra
-                .lines()
-                .map(str::trim)
-                .filter(|line| !line.is_empty() && !line.starts_with('#')),
-        )
+    extra
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
         .any(|listed| app.eq_ignore_ascii_case(app_stem(listed)))
 }
 
@@ -99,6 +118,74 @@ const INDEX_HMD_PROPERTIES: HmdProperties = HmdProperties {
     registered_device_type: c"valve/indexLHR-FFFFFFF0",
     input_profile_path: c"{indexhmd}/input/indexhmd_profile.json",
 };
+
+/// What apps see while the controllers present as Vive wands.
+static VIVE_COMPAT_PROPERTIES: ProfileProperties = ProfileProperties {
+    model: Property::BothHands(c"Vive. MV"),
+    openvr_controller_type: c"vive_controller",
+    render_model_name: Property::BothHands(c"vr_controller_vive_1_5"),
+    main_axis: MainAxisType::Trackpad,
+    // Keep Index's serials, so the devices stay unique and tracked as lighthouse ones.
+    registered_device_type: Property::PerHand {
+        left: c"htc/vive_controllerLHR-FFFFFFF1",
+        right: c"htc/vive_controllerLHR-FFFFFFF2",
+    },
+    serial_number: Property::PerHand {
+        left: c"LHR-FFFFFFF1",
+        right: c"LHR-FFFFFFF2",
+    },
+    tracking_system_name: c"lighthouse",
+    manufacturer_name: c"HTC",
+    input_profile_path: c"{htc}/input/vive_controller_profile.json",
+    legacy_buttons_mask: button_mask_from_ids!(
+        EVRButtonId::System,
+        EVRButtonId::ApplicationMenu,
+        EVRButtonId::Grip,
+        EVRButtonId::A,
+        EVRButtonId::Axis0,
+        EVRButtonId::Axis1
+    ),
+    hmd: INDEX_HMD_PROPERTIES,
+};
+
+static DEVICE_PROPERTIES: ProfileProperties = ProfileProperties {
+    model: Property::PerHand {
+        left: c"Knuckles Left",
+        right: c"Knuckles Right",
+    },
+    openvr_controller_type: c"knuckles",
+    render_model_name: Property::PerHand {
+        left: c"{indexcontroller}valve_controller_knu_1_0_left",
+        right: c"{indexcontroller}valve_controller_knu_1_0_right",
+    },
+    main_axis: MainAxisType::Thumbstick,
+    registered_device_type: Property::PerHand {
+        left: c"valve/index_controllerLHR-FFFFFFF1",
+        right: c"valve/index_controllerLHR-FFFFFFF2",
+    },
+    serial_number: Property::PerHand {
+        left: c"LHR-FFFFFFF1",
+        right: c"LHR-FFFFFFF2",
+    },
+    tracking_system_name: c"lighthouse",
+    manufacturer_name: c"Valve",
+    input_profile_path: c"{indexcontroller}/input/index_controller_profile.json",
+    // Like SteamVR, without A, which is reported as Grip.
+    legacy_buttons_mask: button_mask_from_ids!(
+        EVRButtonId::System,
+        EVRButtonId::ApplicationMenu,
+        EVRButtonId::Grip,
+        EVRButtonId::Axis0,
+        EVRButtonId::Axis1,
+        EVRButtonId::Axis2
+    ),
+    hmd: INDEX_HMD_PROPERTIES,
+};
+
+/// The properties controllers use while they present as Vive wands.
+pub(in crate::input) fn compat_properties() -> &'static ProfileProperties {
+    &VIVE_COMPAT_PROPERTIES
+}
 
 impl InteractionProfile for Knuckles {
     // The trackpad clicks by force, and a dpad on it plays a tick when a direction engages.
@@ -138,69 +225,6 @@ impl InteractionProfile for Knuckles {
         true
     }
     fn properties() -> &'static ProfileProperties {
-        static VIVE_COMPAT_PROPERTIES: ProfileProperties = ProfileProperties {
-            model: Property::BothHands(c"Vive. MV"),
-            openvr_controller_type: c"vive_controller",
-            render_model_name: Property::BothHands(c"vr_controller_vive_1_5"),
-            main_axis: MainAxisType::Trackpad,
-            // Keep Index's serials, so the devices stay unique and tracked as lighthouse ones.
-            registered_device_type: Property::PerHand {
-                left: c"htc/vive_controllerLHR-FFFFFFF1",
-                right: c"htc/vive_controllerLHR-FFFFFFF2",
-            },
-            serial_number: Property::PerHand {
-                left: c"LHR-FFFFFFF1",
-                right: c"LHR-FFFFFFF2",
-            },
-            tracking_system_name: c"lighthouse",
-            manufacturer_name: c"HTC",
-            input_profile_path: c"{htc}/input/vive_controller_profile.json",
-            legacy_buttons_mask: button_mask_from_ids!(
-                EVRButtonId::System,
-                EVRButtonId::ApplicationMenu,
-                EVRButtonId::Grip,
-                EVRButtonId::A,
-                EVRButtonId::Axis0,
-                EVRButtonId::Axis1
-            ),
-            hmd: INDEX_HMD_PROPERTIES,
-        };
-        static DEVICE_PROPERTIES: ProfileProperties = ProfileProperties {
-            model: Property::PerHand {
-                left: c"Knuckles Left",
-                right: c"Knuckles Right",
-            },
-            openvr_controller_type: c"knuckles",
-            render_model_name: Property::PerHand {
-                left: c"{indexcontroller}valve_controller_knu_1_0_left",
-                right: c"{indexcontroller}valve_controller_knu_1_0_right",
-            },
-            main_axis: MainAxisType::Thumbstick,
-            registered_device_type: Property::PerHand {
-                left: c"valve/index_controllerLHR-FFFFFFF1",
-                right: c"valve/index_controllerLHR-FFFFFFF2",
-            },
-            serial_number: Property::PerHand {
-                left: c"LHR-FFFFFFF1",
-                right: c"LHR-FFFFFFF2",
-            },
-            tracking_system_name: c"lighthouse",
-            manufacturer_name: c"Valve",
-            input_profile_path: c"{indexcontroller}/input/index_controller_profile.json",
-            // Like SteamVR, without A, which is reported as Grip.
-            legacy_buttons_mask: button_mask_from_ids!(
-                EVRButtonId::System,
-                EVRButtonId::ApplicationMenu,
-                EVRButtonId::Grip,
-                EVRButtonId::Axis0,
-                EVRButtonId::Axis1,
-                EVRButtonId::Axis2
-            ),
-            hmd: INDEX_HMD_PROPERTIES,
-        };
-        if index_as_vive() {
-            return &VIVE_COMPAT_PROPERTIES;
-        }
         &DEVICE_PROPERTIES
     }
     fn translate_path(path: DynInputPath) -> Option<DynInputPath> {
@@ -307,17 +331,11 @@ impl InteractionProfile for Knuckles {
     }
 
     fn offset_grip_pose(hand: Hand) -> Mat4 {
-        if index_as_vive() {
-            return ViveWands::offset_grip_pose(hand);
-        }
         super::offset_grip_pose_from_pose_type::<Knuckles>(hand, BoundPoseType::Grip)
     }
 
     /// Derived from `SteamVR/drivers/indexcontroller/resources/rendermodels/valve_controller_knu_1_0*/*.json`
     fn pose_transformation(pose: BoundPoseType) -> Option<PoseTransformations> {
-        if index_as_vive() {
-            return ViveWands::pose_transformation(pose);
-        }
         match pose {
             BoundPoseType::Raw => None,
             // All 0 so skip transformation
@@ -574,16 +592,14 @@ mod tests {
     }
 
     #[test]
-    fn index_as_vive_apps() {
-        assert!(super::index_as_vive_app("SkyrimVR.exe", ""));
-        assert!(super::index_as_vive_app("sksevr_loader", ""));
-        assert!(super::index_as_vive_app("MyGame.EXE", "mygame\n"));
-        assert!(super::index_as_vive_app(
+    fn index_as_vive_listed_apps() {
+        assert!(super::index_as_vive_listed("MyGame.EXE", "mygame\n"));
+        assert!(super::index_as_vive_listed(
             "MyGame",
             "# a comment\n\n mygame.exe \n"
         ));
-        assert!(!super::index_as_vive_app("BladeAndSorcery.exe", "mygame\n"));
-        assert!(!super::index_as_vive_app("MyGame", "# MyGame\n"));
+        assert!(!super::index_as_vive_listed("MyGame", "# MyGame\n"));
+        assert!(!super::index_as_vive_listed("SkyrimVR.exe", ""));
     }
 
     #[test]
@@ -594,5 +610,35 @@ mod tests {
         assert!(super::env_enabled(OsStr::new("TRUE")));
         assert!(!super::env_enabled(OsStr::new("0")));
         assert!(!super::env_enabled(OsStr::new("")));
+    }
+
+    #[test]
+    fn index_as_vive_auto_rule() {
+        // The explicit app list wins; chosen bindings only disable the built-in list.
+        assert!(super::index_as_vive_auto(true, false, true));
+        assert!(super::index_as_vive_auto(false, true, false));
+        assert!(!super::index_as_vive_auto(false, true, true));
+        assert!(!super::index_as_vive_auto(false, false, false));
+    }
+
+    #[test]
+    fn chosen_legacy_bindings_disable_auto() {
+        crate::input::tests::set_test_env(
+            "XRIZER_CUSTOM_BINDINGS_DIR",
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/input_data/legacy_custom"
+            ),
+        );
+        assert!(super::has_chosen_legacy_bindings_for(None));
+
+        crate::input::tests::set_test_env(
+            "XRIZER_CUSTOM_BINDINGS_DIR",
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/input_data/custom_bindings"
+            ),
+        );
+        assert!(!super::has_chosen_legacy_bindings_for(None));
     }
 }

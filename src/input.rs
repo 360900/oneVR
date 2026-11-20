@@ -303,7 +303,7 @@ impl<C: openxr_data::Compositor> Input<C> {
         let probed_profile = [Hand::Left, Hand::Right]
             .into_iter()
             .filter_map(|hand| openxr.probed_profiles.get(hand))
-            .filter_map(|name| ProfileData::for_profile_name(name).map(|d| d.properties))
+            .filter_map(|name| ProfileData::for_profile_name(name).map(|d| d.headset))
             .min_by_key(|properties| is_simple_controller(properties));
 
         Self {

@@ -20,6 +20,7 @@ use crate::input::action_manifest::ControllerType;
 use crate::input::profiles::frame_controller::FrameController;
 use crate::input::profiles::knuckles::Knuckles;
 use crate::input::profiles::oculus_touch::OculusTouch;
+use crate::input::profiles::vive_controller::ViveWands;
 #[cfg(feature = "monado")]
 use crate::input::profiles::vive_tracker::ViveTracker;
 #[cfg(feature = "monado")]
@@ -177,8 +178,19 @@ pub struct ProfileData {
 
 impl ProfileData {
     pub fn new<P: InteractionProfile>() -> Self {
+        Self::new_with_compat::<P>(true)
+    }
+
+    fn new_with_compat<P: InteractionProfile>(compat: bool) -> Self {
+        let compat = compat
+            && TypeId::of::<P>() == TypeId::of::<Knuckles>()
+            && profiles::knuckles::index_as_vive();
         Self {
-            properties: P::properties(),
+            properties: if compat {
+                profiles::knuckles::compat_properties()
+            } else {
+                P::properties()
+            },
             headset: P::properties(),
             get_hand_offset: P::offset_grip_pose,
             get_pose_transformation: P::pose_transformation,
@@ -190,8 +202,7 @@ impl ProfileData {
             legacy_trigger_click: P::LEGACY_TRIGGER_CLICK,
             legacy_grip_click: P::LEGACY_GRIP_CLICK,
             legacy_simulated: P::legacy_simulated_properties(),
-            legacy_index_as_vive: TypeId::of::<P>() == TypeId::of::<Knuckles>()
-                && profiles::knuckles::index_as_vive(),
+            legacy_index_as_vive: compat,
         }
     }
 
@@ -199,8 +210,8 @@ impl ProfileData {
     /// that controller's identity and poses, with this one's headset and physical traits.
     pub(super) fn emulating(self, controller_type: &ControllerType) -> Self {
         let emulated = match controller_type {
-            ControllerType::Knuckles => Self::new::<Knuckles>(),
-            ControllerType::OculusTouch => Self::new::<OculusTouch>(),
+            ControllerType::Knuckles => Self::new_with_compat::<Knuckles>(false),
+            ControllerType::OculusTouch => Self::new_with_compat::<OculusTouch>(false),
             _ => return self,
         };
         Self {
@@ -275,12 +286,21 @@ impl ProfileData {
 
     #[inline]
     pub fn hand_offset(&self, hand: Hand) -> Mat4 {
-        (self.get_hand_offset)(hand)
+        if self.legacy_index_as_vive {
+            ViveWands::offset_grip_pose(hand)
+        } else {
+            (self.get_hand_offset)(hand)
+        }
     }
 
     #[inline]
     pub fn pose_transformation(&self, hand: Hand, pose_type: BoundPoseType) -> Option<Mat4> {
-        (self.get_pose_transformation)(pose_type).map(|transforms| match hand {
+        let transforms = if self.legacy_index_as_vive {
+            ViveWands::pose_transformation(pose_type)
+        } else {
+            (self.get_pose_transformation)(pose_type)
+        }?;
+        Some(match hand {
             Hand::Left => transforms.left_hand,
             Hand::Right => transforms.right_hand,
         })
