@@ -3904,12 +3904,16 @@ impl<C: openxr_data::Compositor> Input<C> {
                 if let Some(properties) =
                     loaded.and_then(|loaded| loaded.simulated_properties.get(&profile_path))
                 {
+                    // The chosen binding shows another controller; don't also apply the
+                    // Index->Vive pose mode.
                     data.properties = properties;
                     data.headset = properties;
+                    data.legacy_index_as_vive = false;
                 } else if let Some(properties) = data.legacy_simulated.filter(|_| legacy) {
                     // SteamVR's legacy bindings for the controller show apps another one.
                     data.properties = properties;
                     data.headset = properties;
+                    data.legacy_index_as_vive = false;
                 }
                 if let Some(emulated) =
                     loaded.and_then(|loaded| loaded.emulated_profiles.get(&profile_path))

@@ -2699,6 +2699,20 @@ mod tests {
     }
 
     #[test]
+    fn simulated_binding_clears_index_as_vive_poses() {
+        crate::input::tests::set_test_env("XRIZER_INDEX_AS_VIVE", "1");
+        let f = remapped_fixture::<Knuckles, Knuckles>("legacy_index_as_vive");
+        let data = f.input.openxr.session_data.get();
+        let devices = data.input_data.devices.read().unwrap();
+        let profile = devices
+            .get_controller(Hand::Left)
+            .and_then(|controller| controller.profile_data.as_ref())
+            .unwrap();
+        assert!(!profile.legacy_index_as_vive);
+        assert_eq!(profile.properties.openvr_controller_type, c"oculus_touch");
+    }
+
+    #[test]
     fn legacy_bindings_chosen_in_steamvr() {
         use crate::input::tests::{FakeSteam, input_data};
         let steam = FakeSteam::new("legacy");

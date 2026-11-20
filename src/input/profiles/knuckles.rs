@@ -17,24 +17,36 @@ pub struct Knuckles;
 ///
 /// On by default for the games in [`crate::quirks`] and for the names in
 /// `$XDG_CONFIG_HOME/xrizer/index_as_vive_apps` (one executable name per line, `#` comments),
-/// or for every app with `XRIZER_INDEX_AS_VIVE=1`. `XRIZER_INDEX_AS_VIVE=0` turns the
-/// automatic list off. Automatic mode is skipped when the app has chosen legacy bindings, so
-/// those keep the controller identity they were made for.
+/// or for every app with `XRIZER_INDEX_AS_VIVE=1`. `XRIZER_INDEX_AS_VIVE=0` turns it off for
+/// every app. Automatic mode is skipped when the app has chosen legacy bindings, so those keep
+/// the controller identity they were made for.
 pub(crate) fn index_as_vive() -> bool {
     #[cfg(test)]
     let enabled = crate::input::isolated_env_var("XRIZER_INDEX_AS_VIVE")
         .is_some_and(|value| env_enabled(&value));
     #[cfg(not(test))]
     let enabled = {
-        static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-        *ENABLED.get_or_init(|| {
+        struct Auto {
+            app: Option<String>,
+            explicit: Option<bool>,
+            listed: bool,
+            builtin: bool,
+        }
+
+        static AUTO: std::sync::OnceLock<Auto> = std::sync::OnceLock::new();
+        let auto = AUTO.get_or_init(|| {
             if let Some(enabled) = crate::quirks::env_override("XRIZER_INDEX_AS_VIVE") {
                 if enabled {
                     log::info!(
                         "XRIZER_INDEX_AS_VIVE is set: Index controllers will present as Vive wands"
                     );
                 }
-                return enabled;
+                return Auto {
+                    app: None,
+                    explicit: Some(enabled),
+                    listed: false,
+                    builtin: false,
+                };
             }
 
             let apps = crate::input::xrizer_config_dir()
@@ -45,22 +57,34 @@ pub(crate) fn index_as_vive() -> bool {
                 .as_deref()
                 .is_some_and(|app| index_as_vive_listed(app, &apps));
             let builtin = crate::quirks::get().index_as_vive;
-            let chosen = builtin && !listed && has_chosen_legacy_bindings();
-            let enabled = index_as_vive_auto(listed, builtin, chosen);
+            Auto {
+                app,
+                explicit: None,
+                listed,
+                builtin,
+            }
+        });
 
+        if let Some(enabled) = auto.explicit {
+            enabled
+        } else {
+            let chosen = auto.builtin && !auto.listed && has_chosen_legacy_bindings();
+            let enabled = index_as_vive_auto(auto.listed, auto.builtin, chosen);
             if enabled {
-                log::info!(
+                crate::log_unique!(
+                    log::Level::Info,
                     "{} is on the Index->Vive list: Index controllers will present as Vive wands",
-                    app.as_deref().unwrap_or_default()
+                    auto.app.as_deref().unwrap_or_default()
                 );
-            } else if builtin && chosen {
-                log::info!(
+            } else if auto.builtin && chosen {
+                crate::log_unique!(
+                    log::Level::Info,
                     "{} is on the Index->Vive list but has chosen legacy bindings: keeping Index controllers",
-                    app.as_deref().unwrap_or_default()
+                    auto.app.as_deref().unwrap_or_default()
                 );
             }
             enabled
-        })
+        }
     };
     enabled
 }
@@ -79,7 +103,21 @@ fn index_as_vive_auto(listed: bool, builtin: bool, chosen_legacy_bindings: bool)
 
 #[cfg(not(test))]
 fn has_chosen_legacy_bindings() -> bool {
-    has_chosen_legacy_bindings_for(crate::applications::identified_app_key())
+    use std::sync::Mutex;
+
+    // Keyed by the app key: an app that identifies after the first frame gets its per-app
+    // chosen bindings checked then.
+    static CACHE: Mutex<Option<(Option<String>, bool)>> = Mutex::new(None);
+    let app_key = crate::applications::identified_app_key();
+    let mut cache = CACHE.lock().unwrap();
+    if let Some((cached_key, value)) = &*cache
+        && cached_key == &app_key
+    {
+        return *value;
+    }
+    let value = has_chosen_legacy_bindings_for(app_key.clone());
+    *cache = Some((app_key, value));
+    value
 }
 
 fn has_chosen_legacy_bindings_for(app_key: Option<String>) -> bool {
@@ -87,9 +125,10 @@ fn has_chosen_legacy_bindings_for(app_key: Option<String>) -> bool {
         app_key,
         crate::input::steamvr_bindings::Category::Legacy,
     );
-    crate::input::action_manifest::ControllerType::known()
-        .into_iter()
-        .any(|controller_type| sources.file_for(&controller_type).is_some())
+    // Only Knuckles matters here: the automatic mode presents Index controllers as Vive.
+    sources
+        .file_for(&crate::input::action_manifest::ControllerType::Knuckles)
+        .is_some()
 }
 
 /// Whether the app with the executable name `app` is in the extra list.
@@ -623,11 +662,21 @@ mod tests {
 
     #[test]
     fn chosen_legacy_bindings_disable_auto() {
+        // A legacy binding for another controller doesn't replace the Index identity.
         crate::input::tests::set_test_env(
             "XRIZER_CUSTOM_BINDINGS_DIR",
             concat!(
                 env!("CARGO_MANIFEST_DIR"),
-                "/tests/input_data/legacy_custom"
+                "/tests/input_data/legacy_mirrored"
+            ),
+        );
+        assert!(!super::has_chosen_legacy_bindings_for(None));
+
+        crate::input::tests::set_test_env(
+            "XRIZER_CUSTOM_BINDINGS_DIR",
+            concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/tests/input_data/legacy_index_as_vive"
             ),
         );
         assert!(super::has_chosen_legacy_bindings_for(None));
@@ -646,8 +695,11 @@ mod tests {
     fn chosen_steamvr_legacy_bindings_disable_auto() {
         use crate::input::tests::{FakeSteam, input_data};
         let steam = FakeSteam::new("index_as_vive_gate");
-        let url = format!("file://{}", input_data("legacy_custom/oculus_touch.json"));
-        steam.choose(&[("oculus_touch_250820_CurrentURL_legacy", &url)]);
+        let url = format!(
+            "file://{}",
+            input_data("legacy_index_as_vive/knuckles.json")
+        );
+        steam.choose(&[("knuckles_250820_CurrentURL_legacy", &url)]);
         assert!(super::has_chosen_legacy_bindings_for(Some(
             FakeSteam::APP_KEY.to_owned()
         )));
