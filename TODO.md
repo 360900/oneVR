@@ -3,7 +3,7 @@
 Reconciled against CHANGES.md on 2026-10-31. Items already implemented per CHANGES
 are removed. The 2026-10-30 branch work is merged to main (f598d729) and pushed; CI is
 building the APK. Open upstream issues and PRs of WiVRn, wayvr and xrizer were checked
-against main on 2026-11-11 (see "Open: from upstream issues and PRs"). xrizer items live
+against main on 2026-11-20 (see "Open: from upstream issues and PRs"). xrizer items live
 in xrizer/TODO.md (edited in xrizer-edge).
 
 ## Verify on the Quest (shipped this session, not yet confirmed on device)
@@ -192,23 +192,28 @@ Research first:
 - OpenXR 1.1 and quad views: track upstream Monado.
 - Other headsets: Pico needs testing; others need hardware or testers.
 
-## Open: from upstream issues and PRs (checked 2026-11-11)
+## Open: from upstream issues and PRs (checked 2026-11-20)
 
 Open issues not listed here or above are fixed in oneVR, don't apply to it (WiVRn's Qt
 dashboard, flatpak, the in-stream window), are translations that come with merges, or
 belong to Monado, a driver or a headset runtime.
 
-Bugs, headset:
-- Pico 4 left Menu does nothing (WiVRn #1210): stream.cpp maps the left `menu/click` and
-  `system/click` to one id, and the never-pressed system click overwrites it, so WayVR's
-  show/hide on it fails. WiVRn PR #1213 fixes it (protocol change: server and APK
-  together); take it once merged, cherry-pick if it stalls.
+Bugs, server:
+- Vulkan + AV1 (WiVRn #1087, merged): requesting Vulkan with AV1 gives no image on NVIDIA
+  and a device lost on RDNA3.5. Automatic never picks that pair; oneVR hides AV1 on the
+  Headset page while the encoder is Vulkan and warns on PC > Server. Remove the filter once
+  upstream fixes it.
+- VA-API device offload (WiVRn #1223): the `device` setting is ignored when probing and the
+  maintainer wants it gone; oneVR's inherited docs still advertise it.
+
+Bugs, desktop:
+- wayvr #734: Force close app on a window of a process started from a terminal stops the
+  terminal's process group and everything it launched.
 
 Small features, for upstream:
 - wayvrctl: query the current set and screen visibility (wayvr #712), reload panels.yaml
-  (#714). Both need new IPC packets and a `PROTOCOL_VERSION` bump, which wayvr's handshake
-  matches exactly: a oneVR-only bump would clash with upstream's next one, so propose them
-  upstream instead.
+  (#714; #735 added reloading one panel's XML, not the list). A new IPC packet needs a
+  `PROTOCOL_VERSION` bump, which oneVR shouldn't make alone: propose it upstream.
 
 Larger features, only if wanted:
 - The headset's play area to apps: the headset sends its stage bounds and a Monado patch
@@ -220,11 +225,12 @@ Larger features, only if wanted:
   several inputs per action in the bindings view (#717), stereo per set (#659), saved
   mirrors (#164), window snapping (#315), vertical curvature (#165), resize with keyboard
   and mouse (#724), a launcher on the watch (#722), a TKL keyboard (#625), capture
-  keybinds (#612), Whisper push-to-talk (#642), a toast line limit (#335), long-press
-  bindings (#229), press-and-release menus (#358), OSC overlay poses and keyboard (#264,
-  #120), locate a device from the watch (#327), OVR Advanced Settings style playspace
-  toggles (#560). Physical keyboard typing (#655) and touch-style scrolling (#568) come
-  with hand poke (#19). Suggest declining KMS capture (#705) and gamepad control (#348).
+  keybinds (#612), Whisper push-to-talk (#642) and its language selection (#737), a toast
+  line limit (#335), long-press bindings (#229), press-and-release menus (#358), OSC overlay
+  poses and keyboard (#264, #120), locate a device from the watch (#327), OVR Advanced
+  Settings style playspace toggles (#560). Physical keyboard typing (#655) and touch-style
+  scrolling (#568) come with hand poke (#19). Suggest declining KMS capture (#705) and
+  gamepad control (#348).
 
 Needs hardware to reproduce or verify:
 - AMD Vulkan encode: GPU timeouts and device lost in long sessions on RDNA3/4 (WiVRn #841,
@@ -237,9 +243,12 @@ Needs hardware to reproduce or verify:
   (#560), Half-Life: Alyx load screens (#888), RUMBLE's controllers at the feet with
   `XR_META_touch_controller_plus` (#826, likely a Monado binding patch), Close all apps
   with VRChat and No Man's Sky running (#1084).
-- Pico 4: invisible rays (WiVRn #1005), Pavlov walks inverted (#1169). Pico 4 Ultra: no
-  index pinch click from hands (#1196); fall back to an index pinch from the joints.
+- Pico 4: invisible rays (WiVRn #1005), Pavlov walks inverted (#1169), left Menu (fix from
+  #1213 is in, #1210). Pico 4 Ultra: no index pinch click from hands (#1196); fall back to
+  an index pinch from the joints.
 - Steam Frame: double vision on hands and rays (WiVRn #1140), image jitter (#1173).
+- WayVR beside a game on Monado's compute compositor: dark patchy shaders on NVIDIA (wayvr
+  #732), reproducible with WayVR but not lovr-playspace, so probably WayVR's layer format.
 - Games under xrizer-edge: Overload (WiVRn #598), Dagon (#829), Elite Dangerous losing focus
   after a session recreate (#1029), Ragnarock Demo's buttons (xrizer #465, free demo; note
   the result in xrizer-edge's CHANGES).
@@ -248,14 +257,10 @@ Needs hardware to reproduce or verify:
   WayVR (#675).
 
 Take from upstream:
-- WiVRn PR #1213: the Pico 4 menu fix above.
-- WiVRn PR #1208: Steam Frame bumper clicks and controller batteries. It removes
-  `get_battery_status()`, which stream_onevr.cpp calls, so port that call with it.
 - WiVRn PR #1194: no Wi-Fi scans during a Frame stream; needs a D-Bus policy and a setup
   step in the Frame tarball.
-- WiVRn PR #1206: ccache; add it to oneVR's CI Android and Frame jobs.
-- WiVRn PR #1087: a Vulkan AV1 encoder. Applies now, but upstream reports no image on
-  NVIDIA and a crash on RDNA3.5. Take once merged.
+- WiVRn PR #1206: ccache; merged upstream for WiVRn's own CI, but oneVR's root CI Android
+  and Frame jobs still lack it.
 - wayvr PR #703: holds the PipeWire buffer until drawn and waits on its fences, the cause
   behind `copy_captured_frames`. Conflicts with oneVR's capture changes (L). Once merged,
   test whether the copy is still needed, on the Xid 69 NVIDIA machine and on AMD.
