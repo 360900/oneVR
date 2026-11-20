@@ -4,6 +4,7 @@ use std::{cell::RefCell, collections::BTreeMap, marker::PhantomData, rc::Rc};
 
 use onevr_common::{
 	headset::{BODY_PARTS, Codec, Config, HeadsetSettings, PostProcessing, Posture, RESTART_KEYS},
+	server_config::{Encoder, ServerConfig},
 	state::{Link, OneVrRequest, OneVrState},
 };
 use serde_json::{Value, json};
@@ -91,7 +92,8 @@ enum Control {
 		set: fn(f32) -> Value,
 	},
 	Choice {
-		options: fn(&HeadsetSettings) -> Options,
+		/// The settings and whether the server's encoder is Vulkan, which limits some options
+		options: fn(&HeadsetSettings, bool) -> Options,
 		get: fn(&Config) -> Value,
 	},
 	BodyParts,
@@ -118,7 +120,23 @@ fn key(text: &str) -> Translation {
 	Translation::from_translation_key(text)
 }
 
-fn post_processing_options(_: &HeadsetSettings) -> Options {
+/// Codecs the headset decodes. Vulkan can't stream AV1 yet (no image on NVIDIA, device lost on
+/// RDNA3.5), so it is left out unless it is already picked; the warning then names it and offers
+/// another codec.
+fn codec_options(h: &HeadsetSettings, vulkan: bool) -> Options {
+	let mut options = vec![(json!(Codec::Automatic.key()), key("ONEVR.HEADSET.AUTOMATIC"))];
+	for codec in &h.capabilities.codecs {
+		if vulkan && *codec == Codec::Av1 && h.config.codec != Codec::Av1 {
+			continue;
+		}
+		if let Some(name) = codec.display_name() {
+			options.push((json!(codec.key()), Translation::from_raw_text(name)));
+		}
+	}
+	options
+}
+
+fn post_processing_options(_: &HeadsetSettings, _: bool) -> Options {
 	PostProcessing::ALL
 		.iter()
 		.map(|level| {
@@ -222,7 +240,7 @@ fn settings() -> Vec<Setting> {
 			section: Video,
 			show: |h| h.capabilities.refresh_rate_control,
 			control: Control::Choice {
-				options: |h| {
+				options: |h, _| {
 					let mut options = vec![(json!(0.0), key("ONEVR.HEADSET.AUTOMATIC"))];
 					for rate in &h.capabilities.refresh_rates {
 						options.push((
@@ -284,15 +302,7 @@ fn settings() -> Vec<Setting> {
 			section: Streaming,
 			show: always,
 			control: Control::Choice {
-				options: |h| {
-					let mut options = vec![(json!(Codec::Automatic.key()), key("ONEVR.HEADSET.AUTOMATIC"))];
-					for codec in &h.capabilities.codecs {
-						if let Some(name) = codec.display_name() {
-							options.push((json!(codec.key()), Translation::from_raw_text(name)));
-						}
-					}
-					options
-				},
+				options: codec_options,
 				get: |c| json!(c.codec.key()),
 			},
 		},
@@ -475,7 +485,7 @@ fn settings() -> Vec<Setting> {
 			section: Tracking,
 			show: always,
 			control: Control::Choice {
-				options: |_| {
+				options: |_, _| {
 					vec![
 						(json!(Posture::Standing.key()), key("ONEVR.HEADSET.STANDING")),
 						(json!(Posture::Seated.key()), key("ONEVR.HEADSET.SEATED")),
@@ -571,6 +581,8 @@ struct Shown {
 	headset: Option<HeadsetSettings>,
 	/// The server's setting, for the note on Devices
 	hid_forwarding: bool,
+	/// The server encodes with Vulkan, which can't stream AV1 yet
+	vulkan: bool,
 }
 
 impl Shown {
@@ -586,6 +598,7 @@ impl Shown {
 				// each answer has a new request_id, also one that changed nothing
 				headset: s.headset.clone().map(|h| HeadsetSettings { request_id: 0, ..h }),
 				hid_forwarding: s.server_config.get("hid-forwarding").and_then(Value::as_bool) == Some(true),
+				vulkan: ServerConfig(s.server_config.clone()).encoder() == Encoder::Named("vulkan".into()),
 			},
 		)
 	}
@@ -801,6 +814,9 @@ impl<T: 'static> TabOneVrHeadset<T> {
 		if !h.offline && visible.iter().any(|s| h.permission_denied.iter().any(|k| k == s.key)) {
 			ui.banner(parent, "ONEVR.HEADSET.PERMISSION_DENIED", "danger")?;
 		}
+		if self.section == Section::Streaming && shown.vulkan && h.config.codec == Codec::Av1 {
+			ui.banner(parent, "ONEVR.HEADSET.CODEC_VULKAN", "danger")?;
+		}
 
 		let (title, icon) = self.section.title_icon();
 		let group = ui.group(parent, title, icon)?;
@@ -810,14 +826,14 @@ impl<T: 'static> TabOneVrHeadset<T> {
 		// the risky settings go last, under a note that applies to them only
 		let (advanced, normal): (Vec<&Setting>, Vec<&Setting>) = visible.into_iter().partition(|s| setting_advanced(s.key));
 		for setting in normal {
-			mount(&mut ui, group, setting, h, &self.tasks, &mut self.sliders)?;
+			mount(&mut ui, group, setting, h, shown.vulkan, &self.tasks, &mut self.sliders)?;
 		}
 		if !advanced.is_empty() {
 			let row = ui.row(group)?;
 			ui.badge(row, "ONEVR.HEADSET.ADVANCED", "danger")?;
 			ui.muted(row, Text::Key("ONEVR.HEADSET.ADVANCED_NOTE"))?;
 			for setting in advanced {
-				mount(&mut ui, group, setting, h, &self.tasks, &mut self.sliders)?;
+				mount(&mut ui, group, setting, h, shown.vulkan, &self.tasks, &mut self.sliders)?;
 			}
 		}
 		if self.section == Section::Devices && !h.server_input_forwarding {
@@ -897,6 +913,7 @@ fn mount(
 	parent: WidgetID,
 	setting: &Setting,
 	h: &HeadsetSettings,
+	vulkan: bool,
 	tasks: &Tasks<Task>,
 	sliders: &mut Vec<Rc<ComponentSlider>>,
 ) -> anyhow::Result<()> {
@@ -941,7 +958,7 @@ fn mount(
 		}
 		Control::Choice { options, get } => {
 			let current = get(&h.config);
-			let options = options(h);
+			let options = options(h, vulkan);
 			let current_text = options.iter().find(|(value, _)| *value == current).map_or_else(
 				|| Translation::from_raw_text_string(current.to_string()),
 				|(_, t)| t.clone(),
@@ -1026,6 +1043,24 @@ mod tests {
 	use onevr_common::emulator::EXAMPLE;
 
 	use super::*;
+
+	#[test]
+	fn vulkan_hides_av1() {
+		let mut h = HeadsetSettings::default();
+		h.capabilities.codecs = vec![Codec::H264, Codec::H265, Codec::Av1];
+		let av1 = json!(Codec::Av1.key());
+		let options = |h: &HeadsetSettings, vulkan| {
+			codec_options(h, vulkan)
+				.into_iter()
+				.map(|(value, _)| value)
+				.collect::<Vec<_>>()
+		};
+		assert!(options(&h, false).contains(&av1));
+		assert!(!options(&h, true).contains(&av1));
+		// one already picked stays visible, so the warning names it
+		h.config.codec = Codec::Av1;
+		assert!(options(&h, true).contains(&av1));
+	}
 
 	// The server refuses a whole change over a key it doesn't know, as InvalidSettings
 	#[test]
