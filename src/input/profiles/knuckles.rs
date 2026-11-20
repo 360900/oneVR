@@ -641,4 +641,15 @@ mod tests {
         );
         assert!(!super::has_chosen_legacy_bindings_for(None));
     }
+
+    #[test]
+    fn chosen_steamvr_legacy_bindings_disable_auto() {
+        use crate::input::tests::{FakeSteam, input_data};
+        let steam = FakeSteam::new("index_as_vive_gate");
+        let url = format!("file://{}", input_data("legacy_custom/oculus_touch.json"));
+        steam.choose(&[("oculus_touch_250820_CurrentURL_legacy", &url)]);
+        assert!(super::has_chosen_legacy_bindings_for(Some(
+            FakeSteam::APP_KEY.to_owned()
+        )));
+    }
 }
