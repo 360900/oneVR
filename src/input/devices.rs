@@ -170,6 +170,9 @@ pub struct ProfileData {
     pub legacy_grip_click: Option<(f32, f32)>,
     /// See [`InteractionProfile::legacy_simulated_properties`].
     pub legacy_simulated: Option<&'static ProfileProperties>,
+    /// Index controllers in Index->Vive compatibility mode, see
+    /// [`profiles::knuckles::index_as_vive`].
+    pub legacy_index_as_vive: bool,
 }
 
 impl ProfileData {
@@ -187,6 +190,8 @@ impl ProfileData {
             legacy_trigger_click: P::LEGACY_TRIGGER_CLICK,
             legacy_grip_click: P::LEGACY_GRIP_CLICK,
             legacy_simulated: P::legacy_simulated_properties(),
+            legacy_index_as_vive: TypeId::of::<P>() == TypeId::of::<Knuckles>()
+                && profiles::knuckles::index_as_vive(),
         }
     }
 
@@ -204,6 +209,7 @@ impl ProfileData {
             senses_fingers: self.senses_fingers,
             legacy_trigger_click: self.legacy_trigger_click,
             legacy_grip_click: self.legacy_grip_click,
+            legacy_index_as_vive: false,
             steamvr_wrist_bone_hack: self.steamvr_wrist_bone_hack,
             ..emulated
         }

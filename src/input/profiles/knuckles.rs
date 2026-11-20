@@ -6,12 +6,99 @@ use crate::button_mask_from_ids;
 use crate::input::BoundPoseType;
 use crate::input::legacy::{self, LegacyBindings, button_mask_from_id};
 use crate::input::profiles::DynInputPath;
+use crate::input::profiles::vive_controller::ViveWands;
 use crate::openxr_data::Hand;
 use glam::{EulerRot, Mat4, Quat, Vec3};
 use openvr::EVRButtonId;
 use std::iter::Iterator;
 
 pub struct Knuckles;
+
+/// Games that only speak the legacy `GetControllerState` API and only understand HTC Vive
+/// wands. Matched by executable name, with or without `.exe`.
+const INDEX_AS_VIVE_APPS: &[&str] = &["SkyrimVR", "sksevr_loader"];
+
+/// Whether Index controllers should present as Vive wands to this app.
+///
+/// On by default for [`INDEX_AS_VIVE_APPS`] and for the names in
+/// `$XDG_CONFIG_HOME/xrizer/index_as_vive_apps` (one executable name per line, `#` comments),
+/// or for every app with `XRIZER_INDEX_AS_VIVE=1`. `XRIZER_INDEX_AS_VIVE=0` turns the
+/// automatic list off.
+pub(crate) fn index_as_vive() -> bool {
+    #[cfg(test)]
+    let enabled = crate::input::action_manifest::env_var("XRIZER_INDEX_AS_VIVE")
+        .is_some_and(|value| env_enabled(&value));
+    #[cfg(not(test))]
+    let enabled = {
+        static ENABLED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+        *ENABLED.get_or_init(|| {
+            if let Some(value) = crate::input::action_manifest::env_var("XRIZER_INDEX_AS_VIVE") {
+                let enabled = env_enabled(&value);
+                if enabled {
+                    log::info!(
+                        "XRIZER_INDEX_AS_VIVE is set: Index controllers will present as Vive wands"
+                    );
+                }
+                return enabled;
+            }
+
+            let apps = crate::input::xrizer_config_dir()
+                .and_then(|dir| std::fs::read_to_string(dir.join("index_as_vive_apps")).ok())
+                .unwrap_or_default();
+            let app = crate::openxr_data::get_app_name();
+            let matched = app
+                .as_deref()
+                .is_some_and(|app| index_as_vive_app(app, &apps));
+            if matched {
+                log::info!(
+                    "{} is on the Index->Vive list: Index controllers will present as Vive wands",
+                    app.as_deref().unwrap_or_default()
+                );
+            }
+            matched
+        })
+    };
+    enabled
+}
+
+fn env_enabled(value: &std::ffi::OsStr) -> bool {
+    value.to_str().is_some_and(|value| {
+        let value = value.trim();
+        value == "1" || value.eq_ignore_ascii_case("true")
+    })
+}
+
+/// Whether the app with the executable name `app` is on the list.
+fn index_as_vive_app(app: &str, extra: &str) -> bool {
+    let app = app_stem(app.trim());
+    INDEX_AS_VIVE_APPS
+        .iter()
+        .copied()
+        .chain(
+            extra
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty() && !line.starts_with('#')),
+        )
+        .any(|listed| app.eq_ignore_ascii_case(app_stem(listed)))
+}
+
+fn app_stem(name: &str) -> &str {
+    match name.rsplit_once('.') {
+        Some((stem, extension)) if extension.eq_ignore_ascii_case("exe") => stem,
+        _ => name,
+    }
+}
+
+/// The headset keeps its identity while the controllers show as Vive wands.
+const INDEX_HMD_PROPERTIES: HmdProperties = HmdProperties {
+    model: c"Index",
+    controller_type: c"indexhmd",
+    serial_number: c"LHR-FFFFFFF0",
+    render_model_name: c"generic_hmd",
+    registered_device_type: c"valve/indexLHR-FFFFFFF0",
+    input_profile_path: c"{indexhmd}/input/indexhmd_profile.json",
+};
 
 impl InteractionProfile for Knuckles {
     // The trackpad clicks by force, and a dpad on it plays a tick when a direction engages.
@@ -51,6 +138,33 @@ impl InteractionProfile for Knuckles {
         true
     }
     fn properties() -> &'static ProfileProperties {
+        static VIVE_COMPAT_PROPERTIES: ProfileProperties = ProfileProperties {
+            model: Property::BothHands(c"Vive. MV"),
+            openvr_controller_type: c"vive_controller",
+            render_model_name: Property::BothHands(c"vr_controller_vive_1_5"),
+            main_axis: MainAxisType::Trackpad,
+            // Keep Index's serials, so the devices stay unique and tracked as lighthouse ones.
+            registered_device_type: Property::PerHand {
+                left: c"htc/vive_controllerLHR-FFFFFFF1",
+                right: c"htc/vive_controllerLHR-FFFFFFF2",
+            },
+            serial_number: Property::PerHand {
+                left: c"LHR-FFFFFFF1",
+                right: c"LHR-FFFFFFF2",
+            },
+            tracking_system_name: c"lighthouse",
+            manufacturer_name: c"HTC",
+            input_profile_path: c"{htc}/input/vive_controller_profile.json",
+            legacy_buttons_mask: button_mask_from_ids!(
+                EVRButtonId::System,
+                EVRButtonId::ApplicationMenu,
+                EVRButtonId::Grip,
+                EVRButtonId::A,
+                EVRButtonId::Axis0,
+                EVRButtonId::Axis1
+            ),
+            hmd: INDEX_HMD_PROPERTIES,
+        };
         static DEVICE_PROPERTIES: ProfileProperties = ProfileProperties {
             model: Property::PerHand {
                 left: c"Knuckles Left",
@@ -82,15 +196,11 @@ impl InteractionProfile for Knuckles {
                 EVRButtonId::Axis1,
                 EVRButtonId::Axis2
             ),
-            hmd: HmdProperties {
-                model: c"Index",
-                controller_type: c"indexhmd",
-                serial_number: c"LHR-FFFFFFF0",
-                render_model_name: c"generic_hmd",
-                registered_device_type: c"valve/indexLHR-FFFFFFF0",
-                input_profile_path: c"{indexhmd}/input/indexhmd_profile.json",
-            },
+            hmd: INDEX_HMD_PROPERTIES,
         };
+        if index_as_vive() {
+            return &VIVE_COMPAT_PROPERTIES;
+        }
         &DEVICE_PROPERTIES
     }
     fn translate_path(path: DynInputPath) -> Option<DynInputPath> {
@@ -110,6 +220,33 @@ impl InteractionProfile for Knuckles {
     }
 
     fn legacy_bindings(c: &super::InputToXrPath<Self>) -> LegacyBindings {
+        if index_as_vive() {
+            // A Vive wand: the stick is its trackpad, its touch is emulated from the
+            // deflection in `read_hand_state`, and A is a face button of its own instead of
+            // another grip.
+            return LegacyBindings {
+                extra: legacy::Bindings {
+                    grip_pose: c.pose(),
+                },
+                app_menu: c.leftright::<B, Click, _, _>(),
+                app_menu_touch: vec![],
+                a: c.leftright::<A, Click, _, _>(),
+                a_touch: vec![],
+                trigger: c.leftright::<Trigger, Value, _, _>(),
+                trigger_click: c.leftright::<Trigger, Click, _, _>(),
+                trigger_touch: vec![],
+                squeeze: c.leftright::<Squeeze, Force, _, _>(),
+                squeeze_click: c.leftright::<Squeeze, Force, _, _>(),
+                grip_click: vec![],
+                axis2_touch: vec![],
+                grip_touch: vec![],
+                main_xy: c.leftright::<Thumbstick, (), _, _>(),
+                main_xy_click: c.leftright::<Thumbstick, Click, _, _>(),
+                main_xy_touch: vec![],
+                main_xy_deflect: vec![],
+                haptic: c.haptics(),
+            };
+        }
         // Follows SteamVR's legacy_bindings_index_controller.json
         LegacyBindings {
             extra: legacy::Bindings {
@@ -170,11 +307,17 @@ impl InteractionProfile for Knuckles {
     }
 
     fn offset_grip_pose(hand: Hand) -> Mat4 {
+        if index_as_vive() {
+            return ViveWands::offset_grip_pose(hand);
+        }
         super::offset_grip_pose_from_pose_type::<Knuckles>(hand, BoundPoseType::Grip)
     }
 
     /// Derived from `SteamVR/drivers/indexcontroller/resources/rendermodels/valve_controller_knu_1_0*/*.json`
     fn pose_transformation(pose: BoundPoseType) -> Option<PoseTransformations> {
+        if index_as_vive() {
+            return ViveWands::pose_transformation(pose);
+        }
         match pose {
             BoundPoseType::Raw => None,
             // All 0 so skip transformation
@@ -428,5 +571,28 @@ mod tests {
                 "/user/hand/right/output/haptic".into(),
             ],
         );
+    }
+
+    #[test]
+    fn index_as_vive_apps() {
+        assert!(super::index_as_vive_app("SkyrimVR.exe", ""));
+        assert!(super::index_as_vive_app("sksevr_loader", ""));
+        assert!(super::index_as_vive_app("MyGame.EXE", "mygame\n"));
+        assert!(super::index_as_vive_app(
+            "MyGame",
+            "# a comment\n\n mygame.exe \n"
+        ));
+        assert!(!super::index_as_vive_app("BladeAndSorcery.exe", "mygame\n"));
+        assert!(!super::index_as_vive_app("MyGame", "# MyGame\n"));
+    }
+
+    #[test]
+    fn index_as_vive_override() {
+        use std::ffi::OsStr;
+        assert!(super::env_enabled(OsStr::new("1")));
+        assert!(super::env_enabled(OsStr::new("true")));
+        assert!(super::env_enabled(OsStr::new("TRUE")));
+        assert!(!super::env_enabled(OsStr::new("0")));
+        assert!(!super::env_enabled(OsStr::new("")));
     }
 }
