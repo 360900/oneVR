@@ -254,8 +254,6 @@ Take from upstream:
 - WiVRn PR #1194: no Wi-Fi scans during a Frame stream; needs a D-Bus policy and a setup
   step in the Frame tarball.
 - WiVRn PR #1206: ccache; add it to oneVR's CI Android and Frame jobs.
-- WiVRn PR #1087: a Vulkan AV1 encoder. Applies now, but upstream reports no image on
-  NVIDIA and a crash on RDNA3.5. Take once merged.
 - wayvr PR #703: holds the PipeWire buffer until drawn and waits on its fences, the cause
   behind `copy_captured_frames`. Conflicts with oneVR's capture changes (L). Once merged,
   test whether the copy is still needed, on the Xid 69 NVIDIA machine and on AMD.
