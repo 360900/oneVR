@@ -48,6 +48,9 @@ commands:
         print the oneVR version";
 
 const COMPONENTS: [&str; 4] = ["xrizer", "wivrn", "wayvr", "onevr"];
+/// xrizer's helpers, started from each vrclient.so's directory: the crash dialog, and the desktop
+/// keyboard for games' text entries without WayVR's keyboard
+const XRIZER_HELPERS: [&str; 2] = ["xrizer-crash-dialog", "xrizer-keyboard"];
 const DEFAULT_PREFIX: &str = "/opt/onevr";
 const I686: &str = "i686-unknown-linux-gnu";
 
@@ -403,24 +406,33 @@ fn install(args: &[String]) -> Result {
         &xrizer_dst.join("linux64/vrclient.so"),
         0o755,
     )?;
+    for helper in XRIZER_HELPERS {
+        copy(
+            &xrizer_bin.join("linux64").join(helper),
+            &xrizer_dst.join("linux64").join(helper),
+            0o755,
+        )?;
+    }
     copy(
         &xrizer_bin.join("version.txt"),
         &xrizer_dst.join("version.txt"),
         0o644,
     )?;
     // A 32-bit xrizer left by an earlier --i686 build would get out of date.
-    let xrizer32 = xrizer_dst.join("vrclient.so");
-    if b.i686 {
-        copy(
-            &xrizer.join(I686).join(profile).join("bin/vrclient.so"),
-            &xrizer32,
-            0o755,
-        )?;
-    } else if remove_file(&xrizer32)? {
-        eprintln!(
-            "xtask: removed {}, this build has no --i686",
-            xrizer32.display()
-        );
+    for file in std::iter::once("vrclient.so").chain(XRIZER_HELPERS) {
+        let xrizer32 = xrizer_dst.join(file);
+        if b.i686 {
+            copy(
+                &xrizer.join(I686).join(profile).join("bin").join(file),
+                &xrizer32,
+                0o755,
+            )?;
+        } else if remove_file(&xrizer32)? {
+            eprintln!(
+                "xtask: removed {}, this build has no --i686",
+                xrizer32.display()
+            );
+        }
     }
 
     for bin in ["wayvr", "wayvrctl", "onevr-ui"] {

@@ -11,10 +11,11 @@ use crate::{
     KEYMAP_CHANGE,
     backend::{
         input::{HoverResult, PointerHit},
-        task::{GlobalChange, OverlayTask, TaskType},
+        task::{GlobalChange, ModifyPanelCommand, OverlayTask, TaskType},
     },
     config::none_if_0,
-    gui::panel::{GuiPanel, overlay_list::OverlayList, set_list::SetList},
+    gui::panel::{GuiPanel, apply_custom_command, overlay_list::OverlayList, set_list::SetList},
+    onevr::text_entry,
     overlays::keyboard::builder::create_keyboard_panel,
     state::AppState,
     subsystem::hid::{
@@ -115,6 +116,7 @@ pub fn create_keyboard(app: &mut AppState) -> anyhow::Result<OverlayWindowConfig
         wlx_layout: layout,
         wayland: app.feats.desktop_backend.is_wayland(),
         re_fcitx: Regex::new(r"^keyboard-([^-]+)(?:-([^-]+))?$").unwrap(),
+        text_entry_gen: None,
     };
 
     backend.active_layout = backend.add_new_keymap(maybe_keymap.as_ref(), app)?;
@@ -162,6 +164,8 @@ struct KeyboardBackend {
     wlx_layout: layout::Layout,
     wayland: bool,
     re_fcitx: Regex,
+    /// oneVR: the text entry change the top bar shows, see `show_text_entry`
+    text_entry_gen: Option<u64>,
 }
 
 impl KeyboardBackend {
@@ -217,6 +221,8 @@ impl KeyboardBackend {
             .take();
 
         self.active_layout = new_key;
+        // oneVR: the new panel shows the text entry too
+        self.text_entry_gen = None;
 
         self.layout_panels
             .get_mut(self.active_layout)
@@ -314,6 +320,40 @@ impl KeyboardBackend {
     fn panel(&mut self) -> &mut GuiPanel<KeyboardState> {
         self.layout_panels.get_mut(self.active_layout).unwrap() // want panic
     }
+
+    /// oneVR: an app's text entry takes the top bar's place while it's open, unless it asked for
+    /// minimal mode
+    fn show_text_entry(&mut self, app: &mut AppState) {
+        if self.text_entry_gen == Some(app.onevr.text_entry_gen) {
+            return;
+        }
+        self.text_entry_gen = Some(app.onevr.text_entry_gen);
+        let shown = text_entry::shown(app);
+        let visible = |id, visible| (id, ModifyPanelCommand::SetVisible(visible));
+        let mut commands = vec![
+            visible("tray_bar", shown.is_none()),
+            visible("text_entry_bar", shown.is_some()),
+        ];
+        if let Some(shown) = shown {
+            commands.extend([
+                visible("text_entry_description", !shown.description.is_empty()),
+                visible("text_entry_done", shown.done_key),
+                visible("text_entry_cancel", shown.done_key),
+                visible("text_entry_close", !shown.done_key),
+                (
+                    "text_entry_description",
+                    ModifyPanelCommand::SetText(shown.description),
+                ),
+                ("text_entry_text", ModifyPanelCommand::SetText(shown.text)),
+            ]);
+        }
+        let panel = self.panel();
+        for (element, command) in &commands {
+            if let Err(e) = apply_custom_command(panel, app, element, command) {
+                log::warn!("keyboard.xml: {element}: {e:?}");
+            }
+        }
+    }
 }
 
 impl OverlayBackend for KeyboardBackend {
@@ -323,6 +363,7 @@ impl OverlayBackend for KeyboardBackend {
     fn should_render(&mut self, app: &mut AppState) -> anyhow::Result<ShouldRender> {
         // oneVR: a key held while typing into the dashboard repeats
         repeat_dash_key(app, &mut self.panel().state);
+        self.show_text_entry(app);
 
         while KEYMAP_CHANGE.swap(false, Ordering::Relaxed) {
             if self
@@ -373,6 +414,8 @@ impl OverlayBackend for KeyboardBackend {
         self.panel().state.modifiers = 0;
         // oneVR: a held key stops repeating too
         self.panel().state.dash_repeat = None;
+        // oneVR: and an app's text entry closes
+        text_entry::keyboard_hidden(app);
         app.hid_provider
             .set_modifiers_routed(app.wvr_server.as_mut(), 0);
         self.panel().pause(app)
@@ -471,9 +514,24 @@ fn play_key_click(app: &mut AppState) {
     app.audio.play_sample("key_click");
 }
 
-/// oneVR: keys type into the dashboard's focused edit box, see `handle_press`
+/// oneVR: keys type into an app's text entry or the dashboard's focused edit box, see
+/// `handle_press`
 const fn dash_typing(app: &AppState) -> bool {
-    app.onevr.dash_text_focus && app.hid_provider.keymap.is_some()
+    typing_into_vr(app) && app.hid_provider.keymap.is_some()
+}
+
+/// oneVR: an app's text entry, else the dashboard's focused edit box, takes the keys' text
+const fn typing_into_vr(app: &AppState) -> bool {
+    text_entry::is_open(app) || app.onevr.dash_text_focus
+}
+
+/// oneVR: types a key's text where `typing_into_vr` says
+fn type_into_vr(app: &mut AppState, text: String) {
+    if text_entry::is_open(app) {
+        text_entry::type_text(app, &text);
+    } else {
+        app.onevr.dash_text.push(text);
+    }
 }
 
 /// oneVR: while keys type into the dashboard, the window gets no new Shift, Ctrl, Alt, Super or
@@ -497,14 +555,15 @@ fn repeat_dash_key(app: &mut AppState, keyboard: &mut KeyboardState) {
         .as_ref()
         .and_then(|r| app.input_state.pointers.get(r.pointer))
         .is_some_and(|p| p.now.click);
-    if !app.onevr.dash_text_focus || !held {
+    if !typing_into_vr(app) || !held {
         keyboard.dash_repeat = None;
     } else if let Some(repeat) = &mut keyboard.dash_repeat {
         let now = Instant::now();
         if now >= repeat.next {
-            app.onevr.dash_text.push(repeat.text.clone());
+            let text = repeat.text.clone();
             // no burst after a stall
             repeat.next = now + DASH_REPEAT_INTERVAL;
+            type_into_vr(app, text);
         }
     }
 }
@@ -566,20 +625,26 @@ fn handle_press(
                 _ => 0,
             };
 
-            if app.onevr.dash_text_focus
+            if typing_into_vr(app)
                 && let Some(keymap) = &app.hid_provider.keymap
             {
                 let text = keymap.text_for_key(*vk, keyboard.modifiers);
+                let entry_open = text_entry::is_open(app);
                 keyboard.dash_repeat = if text.is_empty() {
                     None
                 } else {
-                    app.onevr.dash_text.push(text.clone());
-                    button.device.to_index().map(|pointer| DashRepeat {
-                        vk: *vk,
-                        text,
-                        pointer,
-                        next: Instant::now() + DASH_REPEAT_DELAY,
-                    })
+                    type_into_vr(app, text.clone());
+                    // a key that ended a text entry doesn't repeat into the dashboard
+                    if entry_open && !text_entry::is_open(app) {
+                        None
+                    } else {
+                        button.device.to_index().map(|pointer| DashRepeat {
+                            vk: *vk,
+                            text,
+                            pointer,
+                            next: Instant::now() + DASH_REPEAT_DELAY,
+                        })
+                    }
                 };
                 typed.set(true);
                 pressed.set(true);

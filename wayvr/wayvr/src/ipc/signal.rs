@@ -32,4 +32,10 @@ pub enum WayVRSignal {
     ListOverlays(u64, Serial, wayvr_ipc::packet_client::WlxOverlayListParams),
     SetWindowState(wayvr_ipc::packet_client::WlxWindowStateSetParams),
     SetOverlayVisible(String, bool),
+    /// oneVR: (connection id, serial, params)
+    TextEntryShow(u64, Serial, wayvr_ipc::packet_client::WlxKeyboardShowParams),
+    /// oneVR: (connection id)
+    TextEntryHide(u64),
+    /// oneVR: (connection id) the connection is closed
+    Disconnected(u64),
 }

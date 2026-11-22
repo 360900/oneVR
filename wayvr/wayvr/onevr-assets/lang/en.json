@@ -44,6 +44,11 @@
     "GRAB": {
       "HAND_DISTANCE": "Push or pull to adjust distance",
       "HAND_SIZE": "Grab with both hands to adjust size"
+    },
+    "TEXT_ENTRY": {
+      "DONE": "Done",
+      "CANCEL": "Cancel",
+      "CLOSE": "Close"
     }
   }
 }

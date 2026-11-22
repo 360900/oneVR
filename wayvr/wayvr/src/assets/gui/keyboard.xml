@@ -217,7 +217,7 @@
 
   <elements>
     <div flex_direction="column" interactable="0">
-      <rectangle macro="bg_rect" padding="10" align_items="center" justify_content="space_between">
+      <rectangle id="tray_bar" macro="bg_rect" padding="10" align_items="center" justify_content="space_between">
         <div gap="10">
           <Button macro="button_style" id="btn_dashboard" _press="::DashToggle">
             <sprite width="38" height="38" src="@/watch/wayvr_dashboard_mono.svg"  />
@@ -245,6 +245,19 @@
             <Clock />
           </div>
         </div>
+      </rectangle>
+      <!-- oneVR: an app's text entry, in the top bar's place while it's open -->
+      <rectangle id="text_entry_bar" macro="bg_rect" padding="10" gap="10" align_items="center" display="none">
+        <rectangle color="fill" round="10" flex_grow="1" height="60" padding_left="14" padding_right="14" flex_direction="column" justify_content="center" overflow="hidden" gap="2">
+          <label id="text_entry_description" size="15" color="text2" />
+          <div align_items="center" gap="1">
+            <label id="text_entry_text" size="20" />
+            <rectangle width="2" height="24" color="accent" />
+          </div>
+        </rectangle>
+        <Button id="text_entry_cancel" macro="button_style" width="140" translation="ONEVR.TEXT_ENTRY.CANCEL" text_size="20" _press="::TextEntryCancel" />
+        <Button id="text_entry_close" macro="button_style" width="140" translation="ONEVR.TEXT_ENTRY.CLOSE" text_size="20" _press="::TextEntryCancel" />
+        <Button id="text_entry_done" macro="button_style" width="140" color="accent" hover_color="accent_hover" translation="ONEVR.TEXT_ENTRY.DONE" text_size="20" _press="::TextEntryDone" />
       </rectangle>
       <div width="100%" height="13" interactable="0" />
       <rectangle id="keyboard_root" macro="bg_rect" flex_direction="column" padding="10">

@@ -10,7 +10,7 @@ use std::{
 
 use onevr_common::{
 	doctor::{Check, Report, Status},
-	headset::{DecoderTiming, HeadsetStats},
+	headset::{Codec, DecoderTiming, HeadsetStats},
 	server_config::{ENCODERS, Encoder, OpenVrCompat, ServerConfig},
 	state::{KnownKey, Link, OneVrRequest, OneVrState},
 	steam_env,
@@ -881,6 +881,12 @@ impl<T: 'static> TabOneVrPc<T> {
 		ui.dropdown_sized(row, "ONEVR.PC.ENCODER", current, cells, 210, move |position, cells| {
 			tasks.push(Task::OpenMenu(position, cells));
 		})?;
+		// Vulkan can't stream AV1 yet; the Headset page filters it once this is picked
+		if config.encoder() == Encoder::Named("vulkan".into())
+			&& state.headset.as_ref().is_some_and(|h| h.config.codec == Codec::Av1)
+		{
+			ui.banner(group, "ONEVR.PC.VULKAN_AV1", "danger")?;
+		}
 
 		// toggles
 		for (key, label) in [

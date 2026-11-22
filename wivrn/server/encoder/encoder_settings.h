@@ -24,11 +24,20 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <string_view>
 
 namespace wivrn
 {
 struct vk_bundle;
 class wivrn_session;
+
+/// Whether the configuration asks for AV1 with the Vulkan encoder. The headset's codec list
+/// starts with AV1, and Vulkan AV1 gives no image on NVIDIA and loses the device on RDNA3.5, so
+/// this is the only case the Vulkan encoder uses AV1.
+inline bool vulkan_av1_requested(std::string_view encoder, std::optional<video_codec> codec)
+{
+	return encoder == "vulkan" and codec == video_codec::av1;
+}
 
 struct encoder_settings
 {

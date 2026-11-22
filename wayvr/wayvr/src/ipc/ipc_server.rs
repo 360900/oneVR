@@ -484,6 +484,15 @@ impl Connection {
             PacketClient::WlxOverlaySetVisible(overlay, visible) => {
                 Self::handle_wlx_overlay_set_visible(params, overlay, visible);
             }
+            // oneVR: text entries, answered from the frame loop
+            PacketClient::WlxKeyboardShow(serial, show_params) => {
+                params
+                    .signals
+                    .send(WayVRSignal::TextEntryShow(self.id, serial, show_params));
+            }
+            PacketClient::WlxKeyboardHide => {
+                params.signals.send(WayVRSignal::TextEntryHide(self.id));
+            }
         }
 
         Ok(())
@@ -607,6 +616,10 @@ impl WayVRServer {
         }
 
         // remove killed connections
+        // oneVR: what they had open closes
+        for c in self.connections.iter().filter(|c| !c.alive) {
+            params.signals.send(WayVRSignal::Disconnected(c.id));
+        }
         self.connections.retain(|c| c.alive);
     }
 

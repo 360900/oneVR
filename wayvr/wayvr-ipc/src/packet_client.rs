@@ -205,6 +205,26 @@ pub struct WlxOverlayListParams {
 	pub hidden: bool,
 }
 
+/// oneVR: a text entry an app asks for, typed on WayVR's keyboard. xrizer's
+/// `keyboard::protocol::Request` has the same fields.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WlxKeyboardShowParams {
+	/// Shown above the text
+	pub description: String,
+	/// The text to start from
+	pub text: String,
+	/// The most characters the text may have, 0 for no limit
+	pub max_chars: u32,
+	/// The text is shown masked
+	pub password: bool,
+	/// Enter types a new line instead of finishing
+	pub multiline: bool,
+	/// Keys go to the app as they're typed and the keyboard shows no text
+	pub minimal: bool,
+	/// The keyboard has a Done key. Without one, it can only be closed.
+	pub done_key: bool,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PacketClient {
 	Handshake(Handshake),
@@ -227,4 +247,9 @@ pub enum PacketClient {
 	WlxWindowAttribGet(Serial, WlxWindowAttribGetParams),
 	WlxWindowAttribSet(Serial, WlxWindowAttribSetParams),
 	WlxOverlaySetVisible(String, bool),
+	/// oneVR: answered by `WlxKeyboardShowResponse`, then reported on with `WlxKeyboardInput`,
+	/// `WlxKeyboardDone` and `WlxKeyboardClosed`
+	WlxKeyboardShow(Serial, WlxKeyboardShowParams),
+	/// oneVR: closes this connection's text entry
+	WlxKeyboardHide,
 }

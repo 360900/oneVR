@@ -15,6 +15,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#include "encoder/encoder_settings.h"
 #include "onevr_dbus.h"
 #include "onevr_offline.h"
 #include "wivrn_serialization.h"
@@ -189,6 +190,13 @@ int main(int argc, char ** argv)
 		          << std::endl;
 		return 0;
 	}
+
+	// Vulkan AV1 is opt-in: the headset's codec list starts with AV1, which the Vulkan encoder
+	// can't stream on NVIDIA or RDNA3.5
+	check(not vulkan_av1_requested("", video_codec::av1), "automatic encoding skips an explicit AV1");
+	check(not vulkan_av1_requested("vulkan", std::nullopt), "Vulkan skips AV1 without a codec");
+	check(not vulkan_av1_requested("vulkan", video_codec::h265), "a non-AV1 codec is not an opt-in");
+	check(vulkan_av1_requested("vulkan", video_codec::av1), "Vulkan uses an explicit AV1");
 
 	// Packets survive the wire
 	auto settings = example_settings();

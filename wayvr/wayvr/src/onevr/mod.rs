@@ -1,6 +1,7 @@
 //! oneVR: the link to the oneVR server, and dashboard features that need the backend.
 
 mod perf_overlay;
+pub mod text_entry;
 
 use std::{
     sync::Arc,
@@ -45,6 +46,10 @@ pub struct OneVrApp {
     pub dash_text_focus: bool,
     /// Typed text for the dashboard
     pub dash_text: Vec<String>,
+    /// The text entry an app asked for, which the keyboard types into
+    pub text_entry: Option<text_entry::TextEntry>,
+    /// Counts text entry changes, after which the keyboard shows it again
+    pub text_entry_gen: u64,
     pub virtual_monitors: Vec<VirtualMonitor>,
     /// Saved sizes not added yet, which the config keeps: they wait for the screens, and
     /// stay on a desktop that can't add monitors

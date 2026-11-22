@@ -9,6 +9,8 @@ use wlx_common::config::HandsfreePointer;
 use crate::{
     backend::task::{InputTask, OverlayTask, TaskType, ToggleMode},
     ipc::{signal::WayVRSignal, window_attrib, window_state},
+    onevr::text_entry,
+    overlays::keyboard::KEYBOARD_NAME,
     state::AppState,
     windowing::{OverlaySelector, manager::OverlayWindowManager},
 };
@@ -101,6 +103,23 @@ where
                         OverlaySelector::Name(name),
                         mode,
                     )));
+            }
+            WayVRSignal::TextEntryShow(connection_id, serial, params) => {
+                let keyboard_visible = overlays
+                    .lookup(KEYBOARD_NAME)
+                    .and_then(|id| overlays.mut_by_id(id))
+                    .is_some_and(|o| o.config.active_state.is_some());
+                let result = text_entry::show(app, connection_id, params, keyboard_visible);
+                app.ipc_server.send_response(
+                    connection_id,
+                    &PacketServer::WlxKeyboardShowResponse(serial, result),
+                );
+            }
+            WayVRSignal::TextEntryHide(connection_id) => {
+                text_entry::hide(app, connection_id);
+            }
+            WayVRSignal::Disconnected(connection_id) => {
+                text_entry::disconnected(app, connection_id);
             }
             WayVRSignal::Handsfree(params) => match params {
                 HandsfreeParams::SetMode(mode) => {

@@ -31,6 +31,7 @@ use crate::{
         wayvr::process::KillSignal,
     },
     gui::panel::{custom_overlay_reload, log_cmd_invalid_arg, log_cmd_missing_arg},
+    onevr::text_entry,
     overlays::{toast::Toast, wayvr::WvrCommand},
     state::AppState,
     subsystem::hid::VirtualKey,
@@ -295,6 +296,21 @@ pub(super) fn setup_custom_button<S: 'static>(
                         common
                             .alterables
                             .set_style(widget_id, StyleSetRequest::Display(display));
+                        Ok(EventResult::Consumed)
+                    })
+                }
+                // oneVR: the keyboard's buttons for an app's text entry
+                "::TextEntryDone" | "::TextEntryCancel" => {
+                    let end = if command == "::TextEntryDone" {
+                        text_entry::End::Done
+                    } else {
+                        text_entry::End::Cancel
+                    };
+                    Box::new(move |_common, data, app, _| {
+                        if !test_button(data) || !test_duration(&button, app) {
+                            return Ok(EventResult::Pass);
+                        }
+                        text_entry::finish(app, end);
                         Ok(EventResult::Consumed)
                     })
                 }
