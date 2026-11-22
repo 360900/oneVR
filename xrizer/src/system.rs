@@ -549,6 +549,9 @@ impl System {
     fn pump(&self) {
         self.input.force(|_| Input::new(self.openxr.clone()));
         self.openxr.pump();
+        if let Some(overlay) = self.overlay.get() {
+            overlay.pump_keyboard();
+        }
     }
 
     /// Drops the cached views. Those in LOCAL and STAGE are relative to the tracking origin, so
@@ -3875,6 +3878,54 @@ mod tests {
         assert_eq!(
             get_prop(vr::ETrackedDeviceProperty::ControllerType_String).as_c_str(),
             c"rift"
+        );
+    }
+
+    #[test]
+    fn index_compat_keeps_hmd_identity_before_first_frame() {
+        crate::input::TEST_ENV.with_borrow_mut(|env| {
+            env.insert("XRIZER_INDEX_AS_VIVE", "1".into());
+        });
+        fakexr::set_default_interaction_profile(
+            fakexr::UserPath::RightHand,
+            Some("/interaction_profiles/valve/index_controller"),
+        );
+        let xr =
+            Arc::new(OpenXrData::new(&Injector::default(), vr::EVRApplicationType::Scene).unwrap());
+        fakexr::set_default_interaction_profile(fakexr::UserPath::RightHand, None);
+
+        let injector = Injector::default();
+        let input = Arc::new(Input::new(xr.clone()));
+        let system = System::new(xr.clone(), &injector);
+        system.input.set(Arc::downgrade(&input));
+        xr.input.set(Arc::downgrade(&input));
+
+        let get_prop = |property| {
+            let mut err = vr::ETrackedPropertyError::Success;
+            let mut buf = vec![0; 64];
+            let len = system.GetStringTrackedDeviceProperty(
+                vr::k_unTrackedDeviceIndex_Hmd,
+                property,
+                buf.as_mut_ptr(),
+                buf.len() as u32,
+                &mut err,
+            );
+            assert_eq!(err, vr::ETrackedPropertyError::Success);
+            let slice = unsafe { std::slice::from_raw_parts(buf.as_ptr() as _, len as usize) };
+            CStr::from_bytes_with_nul(slice).unwrap().to_owned()
+        };
+
+        assert_eq!(
+            get_prop(vr::ETrackedDeviceProperty::ManufacturerName_String).as_c_str(),
+            c"Valve"
+        );
+        assert_eq!(
+            get_prop(vr::ETrackedDeviceProperty::ModelNumber_String).as_c_str(),
+            c"Index"
+        );
+        assert_eq!(
+            get_prop(vr::ETrackedDeviceProperty::ControllerType_String).as_c_str(),
+            c"indexhmd"
         );
     }
 }

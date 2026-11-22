@@ -27,6 +27,12 @@ pub struct Quirks {
     /// so the two can't be told apart from what's submitted.
     /// Env override: XRIZER_LINEAR_UNORM=1/0.
     pub linear_unorm: bool,
+
+    /// Present Index controllers as HTC Vive wands to games that only speak the legacy
+    /// `GetControllerState` API and only understand Vive wands. See
+    /// `input::profiles::knuckles`.
+    /// Env override: XRIZER_INDEX_AS_VIVE=1/0.
+    pub index_as_vive: bool,
 }
 
 /// Tracking glitches can teleport the controller for a frame; without a cap, a
@@ -66,7 +72,11 @@ pub fn get() -> Quirks {
         };
 
         let quirks = for_exe(&exe);
-        if quirks.no_generic_trackers || quirks.synthesized_velocity || quirks.linear_unorm {
+        if quirks.no_generic_trackers
+            || quirks.synthesized_velocity
+            || quirks.linear_unorm
+            || quirks.index_as_vive
+        {
             log::info!("Applying game quirks for {exe}: {quirks:?}");
         }
         quirks
@@ -75,23 +85,31 @@ pub fn get() -> Quirks {
 
 /// The quirks of the game with the executable `exe`.
 fn for_exe(exe: &str) -> Quirks {
-    match exe.to_lowercase().as_str() {
-        "superhotvr.exe" => Quirks {
+    let exe = exe.to_lowercase();
+    let exe = exe.strip_suffix(".exe").unwrap_or(&exe);
+    match exe {
+        "superhotvr" => Quirks {
             no_generic_trackers: true,
             ..Default::default()
         },
         // These read hand velocity for throws and flicks: Half-Life 2: VR Mod (and episodes),
         // Half-Life: Alyx (upstream issue 281; `hlvr` is its Linux build), H3VR's revolver and
         // break action flicks (362) and Waltz of the Wizard (372).
-        "hl2.exe" | "hlvr.exe" | "hlvr" | "h3vr.exe" | "waltzofthewizard.exe" => Quirks {
+        "hl2" | "hlvr" | "h3vr" | "waltzofthewizard" => Quirks {
             synthesized_velocity: true,
             ..Default::default()
         },
         // Outer Wilds, in VR only with NomaiVR, renders linear values into UNORM textures it
         // submits with ColorSpace_Auto, which look too dark as gamma (upstream issue 441). The
         // Epic build's exe has a space.
-        "outerwilds.exe" | "outer wilds.exe" => Quirks {
+        "outerwilds" | "outer wilds" => Quirks {
             linear_unorm: true,
+            ..Default::default()
+        },
+        // Skyrim VR's legacy input only understands Vive wands. SKSE VR launches the game
+        // through its own loader.
+        "skyrimvr" | "sksevr_loader" => Quirks {
+            index_as_vive: true,
             ..Default::default()
         },
         _ => Quirks::default(),
@@ -100,7 +118,7 @@ fn for_exe(exe: &str) -> Quirks {
 
 /// The basename of the game's executable. Wine rewrites argv[0] to the
 /// Windows path of the .exe, so this works for Proton games too.
-fn game_exe_name() -> Option<String> {
+pub(crate) fn game_exe_name() -> Option<String> {
     let cmdline = std::fs::read_to_string("/proc/self/cmdline")
         .ok()
         .and_then(|args| {
@@ -142,8 +160,16 @@ mod tests {
         ] {
             assert!(for_exe(exe).synthesized_velocity, "{exe}");
         }
+        for exe in ["SkyrimVR.exe", "SkyrimVR", "sksevr_loader.exe"] {
+            assert!(for_exe(exe).index_as_vive, "{exe}");
+        }
         let none = for_exe("BladeAndSorcery.exe");
-        assert!(!none.linear_unorm && !none.no_generic_trackers && !none.synthesized_velocity);
+        assert!(
+            !none.linear_unorm
+                && !none.no_generic_trackers
+                && !none.synthesized_velocity
+                && !none.index_as_vive
+        );
     }
 
     #[test]

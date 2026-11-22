@@ -19,6 +19,7 @@ use slotmap::Key;
 use std::collections::HashSet;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::time::Instant;
 
 #[derive(Default)]
 pub(super) struct LegacyState {
@@ -43,6 +44,22 @@ struct HandState {
     trigger_pressed: bool,
     /// Whether the squeeze value passed the profile's legacy grip press threshold.
     grip_pressed: bool,
+    /// Whether the stick counts as a touched trackpad in Index->Vive mode.
+    stick_touch: StickTouch,
+    /// The stick's distance from center when `stick_time` was taken.
+    stick_magnitude: f32,
+    stick_time: Option<Instant>,
+}
+
+/// Emulated trackpad touch state of a stick in Index->Vive mode.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum StickTouch {
+    #[default]
+    Untouched,
+    Touched,
+    /// The stick sprang back toward center. Stay untouched until it settles, so games that
+    /// scroll on touch movement don't see the spring-back as a swipe.
+    Latched,
 }
 
 impl LegacyState {
@@ -54,6 +71,54 @@ impl LegacyState {
 /// Button events are generated whether or not the app polls them, so an app that never calls
 /// PollNextEvent must not grow the queue forever.
 const MAX_QUEUED_EVENTS: usize = 256;
+
+/// A Vive wand's trigger clicks at the end of the pull, unlike the Index's capacitive click.
+const INDEX_AS_VIVE_TRIGGER_CLICK: (f32, f32) = (0.85, 0.7);
+/// The stick's deflection at which it counts as a touched trackpad in Index->Vive mode, with
+/// hysteresis so a resting thumb doesn't flicker.
+const STICK_TOUCH_ON: f32 = 0.25;
+const STICK_TOUCH_OFF: f32 = 0.15;
+/// Stick return speed (deflection units per second) above which the stick is springing back
+/// from a release rather than being eased back deliberately.
+const STICK_SPRING_SPEED: f32 = 6.0;
+/// Reads closer together than this can't measure the return speed reliably.
+const STICK_MIN_DT: f32 = 0.004;
+
+/// The next Index->Vive stick touch state. `dt` is the time since the last measured magnitude,
+/// `None` on the first read.
+fn next_stick_touch(
+    previous: StickTouch,
+    previous_magnitude: f32,
+    dt: Option<f32>,
+    magnitude: f32,
+) -> StickTouch {
+    let Some(dt) = dt else {
+        return if magnitude > STICK_TOUCH_ON {
+            StickTouch::Touched
+        } else {
+            StickTouch::Untouched
+        };
+    };
+    if dt < STICK_MIN_DT {
+        // Too soon to measure the speed; keep the previous decision, but still release if the
+        // stick is back near center, and touch if it went out past the threshold.
+        return match previous {
+            _ if magnitude <= STICK_TOUCH_OFF => StickTouch::Untouched,
+            StickTouch::Untouched if magnitude > STICK_TOUCH_ON => StickTouch::Touched,
+            _ => previous,
+        };
+    }
+    let returning_speed = (previous_magnitude - magnitude) / dt;
+    match previous {
+        _ if returning_speed > STICK_SPRING_SPEED && magnitude > STICK_TOUCH_OFF => {
+            StickTouch::Latched
+        }
+        StickTouch::Touched if magnitude > STICK_TOUCH_OFF => StickTouch::Touched,
+        StickTouch::Latched if magnitude > STICK_TOUCH_OFF => StickTouch::Latched,
+        StickTouch::Untouched if magnitude > STICK_TOUCH_ON => StickTouch::Touched,
+        _ => StickTouch::Untouched,
+    }
+}
 
 // Adapted from openvr.h
 pub const fn button_mask_from_id(id: vr::EVRButtonId) -> u64 {
@@ -512,13 +577,26 @@ fn read_hand_state(
     };
 
     let trigger = float_state(&actions.trigger);
-    // SteamVR's legacy bindings also touch the trigger once it is pulled, which is all
-    // controllers without a capacitive trigger can report.
-    let trigger_touched = threshold(previous.trigger_touched, trigger, 0.1, 0.05);
     let squeeze = float_state(&actions.squeeze);
+    let main_xy = actions
+        .main_xy
+        .state(session, hand_path)
+        .map_or(Default::default(), |s| s.current_state);
+    let compat = profile.is_some_and(|p| p.legacy_index_as_vive);
+
+    // SteamVR's legacy bindings also touch the trigger once it is pulled, which is all
+    // controllers without a capacitive trigger can report. A Vive wand has no trigger touch,
+    // and its trigger only clicks at the end of the pull.
+    let trigger_touched = !compat && threshold(previous.trigger_touched, trigger, 0.1, 0.05);
+    let trigger_thresholds = profile.and_then(|p| {
+        if p.legacy_index_as_vive {
+            Some(INDEX_AS_VIVE_TRIGGER_CLICK)
+        } else {
+            p.legacy_trigger_click
+        }
+    });
     // Some of SteamVR's legacy bindings also press these from the analog values.
-    let trigger_pressed = profile
-        .and_then(|p| p.legacy_trigger_click)
+    let trigger_pressed = trigger_thresholds
         .is_some_and(|(on, off)| threshold(previous.trigger_pressed, trigger, on, off));
     let grip_pressed = profile
         .and_then(|p| p.legacy_grip_click)
@@ -530,6 +608,36 @@ fn read_hand_state(
             glam::Vec2::new(s.current_state.x, s.current_state.y).length()
         });
     let stick_deflected = threshold(previous.stick_deflected, deflection, 0.8, 0.7);
+    let mut stick = (main_xy.x, main_xy.y);
+    let axis0_clicked = bool_state(&actions.main_xy_click);
+    let mut axis0_touched = bool_state(&actions.main_xy_touch);
+    let (mut stick_touch, mut stick_magnitude, mut stick_time) = (
+        previous.stick_touch,
+        previous.stick_magnitude,
+        previous.stick_time,
+    );
+
+    if compat {
+        // A Vive wand's trackpad is touched only while the stick is meaningfully deflected.
+        let magnitude = glam::Vec2::new(stick.0, stick.1).length();
+        let now = Instant::now();
+        let dt = stick_time.map(|at| now.duration_since(at).as_secs_f32());
+        stick_touch = next_stick_touch(stick_touch, stick_magnitude, dt, magnitude);
+        if dt.is_none_or(|dt| dt >= STICK_MIN_DT) {
+            stick_magnitude = magnitude;
+            stick_time = Some(now);
+        }
+
+        if stick_touch == StickTouch::Touched {
+            // Start from zero at the touch threshold so the first sample isn't a big jump.
+            let scaled = ((magnitude - STICK_TOUCH_OFF) / (1.0 - STICK_TOUCH_OFF)).max(0.0);
+            stick = (stick.0 / magnitude * scaled, stick.1 / magnitude * scaled);
+        } else if !axis0_clicked {
+            stick = (0.0, 0.0);
+        }
+        // Games expect the pad to be touched while it is clicked.
+        axis0_touched = stick_touch == StickTouch::Touched || axis0_clicked;
+    }
 
     let mut state = vr::VRControllerState_t::default();
     let mut set_button = |id, pressed: bool, touched: bool| {
@@ -545,13 +653,13 @@ fn read_hand_state(
 
     set_button(
         vr::EVRButtonId::Axis0,
-        bool_state(&actions.main_xy_click) || stick_deflected,
-        bool_state(&actions.main_xy_touch),
+        axis0_clicked || stick_deflected,
+        axis0_touched,
     );
     set_button(
         vr::EVRButtonId::SteamVR_Trigger,
-        bool_state(&actions.trigger_click) || trigger_pressed,
-        bool_state(&actions.trigger_touch) || trigger_touched,
+        (!compat && bool_state(&actions.trigger_click)) || trigger_pressed,
+        (!compat && bool_state(&actions.trigger_touch)) || trigger_touched,
     );
     set_button(
         vr::EVRButtonId::ApplicationMenu,
@@ -575,13 +683,9 @@ fn read_hand_state(
         bool_state(&actions.axis2_touch),
     );
 
-    let main_xy = actions
-        .main_xy
-        .state(session, hand_path)
-        .map_or(Default::default(), |s| s.current_state);
     state.rAxis[0] = vr::VRControllerAxis_t {
-        x: main_xy.x,
-        y: main_xy.y,
+        x: stick.0,
+        y: stick.1,
     };
     state.rAxis[1].x = trigger;
     state.rAxis[2].x = squeeze;
@@ -592,6 +696,9 @@ fn read_hand_state(
         stick_deflected,
         trigger_pressed,
         grip_pressed,
+        stick_touch,
+        stick_magnitude,
+        stick_time,
     }
 }
 
@@ -1514,6 +1621,232 @@ mod tests {
     }
 
     #[test]
+    fn index_as_vive_bindings() {
+        crate::input::tests::set_test_env("XRIZER_INDEX_AS_VIVE", "1");
+        let (f, _) = legacy_fixture(|actions| actions.a.as_raw());
+        let both = |paths: &[&str]| -> Vec<String> {
+            paths
+                .iter()
+                .flat_map(|p| ["left", "right"].map(|hand| format!("/user/hand/{hand}/input/{p}")))
+                .collect()
+        };
+        let check = |get_action: fn(&super::LegacyActions) -> openxr::sys::Action,
+                     paths: &[&str]| {
+            let expected = both(paths);
+            let expected: Vec<_> = expected.iter().map(String::as_str).collect();
+            assert_legacy_bindings::<Knuckles>(&f, get_action, &expected);
+        };
+
+        check(|a| a.main_xy.as_raw(), &["thumbstick"]);
+        check(|a| a.main_xy_click.as_raw(), &["thumbstick/click"]);
+        // The trackpad touch is emulated from the deflection, not the stick's touch.
+        check(|a| a.main_xy_touch.as_raw(), &[]);
+        check(|a| a.main_xy_deflect.as_raw(), &[]);
+        check(|a| a.a.as_raw(), &["a/click"]);
+        check(|a| a.a_touch.as_raw(), &[]);
+        check(|a| a.grip_click.as_raw(), &[]);
+        check(|a| a.grip_touch.as_raw(), &[]);
+        check(|a| a.trigger.as_raw(), &["trigger/value"]);
+        check(|a| a.trigger_click.as_raw(), &["trigger/click"]);
+        check(|a| a.trigger_touch.as_raw(), &[]);
+        check(|a| a.squeeze.as_raw(), &["squeeze/force"]);
+        check(|a| a.squeeze_click.as_raw(), &["squeeze/force"]);
+        check(|a| a.app_menu.as_raw(), &["b/click"]);
+        check(|a| a.app_menu_touch.as_raw(), &[]);
+
+        let data = f.input.openxr.session_data.get();
+        let devices = data.input_data.devices.read().unwrap();
+        let profile = devices
+            .get_controller(Hand::Left)
+            .and_then(|controller| controller.profile_data.as_ref())
+            .unwrap();
+        assert!(profile.legacy_index_as_vive);
+        assert_eq!(
+            profile.properties.openvr_controller_type,
+            c"vive_controller"
+        );
+        assert!(matches!(
+            profile.properties.main_axis,
+            crate::input::profiles::MainAxisType::Trackpad
+        ));
+        assert_eq!(profile.properties.legacy_buttons_mask, 0x3_0000_0087);
+        // The headset keeps its own identity.
+        assert_eq!(profile.headset.manufacturer_name, c"Valve");
+        assert_eq!(Knuckles::properties().openvr_controller_type, c"knuckles");
+    }
+
+    #[test]
+    fn index_as_vive_keeps_the_index_headset_identity() {
+        crate::input::tests::set_test_env("XRIZER_INDEX_AS_VIVE", "1");
+        use vr::ETrackedDeviceProperty as Prop;
+        let (f, _) = legacy_fixture(|actions| actions.a.as_raw());
+        let hmd = |prop| {
+            f.input
+                .get_device_string_tracked_property(vr::k_unTrackedDeviceIndex_Hmd, prop)
+                .map(|value| value.to_str().unwrap().to_owned())
+        };
+
+        assert_eq!(hmd(Prop::ManufacturerName_String).as_deref(), Some("Valve"));
+        assert_eq!(hmd(Prop::ModelNumber_String).as_deref(), Some("Index"));
+        assert_eq!(
+            hmd(Prop::ControllerType_String).as_deref(),
+            Some("indexhmd")
+        );
+    }
+
+    #[test]
+    fn index_as_vive_stick_is_a_trackpad() {
+        crate::input::tests::set_test_env("XRIZER_INDEX_AS_VIVE", "1");
+        use fakexr::UserPath::*;
+        let (f, stick) = legacy_fixture(|actions| actions.main_xy.as_raw());
+        let click = legacy_action(&f, |actions| actions.main_xy_click.as_raw());
+        {
+            let data = f.input.openxr.session_data.get();
+            let devices = data.input_data.devices.read().unwrap();
+            let controller = devices.get_controller(Hand::Left).unwrap();
+            assert!(
+                controller
+                    .profile_data
+                    .as_ref()
+                    .unwrap()
+                    .legacy_index_as_vive
+            );
+        }
+        let set_stick = |x, y| {
+            fakexr::set_action_state(stick, fakexr::ActionState::Vector2(x, y), LeftHand);
+            f.input.frame_start_update();
+            get_state(&f, 1)
+        };
+        let axis0 = super::button_mask_from_id(vr::EVRButtonId::Axis0);
+
+        // Below the touch threshold: untouched and no position, as a resting trackpad.
+        let state = set_stick(0.0, 0.2);
+        assert_eq!({ state.ulButtonTouched } & axis0, 0);
+        assert_eq!({ state.ulButtonPressed } & axis0, 0);
+        assert_eq!({ state.rAxis }[0].y, 0.0);
+        expect_no_event(&f);
+
+        // Past it: touched, with the position starting from zero at the threshold.
+        let state = set_stick(0.0, 0.4);
+        assert_eq!({ state.ulButtonTouched } & axis0, axis0);
+        assert_eq!({ state.ulButtonPressed } & axis0, 0);
+        let expected = (0.4 - 0.15) / (1.0 - 0.15);
+        assert!(({ state.rAxis }[0].y - expected).abs() < 1e-6);
+        expect_button_event(&f, vr::EVREventType::ButtonTouch, 1, vr::EVRButtonId::Axis0);
+
+        // Hysteresis: still touched above the release threshold.
+        let state = set_stick(0.0, 0.2);
+        assert_eq!({ state.ulButtonTouched } & axis0, axis0);
+
+        // Clicking touches it even at rest, and keeps the raw position.
+        fakexr::set_action_state(click, fakexr::ActionState::Bool(true), LeftHand);
+        f.input.frame_start_update();
+        let state = get_state(&f, 1);
+        assert_eq!({ state.ulButtonPressed } & axis0, axis0);
+        assert_eq!({ state.ulButtonTouched } & axis0, axis0);
+        expect_button_event(&f, vr::EVREventType::ButtonPress, 1, vr::EVRButtonId::Axis0);
+
+        // Letting go releases and untouches.
+        fakexr::set_action_state(click, fakexr::ActionState::Bool(false), LeftHand);
+        let state = set_stick(0.0, 0.0);
+        assert_eq!({ state.ulButtonPressed } & axis0, 0);
+        assert_eq!({ state.ulButtonTouched } & axis0, 0);
+        expect_button_event(
+            &f,
+            vr::EVREventType::ButtonUnpress,
+            1,
+            vr::EVRButtonId::Axis0,
+        );
+        expect_button_event(
+            &f,
+            vr::EVREventType::ButtonUntouch,
+            1,
+            vr::EVRButtonId::Axis0,
+        );
+    }
+
+    #[test]
+    fn index_as_vive_trigger_clicks_at_the_end() {
+        crate::input::tests::set_test_env("XRIZER_INDEX_AS_VIVE", "1");
+        use fakexr::UserPath::*;
+        let (f, trigger) = legacy_fixture(|actions| actions.trigger.as_raw());
+        let trigger_click = legacy_action(&f, |actions| actions.trigger_click.as_raw());
+        let set_trigger = |value| {
+            fakexr::set_action_state(trigger, fakexr::ActionState::Float(value), RightHand);
+            fakexr::set_action_state(trigger_click, fakexr::ActionState::Bool(true), RightHand);
+            f.input.frame_start_update();
+            get_state(&f, 2).ulButtonPressed
+        };
+        let mask = super::button_mask_from_id(vr::EVRButtonId::SteamVR_Trigger);
+
+        assert_eq!(set_trigger(0.6), 0, "the runtime's click is too early");
+        assert_eq!(set_trigger(0.9), mask);
+        assert_eq!(set_trigger(0.75), mask, "stays pressed until it drops");
+        assert_eq!(set_trigger(0.65), 0);
+    }
+
+    #[test]
+    fn index_as_vive_a_is_its_own_button() {
+        crate::input::tests::set_test_env("XRIZER_INDEX_AS_VIVE", "1");
+        use fakexr::UserPath::*;
+        let (f, a) = legacy_fixture(|actions| actions.a.as_raw());
+        fakexr::set_action_state(a, fakexr::ActionState::Bool(true), RightHand);
+        f.input.frame_start_update();
+        let pressed = { get_state(&f, 2).ulButtonPressed };
+        assert_eq!(
+            pressed & super::button_mask_from_id(vr::EVRButtonId::A),
+            super::button_mask_from_id(vr::EVRButtonId::A)
+        );
+        assert_eq!(
+            pressed & super::button_mask_from_id(vr::EVRButtonId::Axis0),
+            0
+        );
+        assert_eq!(
+            pressed & super::button_mask_from_id(vr::EVRButtonId::Grip),
+            0
+        );
+    }
+
+    #[test]
+    fn stick_touch_latches_on_spring_back() {
+        use super::StickTouch::*;
+        assert_eq!(super::next_stick_touch(Untouched, 0.0, None, 0.3), Touched);
+        assert_eq!(
+            super::next_stick_touch(Touched, 0.4, Some(0.016), 0.35),
+            Touched
+        );
+        assert_eq!(
+            super::next_stick_touch(Untouched, 0.0, Some(0.016), 0.2),
+            Untouched
+        );
+        assert_eq!(
+            super::next_stick_touch(Touched, 0.8, Some(0.01), 0.5),
+            Latched
+        );
+        assert_eq!(
+            super::next_stick_touch(Latched, 0.5, Some(0.016), 0.6),
+            Latched
+        );
+        assert_eq!(
+            super::next_stick_touch(Latched, 0.5, Some(0.016), 0.1),
+            Untouched
+        );
+        // Too soon to measure the speed, but still touch when going out past the threshold.
+        assert_eq!(
+            super::next_stick_touch(Untouched, 0.0, Some(0.001), 0.3),
+            Touched
+        );
+        assert_eq!(
+            super::next_stick_touch(Touched, 0.4, Some(0.001), 0.2),
+            Touched
+        );
+        assert_eq!(
+            super::next_stick_touch(Touched, 0.4, Some(0.001), 0.1),
+            Untouched
+        );
+    }
+
+    #[test]
     fn stick_deflection_presses_axis0() {
         use fakexr::UserPath::*;
         let (f, stick) = legacy_fixture(|actions| actions.main_xy_deflect.as_raw());
@@ -2363,6 +2696,20 @@ mod tests {
             .unwrap()
             .properties;
         assert!(std::ptr::eq(properties, Knuckles::properties()));
+    }
+
+    #[test]
+    fn simulated_binding_clears_index_as_vive_poses() {
+        crate::input::tests::set_test_env("XRIZER_INDEX_AS_VIVE", "1");
+        let f = remapped_fixture::<Knuckles, Knuckles>("legacy_index_as_vive");
+        let data = f.input.openxr.session_data.get();
+        let devices = data.input_data.devices.read().unwrap();
+        let profile = devices
+            .get_controller(Hand::Left)
+            .and_then(|controller| controller.profile_data.as_ref())
+            .unwrap();
+        assert!(!profile.legacy_index_as_vive);
+        assert_eq!(profile.properties.openvr_controller_type, c"oculus_touch");
     }
 
     #[test]

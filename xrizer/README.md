@@ -23,6 +23,8 @@ OpenVR games need to be pointed at xrizer-edge instead of SteamVR. Either:
 
 With WiVRn, you can instead set the xrizer-edge path as the OpenVR compatibility library in the WiVRn settings.
 
+When a game asks for text, xrizer-edge shows [oneVR](https://github.com/360900/oneVR)'s WayVR keyboard in the headset if it's running, and a text entry window on the desktop otherwise.
+
 ## openvrpaths.vrpath
 
 A JSON file OpenVR games read to find the runtime. If you've run SteamVR before, add the xrizer-edge path to the `runtime` list. Otherwise, create `$XDG_CONFIG_HOME/openvr/openvrpaths.vrpath`:
@@ -85,6 +87,8 @@ The app list (`IVRApplications`) holds the apps whose manifests were added by th
 
 `XRIZER_CONTROLLER_TYPE` - `knuckles` or `oculus_touch` shows the controllers to the game as Index or Touch controllers: they report that controller's identity and poses, and get the game's bindings for it converted, if it has any. The headset keeps its identity. Without the variable, `controller_type` in `~/.config/xrizer/apps/<app key>.json` (same key as above) chooses it per game. `auto` or no choice shows the real controllers, except those the game has no bindings for: they show as the Index or Touch controllers their bindings are converted from. Games without an action manifest always see the real controllers.
 
+`XRIZER_INDEX_AS_VIVE` - `1` shows Index controllers to legacy games that only understand HTC Vive wands as Vive wands: Vive identity and poses, the stick as a trackpad touched past 25% deflection and clicked by the stick click, A as a button of its own, and the trigger clicking near the end of the pull. `0` turns it off for every app. Enabled automatically for Skyrim VR and `sksevr_loader`, unless the game has chosen legacy bindings; the executable names in `~/.config/xrizer/index_as_vive_apps` (under `$XDG_CONFIG_HOME` if set, one per line with `#` comments) and `XRIZER_INDEX_AS_VIVE=1` enable it. While active, the headset keeps its Index identity.
+
 `XRIZER_LINEAR_UNORM` - `1` shows 8-bit UNORM textures submitted with `ColorSpace_Auto` as linear instead of sRGB encoded, `0` forces sRGB. Try `1` if a game looks much too dark. Enabled automatically for games known to need it.
 
 `XRIZER_WINE_APP` - `1` removes Linux-only Vulkan extensions from the lists given to the game and names external handles by their Windows names. Try it if a Proton game hangs before its first frame with `VK_ERROR_EXTENSION_NOT_PRESENT` in its log.
@@ -123,7 +127,7 @@ The output directory is the runtime directory.
 ```
 rustup target add i686-unknown-linux-gnu
 cargo xbuild --release --target i686-unknown-linux-gnu
-cp -L target/i686-unknown-linux-gnu/release/bin/{vrclient.so,xrizer-crash-dialog} target/release/bin/
+cp -L target/i686-unknown-linux-gnu/release/bin/{vrclient.so,xrizer-crash-dialog,xrizer-keyboard} target/release/bin/
 ```
 
 These builds load the system OpenXR loader, so 32-bit games also need a 32-bit one (e.g. `lib32-openxr`). Releases bundle the loader with `--features static-openxr` instead, which also needs cmake, a C++ compiler and, for 32-bit, C++ multilib and 32-bit X11 headers. That loader also reads OpenXR config from its build directory and fails if that exists but isn't readable, so build packages in a path that won't exist on users' machines.

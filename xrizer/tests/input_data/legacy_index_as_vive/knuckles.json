@@ -1,0 +1,22 @@
+{
+	"controller_type": "knuckles",
+	"category": "legacy",
+	"options": {
+		"simulated_controller_type": "oculus_touch"
+	},
+	"bindings": {
+		"/actions/legacy": {
+			"sources": [
+				{
+					"mode": "button",
+					"path": "/user/hand/right/input/a",
+					"inputs": {
+						"click": {
+							"output": "/actions/legacy/in/right_applicationmenu_press"
+						}
+					}
+				}
+			]
+		}
+	}
+}

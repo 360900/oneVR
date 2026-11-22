@@ -303,7 +303,7 @@ impl<C: openxr_data::Compositor> Input<C> {
         let probed_profile = [Hand::Left, Hand::Right]
             .into_iter()
             .filter_map(|hand| openxr.probed_profiles.get(hand))
-            .filter_map(|name| ProfileData::for_profile_name(name).map(|d| d.properties))
+            .filter_map(|name| ProfileData::for_profile_name(name).map(|d| d.headset))
             .min_by_key(|properties| is_simple_controller(properties));
 
         Self {
@@ -3904,12 +3904,16 @@ impl<C: openxr_data::Compositor> Input<C> {
                 if let Some(properties) =
                     loaded.and_then(|loaded| loaded.simulated_properties.get(&profile_path))
                 {
+                    // The chosen binding shows another controller; don't also apply the
+                    // Index->Vive pose mode.
                     data.properties = properties;
                     data.headset = properties;
+                    data.legacy_index_as_vive = false;
                 } else if let Some(properties) = data.legacy_simulated.filter(|_| legacy) {
                     // SteamVR's legacy bindings for the controller show apps another one.
                     data.properties = properties;
                     data.headset = properties;
+                    data.legacy_index_as_vive = false;
                 }
                 if let Some(emulated) =
                     loaded.and_then(|loaded| loaded.emulated_profiles.get(&profile_path))

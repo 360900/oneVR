@@ -51,15 +51,15 @@ Effort: S under a day, M a few days, L a week or more. "WiVRn" notes describe wh
 13. Overlay input (L)
     - no laser, no hit testing, no mouse, scroll or focus events
     - `ComputeOverlayIntersection`, `IsHoverTargetOverlay`, `HandleControllerOverlayInteractionAsMouse` return false
-    - The Lab (#122); prerequisite for 14 and 15
+    - The Lab (#122); prerequisite for 14
 14. Dashboard (M-L)
     - dashboard overlays are plain hidden overlays with no tab; `ShowDashboard` does nothing
     - focus loss sends `InputFocusCaptured`, never `DashboardActivated`/`Deactivated`
     - option: follow WayVR's dashboard over WayVR IPC
-15. Virtual keyboard (M after 13)
-    - `KeyboardDone`/`KeyboardClosed` sent at once, text unchanged
-    - no `KeyboardCharInput`, no `*_Global` events
-    - option: WayVR's keyboard over WayVR IPC
+15. Virtual keyboard (S)
+    - WayVR's keyboard needs oneVR's WayVR; upstream WayVR has no text entry packets, so it gets the desktop window
+    - `SetKeyboardTransformAbsolute` and `SetKeyboardPositionForOverlay` ignored; WayVR's keyboard stays where the user put it
+    - untested in a game on a headset
 16. Overlay rendering (S-M each)
     - panorama overlays ignored; cubemap skybox shows only the front face (`XR_KHR_composition_layer_cube`, not on WiVRn)
     - pre-curve pitch, auto-curve range ignored
@@ -106,6 +106,7 @@ Effort: S under a day, M a few days, L a week or more. "WiVRn" notes describe wh
 23. Legacy input without chosen bindings (S)
     - fixed mappings match SteamVR's per-controller legacy files (no DPad there, the system button is the runtime's); Focus 3 bumper (`Axis3`) isn't in its OpenXR profile
     - WMR legacy mapping unverified: SteamVR's WMR driver isn't shipped on Linux
+    - Index->Vive compatibility mode (`XRIZER_INDEX_AS_VIVE`, Skyrim VR) unverified on a headset; automatic mode skips games with chosen legacy bindings
     - `vive_tracker_handed` legacy bindings (trackers: 21)
 24. Dominant hand (S)
     - a change through `SetDominantHand` restarts the session to load the bindings again, where SteamVR applies it at the next `UpdateActionState`

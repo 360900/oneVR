@@ -92,6 +92,18 @@ Status: `pending` | `merged` | `superseded-by-<n>` | `blocked` | `dropped` | `re
 | 463 | Upgrade Dependencies | merged | glam 0.34, lz4_flex 0.14, miniquad 0.4.11, bindgen 0.72; only these updated in the lockfile |
 | 464 | input: Frame controller support | merged | draft, supersedes 440 on top of 338; grip offset and bumper, view and menu touches ported by hand in `114f58b`, with the pose components of SteamVR's render models; head `6fbf90e` (2026-11-14): thumb from the inputs in `7efaf5f`, wrist hack in `0b748ff`, on SteamVR's runtime only, model names in `b45c76a`; custom bindings for controllers without defaults already in the fork |
 
+## Upstream sync (2026-11-18)
+
+| PR | Title | Status | Notes |
+|----|-------|--------|-------|
+| 469 | [Input]: ShowKeyboard Support | merged | ported by hand as the fallback to WayVR's keyboard in `92e43b0`: its egui window runs in `xrizer-keyboard`, next to `vrclient.so`, instead of a fork of the game's process, reports each edit as keys and takes the flags; WayVR's keyboard (oneVR) over its IPC first, in `66481dd`, with `KeyboardCharInput` per key, a live `GetKeyboardText`, `HideKeyboard` and the `*_Global` events |
+
+## Upstream sync (2026-11-20)
+
+| PR | Title | Status | Notes |
+|----|-------|--------|-------|
+| 469 | [Input]: ShowKeyboard Support | merged | head `01c937f` (2026-11-19), after the keyboard: Index->Vive compatibility layer for legacy-only games, ported by hand. Skyrim VR and `sksevr_loader` show Index controllers as Vive wands automatically, unless the game has chosen legacy bindings; `XRIZER_INDEX_AS_VIVE=1` or `~/.config/xrizer/index_as_vive_apps` force it. The controllers get Vive identity and poses, the stick as a trackpad touched past 25% deflection and clicked by the stick click, A as its own button instead of another grip, and the trigger clicking at 85%/70% of the pull. The headset keeps its Index identity while this mode is active, and games with chosen legacy bindings skip the automatic mode |
+
 ## Upstream issues (2026-11-10)
 
 All open upstream issues checked against the fork. What needed a change:
@@ -106,6 +118,15 @@ All open upstream issues checked against the fork. What needed a change:
 | crash dialog | runs in its own process (`xrizer-crash-dialog`, next to `vrclient.so`), so it stays open after the game exits; in the game's process if that's missing; window fits its content (#73) | `7b481f7` `7b42d12` |
 
 Checked with the games' own files, no change needed: The Forest's jump, drop and crouch (#250) are on its joystick bindings, its leftover trackpad sources are dropped by SteamVR too; Half-Life 2: VR Mod's jump and crouch on Touch (#213). Like SteamVR: grab mode has no click haptic unless the binding sets one (#420), and a game that never resets the seated zero sits where the user last recentered (#405).
+
+## Upstream issues (2026-11-20)
+
+| Issue | Change |
+|------|--------|
+| #470, #424 Blade & Sorcery alternate use and telekinesis repel | fixed by `8ff6a22`: the game binds `a/value` and `x/value` with `scalar_constant`, which now binds the button's click; the test covers the game's paths |
+| #466 Half-Life: Alyx crash on start | fixed by `8573df8`: `GetPosesForFrame` is implemented (upstream PR 168) |
+| #467 The Lab crash when grabbing and releasing a stick | fixed by `8148144`: negative and non-finite "seconds from now" no longer panic; the stick release itself is a separate report, not reproduced |
+| #465 Ragnarock Demo, #468 Population: ONE | logs from upstream builds only; #465's one rejected path is `/input/system`, which the fork maps to the menu button (`5ce6287`). No change until a fork log or a headset test |
 
 ## Fork fixes (not upstream PRs)
 
