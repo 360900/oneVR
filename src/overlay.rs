@@ -4324,7 +4324,7 @@ mod tests {
         );
         keyboard_event(vr::EVREventType::KeyboardOpened_Global, 9)(&poll().unwrap());
         assert!(poll().is_none());
-        assert_eq!(text(), c"ab");
+        assert_eq!(text().as_c_str(), c"ab");
 
         // One at a time.
         assert_eq!(
@@ -4359,7 +4359,7 @@ mod tests {
         for event in &events {
             keyboard_event(vr::EVREventType::KeyboardCharInput, 9)(event);
         }
-        assert_eq!(text(), c"abc d e f ");
+        assert_eq!(text().as_c_str(), c"abc d e f ");
 
         // HideKeyboard closes it, which ends the session.
         let (closed, was_closed) = std::sync::mpsc::channel::<()>();
@@ -4375,7 +4375,7 @@ mod tests {
         }
         assert!(poll().is_none());
         // The text stays for the app to read.
-        assert_eq!(text(), c"abc d e f ");
+        assert_eq!(text().as_c_str(), c"abc d e f ");
 
         // Free again; a Done before the close.
         assert_eq!(
@@ -4392,7 +4392,7 @@ mod tests {
         );
         let (request, replies, _) = SHOWN.with(|s| s.borrow_mut().take()).unwrap();
         assert!(!request.done_key && !request.minimal && !request.password);
-        assert_eq!(text(), c"");
+        assert_eq!(text().as_c_str(), c"");
         replies.send(Reply::Done).unwrap();
         drop(replies);
         for ty in [
