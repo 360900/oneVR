@@ -56,7 +56,7 @@ use std::{
     time::{Duration, Instant},
 };
 use wayland_protocols::xdg::shell::server::xdg_toplevel;
-use wayvr_ipc::packet_client::PositionMode;
+use wayvr_ipc::packet_client::{PositionMode, WvrProcessLaunchParams};
 use wgui::{gfx::ImageView, globals::WguiGlobals, log::LogErr};
 use wlx_capture::frame::Transform;
 use wlx_common::{
@@ -170,6 +170,7 @@ pub struct WvrServerState {
     ticks: u64,
     cur_modifiers: u8,
     mouse_freeze: Instant,
+    pending_release: Option<(MouseIndex, Vec2)>,
     window_to_overlay: HashMap<window::WindowHandle, OverlayID>,
     overlay_to_window: SecondaryMap<OverlayID, window::WindowHandle>,
     process_overlays: HashMap<process::ProcessHandle, Vec<OverlayID>>,
@@ -198,6 +199,7 @@ const KEY_REPEAT_RATE: i32 = 50;
 const WAYVR_SCREEN_RES: [i32; 2] = [2560, 1440];
 
 impl WvrServerState {
+    #[allow(clippy::tuple_array_conversions)]
     pub fn new(
         gfx_extras: &WGfxExtras,
         config: &GeneralConfig,
@@ -361,6 +363,7 @@ impl WvrServerState {
             tasks,
             cur_modifiers: 0,
             mouse_freeze: Instant::now(),
+            pending_release: None,
             window_to_overlay: HashMap::new(),
             overlay_to_window: SecondaryMap::new(),
             process_overlays: HashMap::new(),
@@ -510,10 +513,9 @@ impl WvrServerState {
                             name.as_deref(),
                             restore_on_spawn,
                         )
-                        .map(|size| {
+                        .map_or(fallback_size, |size| {
                             client_size_from_overlay_size(size, ssd).clamp(min_size, max_size)
-                        })
-                        .unwrap_or(fallback_size);
+                        });
                         let initial_overlay_size = overlay_size_from_client_size(
                             [initial_size.w as u32, initial_size.h as u32],
                             ssd,
@@ -946,6 +948,7 @@ impl WvrServerState {
                 WayVRTask::DndStarted { icon, pointer } => {
                     // don't freeze on drag start
                     wvr_server.mouse_freeze = Instant::now();
+                    wvr_server.pending_release = None;
 
                     let selector = OverlaySelector::Name(DRAG_ITEM_NAME.clone());
 
@@ -1585,7 +1588,7 @@ impl WvrServerState {
     pub fn send_mouse_button(
         &mut self,
         target: PointerFocusTarget,
-        global_pos: Vec2,
+        mut global_pos: Vec2,
         hover_window: window::WindowHandle,
         index: MouseIndex,
         pressed: bool,
@@ -1604,6 +1607,12 @@ impl WvrServerState {
 
         if pressed {
             self.mouse_freeze = Instant::now() + Duration::from_millis(click_freeze.max(0) as u64);
+            self.pending_release = Some((index, global_pos));
+        } else if self.mouse_freeze > Instant::now()
+            && let Some((press_index, press_pos)) = self.pending_release.take()
+            && press_index == index
+        {
+            global_pos = press_pos;
         }
 
         let (focus, focus_keyboard) = self.get_mouse_focus(target, hover_window, pressed);
@@ -1717,6 +1726,30 @@ impl WvrServerState {
 
     pub fn set_clipboard(&mut self, content: &str) {
         self.manager.state.set_clipboard_text(content);
+    }
+
+    pub fn launch_process(
+        &mut self,
+        params: WvrProcessLaunchParams,
+    ) -> anyhow::Result<process::ProcessHandle> {
+        let mut argv_iter = params.argv.iter().map(String::as_str);
+        let exec_path = argv_iter
+            .next()
+            .context("No executable for process_launch")?;
+        let exec_args = argv_iter.collect::<Box<_>>();
+        let env_vec = ipc_server::gen_env_vec(&params.env);
+
+        self.spawn_process(
+            &params.name,
+            exec_path,
+            &exec_args,
+            &env_vec,
+            params.resolution,
+            params.pos_mode,
+            None,
+            params.icon.as_deref(),
+            params.userdata,
+        )
     }
 
     #[allow(clippy::too_many_arguments)]

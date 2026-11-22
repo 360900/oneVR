@@ -6,14 +6,13 @@ use crate::{
     backend::input::InputState,
     ipc::{event_queue::SyncEventQueue, signal::WayVRSignal},
 };
-use anyhow::Context;
 use bytes::BufMut;
 use glam::Vec3A;
 use interprocess::local_socket::{self, ToNsName, traits::Listener};
 use smallvec::SmallVec;
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicU64, Ordering};
-use wayvr_ipc::packet_client::HandsfreeParams;
+use wayvr_ipc::packet_client::{HandsfreeParams, WlxPanelReloadParams};
 use wayvr_ipc::{
     ipc::{self},
     packet_client::{self, PacketClient},
@@ -221,28 +220,11 @@ impl Connection {
         serial: ipc::Serial,
         packet_params: packet_client::WvrProcessLaunchParams,
     ) -> anyhow::Result<()> {
-        let res = {
-            let mut argv_iter = packet_params.argv.iter().map(String::as_str);
-            let exec_path = argv_iter
-                .next()
-                .context("No executable for process_launch")?;
-            let exec_args = argv_iter.collect::<Box<_>>();
-            let env_vec = gen_env_vec(&packet_params.env);
-
-            params.wvr_server.spawn_process(
-                &packet_params.name,
-                exec_path,
-                &exec_args,
-                &env_vec,
-                packet_params.resolution,
-                packet_params.pos_mode,
-                None,
-                packet_params.icon.as_deref(),
-                packet_params.userdata,
-            )
-        }
-        .map(ProcessHandle::as_packet)
-        .map_err(|e| e.to_string());
+        let res = params
+            .wvr_server
+            .launch_process(packet_params)
+            .map(ProcessHandle::as_packet)
+            .map_err(|e| e.to_string());
 
         send_packet(
             &mut self.conn,
@@ -397,9 +379,13 @@ impl Connection {
             .send(WayVRSignal::SetOverlayVisible(overlay, visible));
     }
 
-    fn handle_wlx_panel(
+    fn handle_wlx_panel_reload(params: &mut TickParams, payload: WlxPanelReloadParams) {
+        params.signals.send(WayVRSignal::PanelReload(payload));
+    }
+
+    fn handle_wlx_panel_modify(
         params: &mut TickParams,
-        custom_params: packet_client::WlxModifyPanelParams,
+        custom_params: packet_client::WlxPanelModifyParams,
     ) {
         use crate::backend::task::{ModifyPanelCommand, ModifyPanelTask};
 
@@ -409,19 +395,19 @@ impl Connection {
                 overlay: custom_params.overlay,
                 element: custom_params.element,
                 command: match custom_params.command {
-                    packet_client::WlxModifyPanelCommand::SetText(text) => {
+                    packet_client::WlxPanelModifyCommand::SetText(text) => {
                         ModifyPanelCommand::SetText(text)
                     }
-                    packet_client::WlxModifyPanelCommand::SetImage(sprite) => {
+                    packet_client::WlxPanelModifyCommand::SetImage(sprite) => {
                         ModifyPanelCommand::SetImage(sprite)
                     }
-                    packet_client::WlxModifyPanelCommand::SetStickyState(sticky) => {
+                    packet_client::WlxPanelModifyCommand::SetStickyState(sticky) => {
                         ModifyPanelCommand::SetStickyState(sticky)
                     }
-                    packet_client::WlxModifyPanelCommand::SetVisible(visible) => {
+                    packet_client::WlxPanelModifyCommand::SetVisible(visible) => {
                         ModifyPanelCommand::SetVisible(visible)
                     }
-                    packet_client::WlxModifyPanelCommand::SetColor(color) => {
+                    packet_client::WlxPanelModifyCommand::SetColor(color) => {
                         ModifyPanelCommand::SetColor(color)
                     }
                 },
@@ -474,8 +460,11 @@ impl Connection {
             PacketClient::WlxSwitchSet(set) => {
                 Self::handle_wlx_switch_set(params, set);
             }
-            PacketClient::WlxModifyPanel(custom_params) => {
-                Self::handle_wlx_panel(params, custom_params);
+            PacketClient::WlxPanelReload(payload) => {
+                Self::handle_wlx_panel_reload(params, payload);
+            }
+            PacketClient::WlxPanelModify(custom_params) => {
+                Self::handle_wlx_panel_modify(params, custom_params);
             }
             PacketClient::WlxHandsfree(payload) => {
                 Self::handle_wlx_handsfree(params, payload);
